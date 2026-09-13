@@ -5,6 +5,7 @@ import {
   BookOpen, QrCode, Armchair, CalendarCheck, LifeBuoy, Bell,
   ShieldCheck, ChevronRight, Menu, X, Phone, MapPin, LogIn,
   ArrowRight, CheckCircle, Users, Building2, Code2, Sparkles,
+  Youtube, Instagram, Clock, Award, CheckCircle2,
 } from 'lucide-react';
 
 // -----------------------------------------------------------------------
@@ -16,6 +17,10 @@ const IMG_MANAGER    = '/Sonu_Singh_Manager.png';
 const IMG_DEV_KUNAL  = '/Kunal_Kumar_Developer.png';
 const IMG_DEV_CHHOTU = '/Chhotu_Kumar_Developer.jpeg';
 
+// Social URLs (Provided strictly by user)
+const URL_YOUTUBE = 'https://youtube.com/@lakshyaclassesbymonusir?si=lrf3-BwXjqxBCW1w';
+const URL_INSTAGRAM = 'https://www.instagram.com/lakshayaclasses9431?stkn=YWpxcnY2dGxybTRy';
+
 // -----------------------------------------------------------------------
 // Scroll reveal hook
 // -----------------------------------------------------------------------
@@ -26,8 +31,13 @@ function useScrollReveal<T extends HTMLElement = HTMLDivElement>() {
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
-      { threshold: 0.1 }
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          obs.disconnect();
+        }
+      },
+      { threshold: 0.08 }
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -45,7 +55,7 @@ const SectionReveal: React.FC<{ children: React.ReactNode; className?: string; d
       className={className}
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(24px)',
+        transform: visible ? 'translateY(0)' : 'translateY(22px)',
         transition: `opacity 0.6s ease ${delay}ms, transform 0.6s ease ${delay}ms`,
       }}
     >
@@ -63,28 +73,22 @@ interface PersonCardProps {
   name: string;
   title: string;
   org: string;
-  badge?: string;
 }
 
-const PersonCard: React.FC<PersonCardProps> = ({ img, alt, name, title, org, badge }) => (
-  <div className="w-full max-w-[360px] sm:max-w-[380px] bg-white rounded-3xl p-6 sm:p-7 shadow-md hover:shadow-xl border border-slate-200/80 transition-all duration-300 flex flex-col items-center text-center">
+const PersonCard: React.FC<PersonCardProps> = ({ img, alt, name, title, org }) => (
+  <div className="w-full max-w-[360px] sm:max-w-[380px] bg-white rounded-3xl p-6 sm:p-7 shadow-sm hover:shadow-xl border border-slate-200/90 transition-all duration-300 hover:-translate-y-1.5 flex flex-col items-center text-center group">
     {/* Large Square Photo Container */}
-    <div className="w-full max-w-[260px] sm:max-w-[280px] aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-100 border border-slate-200 shadow-inner mb-5 relative flex items-center justify-center">
+    <div className="w-full max-w-[260px] sm:max-w-[280px] aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-stone-100 border border-slate-200 shadow-inner mb-5 flex items-center justify-center">
       <img
         src={img}
         alt={alt}
         loading="lazy"
-        className="w-full h-full object-cover object-top hover:scale-105 transition-transform duration-500"
+        className="w-full h-full object-cover object-top group-hover:scale-[1.03] transition-transform duration-500"
       />
-      {badge && (
-        <span className="absolute top-3 right-3 bg-indigo-600/90 backdrop-blur-md text-white text-[10px] sm:text-[11px] font-bold px-3 py-1 rounded-full shadow-md tracking-wider uppercase">
-          {badge}
-        </span>
-      )}
     </div>
 
-    {/* Clear hierarchy: Name -> Spacing -> Designation -> Spacing -> Organization */}
-    <h3 className="text-xl font-extrabold text-slate-900 tracking-tight mb-1">
+    {/* Exact Hierarchy: Name -> Spacing -> Designation -> Spacing -> Organization */}
+    <h3 className="text-xl font-black text-slate-900 tracking-tight mb-1">
       {name}
     </h3>
     <p className="text-sm font-bold text-indigo-600 mb-1">
@@ -107,16 +111,16 @@ const FeatureCard: React.FC<FeatureCardProps> = ({ icon, title, desc, delay = 0 
       ref={ref}
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(24px)',
+        transform: visible ? 'translateY(0)' : 'translateY(22px)',
         transition: `opacity 0.6s ease ${delay}ms, transform 0.6s ease ${delay}ms`,
       }}
-      className="group bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-indigo-200 transition-all duration-300"
+      className="group bg-white rounded-2xl p-6 sm:p-7 border border-slate-200/80 shadow-sm hover:shadow-xl hover:-translate-y-1.5 hover:border-indigo-200 transition-all duration-300 flex flex-col h-full"
     >
-      <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+      <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300 shadow-sm">
         {icon}
       </div>
       <h3 className="text-base font-bold text-slate-900 mb-2">{title}</h3>
-      <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">{desc}</p>
+      <p className="text-xs sm:text-sm text-slate-500 leading-relaxed mt-auto">{desc}</p>
     </div>
   );
 };
@@ -136,13 +140,13 @@ const StepCard: React.FC<{ step: number; title: string; desc: string; delay?: nu
         transform: visible ? 'translateY(0)' : 'translateY(20px)',
         transition: `opacity 0.6s ease ${delay}ms, transform 0.6s ease ${delay}ms`,
       }}
-      className="flex gap-4 items-start bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm"
+      className="flex gap-4 items-start bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-sm hover:shadow-md transition-shadow"
     >
-      <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-indigo-600/25">
+      <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-indigo-600/20">
         {step}
       </div>
       <div className="pt-0.5">
-        <p className="text-sm font-bold text-slate-900 mb-1">{title}</p>
+        <p className="text-sm sm:text-base font-bold text-slate-900 mb-1">{title}</p>
         <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">{desc}</p>
       </div>
     </div>
@@ -154,6 +158,7 @@ const StepCard: React.FC<{ step: number; title: string; desc: string; delay?: nu
 // -----------------------------------------------------------------------
 const NAV_LINKS = [
   { label: 'Home',            href: 'home' },
+  { label: 'Benefits',        href: 'benefits' },
   { label: 'About',           href: 'about' },
   { label: 'Features',        href: 'features' },
   { label: 'How It Works',    href: 'how-it-works' },
@@ -177,7 +182,7 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
     setMenuOpen(false);
     const el = document.getElementById(id);
     if (el) {
-      const yOffset = -70;
+      const yOffset = -72;
       const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
       window.scrollTo({ top: y, behavior: 'smooth' });
     }
@@ -187,8 +192,8 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'bg-white/95 backdrop-blur-md shadow-md border-b border-slate-200/80 py-2'
-          : 'bg-slate-950/70 backdrop-blur-sm border-b border-white/10 py-3'
+          ? 'bg-white/95 backdrop-blur-md shadow-md border-b border-slate-200/80 py-2.5'
+          : 'bg-slate-950/75 backdrop-blur-md border-b border-white/10 py-3.5'
       }`}
       aria-label="Main navigation"
     >
@@ -200,7 +205,7 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
             className="flex items-center gap-2.5 group cursor-pointer text-left"
             aria-label="Go to top"
           >
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-sm group-hover:bg-indigo-700 transition-colors">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md group-hover:bg-indigo-700 transition-colors">
               <BookOpen className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -215,7 +220,7 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
             </div>
           </button>
 
-          {/* Desktop links */}
+          {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center gap-1">
             {NAV_LINKS.map(link => (
               <button
@@ -232,7 +237,7 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
             ))}
           </div>
 
-          {/* CTA */}
+          {/* CTA Right */}
           <div className="hidden lg:block">
             {isAuth ? (
               <button
@@ -251,7 +256,7 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
             )}
           </div>
 
-          {/* Mobile toggle */}
+          {/* Mobile menu toggle */}
           <button
             className={`lg:hidden p-2 rounded-lg transition-colors cursor-pointer ${
               scrolled ? 'text-slate-700' : 'text-white'
@@ -265,9 +270,9 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
         </div>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile menu drawer */}
       {menuOpen && (
-        <div className="lg:hidden bg-white border-t border-slate-200 shadow-xl">
+        <div className="lg:hidden bg-white border-t border-slate-200 shadow-2xl">
           <div className="px-4 pt-3 pb-5 space-y-1">
             {NAV_LINKS.map(link => (
               <button
@@ -303,14 +308,14 @@ export const LandingPage: React.FC = () => {
   const [heroVisible, setHeroVisible] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setHeroVisible(true), 80);
+    const t = setTimeout(() => setHeroVisible(true), 70);
     return () => clearTimeout(t);
   }, []);
 
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
     if (el) {
-      const yOffset = -70;
+      const yOffset = -72;
       const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
       window.scrollTo({ top: y, behavior: 'smooth' });
     }
@@ -323,173 +328,149 @@ export const LandingPage: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen font-sans bg-slate-50 text-slate-900 antialiased selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen font-sans bg-[#faf9f6] text-slate-900 antialiased selection:bg-indigo-500 selection:text-white">
+      {/* 1. NAVBAR */}
       <Navbar isAuth={isAuthenticated} role={user?.role} />
 
       {/* ==============================================================
-          1. HERO SECTION WITH BANNER BACKGROUND (ZERO OVERLAP)
+          2. HERO — REDESIGNED TO PREVENT LOGO COLLISION & DUPLICATION
       ============================================================== */}
       <section
         id="home"
-        className="relative min-h-[90vh] sm:min-h-screen flex items-center justify-center overflow-hidden pt-28 sm:pt-36 pb-20 sm:pb-28 px-4 sm:px-6"
+        className="relative min-h-[92vh] sm:min-h-screen flex items-center justify-center overflow-hidden pt-28 sm:pt-36 pb-20 sm:pb-28 px-4 sm:px-6"
       >
-        {/* Full-width Banner background with readable overlay */}
+        {/* Full-width banner background with sophisticated multi-layer overlay */}
         <div className="absolute inset-0 z-0">
           <img
             src={IMG_BANNER}
-            alt="Lakshya Smart Library Banner"
-            className="w-full h-full object-cover object-center scale-[1.02] filter brightness-95"
+            alt="Lakshya Smart Library Background"
+            className="w-full h-full object-cover object-center filter brightness-[0.92]"
           />
-          {/* Subtle balanced overlay: preserves original banner graphics while keeping text highly readable */}
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/65 to-slate-950/85 backdrop-blur-[1px]" />
+          {/* Multi-layer gentle overlay: preserves original banner graphics and colors while ensuring crisp text readability */}
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-900/40 to-slate-950/75" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-black/30" />
         </div>
 
-        {/* Hero Content Container — properly separated, no colliding elements */}
-        <div className="relative z-10 max-w-4xl mx-auto text-center flex flex-col items-center">
-          {/* Tagline Badge */}
+        {/* Hero Content Panel — Translucent glass panel so text never competes with background banner logo */}
+        <div className="relative z-10 max-w-3xl mx-auto text-center w-full">
           <div
-            style={anim(heroVisible, 100, -14)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/25 border border-indigo-400/40 rounded-full text-indigo-200 text-xs sm:text-sm font-semibold mb-6 sm:mb-8 backdrop-blur-md shadow-lg"
+            style={anim(heroVisible, 100)}
+            className="bg-slate-950/60 backdrop-blur-md border border-white/20 rounded-3xl p-6 sm:p-10 shadow-2xl"
           >
-            <Sparkles className="w-4 h-4 text-indigo-300" />
-            <span>Personal Library Management &amp; Attendance System</span>
-          </div>
+            {/* System Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/25 border border-indigo-400/40 rounded-full text-indigo-200 text-xs sm:text-sm font-semibold mb-6 shadow-inner">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
+              <span>Personal Library Management &amp; Attendance System</span>
+            </div>
 
-          {/* Main Title */}
-          <h1
-            style={anim(heroVisible, 250)}
-            className="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight sm:leading-none tracking-tight mb-5 sm:mb-6 drop-shadow-sm"
-          >
-            LAKSHYA{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-sky-300 to-indigo-300">
-              SMART
-            </span>{' '}
-            LIBRARY
-          </h1>
+            {/* Primary Headline — Value focused, NO duplicate giant brand name over banner */}
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4 drop-shadow-sm">
+              A Smarter Way to Manage Your Library Experience
+            </h1>
 
-          {/* Value Proposition */}
-          <p
-            style={anim(heroVisible, 400)}
-            className="text-lg sm:text-2xl text-slate-200 font-semibold mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed drop-shadow"
-          >
-            A Smarter Way to Manage Your Library Experience
-          </p>
+            {/* Subtitle */}
+            <p className="text-base sm:text-lg text-slate-200 font-medium mb-7 max-w-xl mx-auto leading-relaxed">
+              Personal digital attendance, 50 dedicated seats, automated visit history, and instant student support.
+            </p>
 
-          {/* Feature Badges — clean wrapping, no cutoffs */}
-          <div
-            style={anim(heroVisible, 530)}
-            className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 mb-8 sm:mb-10 max-w-3xl"
-          >
-            {[
-              'Smart QR Attendance',
-              '50 Smart Seats',
-              'Attendance History',
-              'Notices & Complaints',
-              'Secure Student Access',
-            ].map(tag => (
-              <span
-                key={tag}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white/10 hover:bg-white/15 border border-white/20 rounded-full text-xs sm:text-sm font-medium text-slate-200 backdrop-blur-md transition-colors"
-              >
-                <CheckCircle className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                {tag}
-              </span>
-            ))}
-          </div>
-
-          {/* CTA Buttons */}
-          <div
-            style={anim(heroVisible, 650)}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3.5 sm:gap-4 w-full sm:w-auto"
-          >
-            {isAuthenticated ? (
-              <button
-                onClick={() => navigate(user?.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard')}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-2xl transition-all shadow-xl shadow-indigo-600/30 group cursor-pointer"
-              >
-                Go to Dashboard
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-            ) : (
-              <>
-                <Link
-                  to="/login"
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-2xl transition-all shadow-xl shadow-indigo-600/30 group"
+            {/* Feature Pills */}
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 mb-8">
+              {[
+                'Smart QR Attendance',
+                '50 Smart Seats',
+                'Attendance History',
+                'Notices & Complaints',
+                'Secure Student Access',
+              ].map(tag => (
+                <span
+                  key={tag}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/15 rounded-full text-xs font-medium text-slate-200 backdrop-blur-sm"
                 >
-                  Get Started
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Link>
+                  <CheckCircle className="w-3 h-3 text-indigo-300 flex-shrink-0" />
+                  {tag}
+                </span>
+              ))}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full sm:w-auto">
+              {isAuthenticated ? (
                 <button
-                  onClick={() => scrollTo('features')}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-white/10 hover:bg-white/20 border border-white/25 text-white font-bold text-sm sm:text-base rounded-2xl transition-all backdrop-blur-md cursor-pointer"
+                  onClick={() => navigate(user?.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard')}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-2xl transition-all shadow-xl shadow-indigo-600/30 group cursor-pointer"
                 >
-                  Explore Features
+                  Go to Dashboard
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
-              </>
-            )}
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-2xl transition-all shadow-xl shadow-indigo-600/30 group"
+                  >
+                    Get Started
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                  <button
+                    onClick={() => scrollTo('features')}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white font-bold text-sm sm:text-base rounded-2xl transition-all backdrop-blur-sm cursor-pointer"
+                  >
+                    Explore Features
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </section>
 
       {/* ==============================================================
-          2. ABOUT LAKSHYA SMART LIBRARY
+          3. LIBRARY BENEFITS (CORE VALUE PILLARS)
       ============================================================== */}
-      <section id="about" className="py-20 sm:py-24 bg-white border-b border-slate-200/60">
+      <section id="benefits" className="py-16 sm:py-20 bg-white border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <SectionReveal className="text-center mb-12 sm:mb-16">
+          <SectionReveal className="text-center mb-12">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
-              Overview
+              Why Lakshya Smart Library
             </span>
-            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-4">
-              About Lakshya Smart Library
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-3">
+              Designed for Focused Academic Excellence
             </h2>
-            <p className="text-slate-600 max-w-2xl mx-auto text-sm sm:text-base leading-relaxed">
-              A modern, fully digital, 50-seat personal library management system engineered for focused self-study, automated attendance, and comfortable student management.
+            <p className="text-slate-600 max-w-xl mx-auto text-sm leading-relaxed">
+              Every feature is built around the student's productivity, discipline, and comfort.
             </p>
           </SectionReveal>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
-                icon: <ShieldCheck className="w-6 h-6" />,
-                title: 'Secure Student Accounts',
-                desc: 'Students receive credentials issued directly by the admin. JWT authentication with server-side authorization ensures complete security.',
+                icon: <Armchair className="w-6 h-6 text-indigo-600" />,
+                title: '50 Reserved Desks',
+                desc: 'A dedicated personal space. No seat hunting, no reservations confusion.',
               },
               {
-                icon: <QrCode className="w-6 h-6" />,
-                title: 'Dynamic QR Attendance',
-                desc: 'Mark entry and exit in seconds by scanning a time-limited, digitally signed QR code generated on the library display.',
+                icon: <Clock className="w-6 h-6 text-indigo-600" />,
+                title: 'Contactless Check-In',
+                desc: 'Scan the dynamic QR code on entry and exit in less than 5 seconds.',
               },
               {
-                icon: <Armchair className="w-6 h-6" />,
-                title: '50 Dedicated Smart Seats',
-                desc: 'A focused study space with exactly 50 seats. Real-time occupancy tracking allows students to sit at their assigned desks peacefully.',
+                icon: <Award className="w-6 h-6 text-indigo-600" />,
+                title: 'Daily Study Tracking',
+                desc: 'Monitor your study hours, consistency, and monthly visit percentages.',
               },
               {
-                icon: <CalendarCheck className="w-6 h-6" />,
-                title: 'Detailed Attendance History',
-                desc: 'Log every visit with precise check-in and check-out timestamps, study duration, and date records accessible anytime.',
-              },
-              {
-                icon: <Bell className="w-6 h-6" />,
-                title: 'Real-Time Digital Notices',
-                desc: 'Never miss an update. Schedule changes, holiday announcements, and facility notices appear instantly on student dashboards.',
-              },
-              {
-                icon: <LifeBuoy className="w-6 h-6" />,
-                title: 'Instant Support & Complaints',
-                desc: 'Quickly report any issues with Wi-Fi, AC, lighting, chairs, or drinking water directly to the library administration.',
+                icon: <LifeBuoy className="w-6 h-6 text-indigo-600" />,
+                title: 'Fast Issue Resolution',
+                desc: 'Report Wi-Fi, AC, or maintenance issues directly to library management.',
               },
             ].map((item, i) => (
               <SectionReveal key={item.title} delay={i * 60}>
-                <div className="flex gap-4 items-start p-6 rounded-2xl border border-slate-200/80 bg-slate-50/60 hover:bg-white hover:border-indigo-200 hover:shadow-md transition-all h-full">
-                  <div className="flex-shrink-0 w-11 h-11 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                <div className="p-6 rounded-2xl bg-stone-50/70 border border-stone-200/80 hover:bg-white hover:border-indigo-200 hover:shadow-md transition-all duration-300 h-full flex flex-col">
+                  <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-4">
                     {item.icon}
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 mb-1">{item.title}</h3>
-                    <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">{item.desc}</p>
-                  </div>
+                  <h3 className="text-base font-bold text-slate-900 mb-1.5">{item.title}</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed mt-auto">{item.desc}</p>
                 </div>
               </SectionReveal>
             ))}
@@ -498,19 +479,103 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* ==============================================================
-          3. SMART LIBRARY FEATURES
+          4. ABOUT LAKSHYA SMART LIBRARY (TWO-COLUMN DESKTOP LAYOUT)
       ============================================================== */}
-      <section id="features" className="py-20 sm:py-24 bg-slate-50/70 border-b border-slate-200/60">
+      <section id="about" className="py-20 sm:py-24 bg-[#faf9f6] border-b border-stone-200/80">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Left Column: About Narrative */}
+            <SectionReveal delay={0}>
+              <div>
+                <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
+                  About Our Institution
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-5 leading-snug">
+                  A Modern, Fully Digital Single Library Study System
+                </h2>
+                <p className="text-slate-600 text-sm sm:text-base leading-relaxed mb-4">
+                  Lakshya Smart Library is a personal, premium study center featuring exactly <strong>50 numbered seats</strong>. Built to eliminate overcrowding, chaotic manual registers, and neglected facility complaints, our system brings digital ease to daily self-study.
+                </p>
+                <p className="text-slate-600 text-sm sm:text-base leading-relaxed mb-6">
+                  Every enrolled student receives a verified account with access to encrypted QR check-ins, automated study time logs, direct administrative notices, and digital ticket support.
+                </p>
+
+                <div className="space-y-3">
+                  {[
+                    'Strictly 50 seats — zero overcrowding, complete silence',
+                    'Dynamic QR verification prevents proxy and attendance tampering',
+                    'Direct communication with Director Monu Kumar & Manager Sonu Singh',
+                  ].map(feat => (
+                    <div key={feat} className="flex items-center gap-3 text-xs sm:text-sm font-semibold text-slate-800">
+                      <CheckCircle2 className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                      <span>{feat}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </SectionReveal>
+
+            {/* Right Column: Digital Specs Card */}
+            <SectionReveal delay={120}>
+              <div className="bg-white rounded-3xl p-8 sm:p-10 border border-stone-200/90 shadow-lg">
+                <div className="flex items-center justify-between pb-6 mb-6 border-b border-stone-100">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-slate-900">Lakshya Smart Library</h3>
+                    <p className="text-xs text-indigo-600 font-semibold">Official Study Center</p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
+                    Active &amp; Open
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/60">
+                    <p className="text-2xl font-black text-slate-900">50</p>
+                    <p className="text-xs text-slate-500 font-medium">Smart Seats</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/60">
+                    <p className="text-2xl font-black text-slate-900">100%</p>
+                    <p className="text-xs text-slate-500 font-medium">Digital Attendance</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/60">
+                    <p className="text-2xl font-black text-slate-900">45s</p>
+                    <p className="text-xs text-slate-500 font-medium">QR Refresh Cycle</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/60">
+                    <p className="text-2xl font-black text-slate-900">24/7</p>
+                    <p className="text-xs text-slate-500 font-medium">Ticket Filing</p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">Associated with Lakshya Classes</p>
+                    <p className="text-[11px] text-slate-600">Coaching classes 9th–12th located directly above</p>
+                  </div>
+                </div>
+              </div>
+            </SectionReveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ==============================================================
+          5. SMART LIBRARY FEATURES
+      ============================================================== */}
+      <section id="features" className="py-20 sm:py-24 bg-white border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <SectionReveal className="text-center mb-12 sm:mb-16">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
-              Capabilities
+              System Highlights
             </span>
             <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-4">
-              Smart Library Features
+              Comprehensive Library Features
             </h2>
             <p className="text-slate-600 max-w-xl mx-auto text-sm sm:text-base leading-relaxed">
-              Tailored specifically for Lakshya Smart Library — simple for students, powerful for administration.
+              Engineered specifically for single-library efficiency without the unnecessary bloat of multi-branch systems.
             </p>
           </SectionReveal>
 
@@ -519,117 +584,123 @@ export const LandingPage: React.FC = () => {
               delay={0}
               icon={<QrCode className="w-6 h-6" />}
               title="Smart QR Attendance"
-              desc="Fast, contactless check-in and check-out using encrypted dynamic QR codes refreshed every 45 seconds."
+              desc="Contactless, dynamic QR codes refresh automatically. Eliminates proxy and provides instantaneous check-in."
             />
             <FeatureCard
-              delay={70}
+              delay={60}
               icon={<Armchair className="w-6 h-6" />}
-              title="50 Smart Seats"
-              desc="Live seat availability and assigned seating for every student. Zero confusion upon arrival."
+              title="50 Dedicated Desks"
+              desc="Real-time seat assignment and occupancy indicators assure students of their allocated quiet study corner."
             />
             <FeatureCard
-              delay={140}
+              delay={120}
               icon={<CalendarCheck className="w-6 h-6" />}
-              title="Attendance Logs"
-              desc="View daily visit summaries, study hours, and monthly attendance percentage on your personal dashboard."
+              title="Attendance Records"
+              desc="Detailed visit history with check-in, check-out, and total hours logged on each student's personal portal."
             />
             <FeatureCard
-              delay={210}
+              delay={180}
               icon={<LifeBuoy className="w-6 h-6" />}
-              title="Complaint Tickets"
-              desc="Raise and track service requests for Wi-Fi, air conditioning, cleanliness, or power sockets with real-time status."
+              title="Complaint Desk"
+              desc="Lodge complaints for Wi-Fi speed, air conditioning, power sockets, or cleanliness with live admin updates."
             />
             <FeatureCard
-              delay={280}
+              delay={240}
               icon={<Bell className="w-6 h-6" />}
-              title="Broadcast Notices"
-              desc="Stay informed with immediate library updates, holiday notifications, and exam preparation hours."
+              title="Digital Notices"
+              desc="Important announcements, festive holiday alerts, and schedule changes broadcast straight to dashboards."
             />
             <FeatureCard
-              delay={350}
+              delay={300}
               icon={<ShieldCheck className="w-6 h-6" />}
-              title="Secure Role Portals"
-              desc="Separate interfaces for Administrator and Students with encrypted sessions and strict access controls."
+              title="Encrypted Access"
+              desc="Strict separation between Admin and Student portals powered by secure JWT sessions and bcrypt authentication."
             />
           </div>
         </div>
       </section>
 
       {/* ==============================================================
-          4. HOW IT WORKS
+          6. HOW IT WORKS (5-STEP PROCESS)
       ============================================================== */}
-      <section id="how-it-works" className="py-20 sm:py-24 bg-white border-b border-slate-200/60">
+      <section id="how-it-works" className="py-20 sm:py-24 bg-[#faf9f6] border-b border-stone-200/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <SectionReveal className="text-center mb-12 sm:mb-16">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
-              Workflow
+              User Workflow
             </span>
             <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-4">
               How It Works
             </h2>
             <p className="text-slate-600 max-w-lg mx-auto text-sm sm:text-base leading-relaxed">
-              Five simple steps designed for a smooth and uninterrupted daily library experience.
+              Simple, smooth, and designed for your phone. Study without interruptions.
             </p>
           </SectionReveal>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-            {/* Step list */}
+            {/* Step Cards List */}
             <div className="space-y-4">
               <StepCard
                 delay={0}
                 step={1}
                 title="Login to Your Account"
-                desc="Access your portal with your registered email address and credentials provided by the library administrator."
+                desc="Access your personal portal using the registered credentials provided by the library administrator."
               />
               <StepCard
                 delay={70}
                 step={2}
-                title="Check Your Dashboard"
-                desc="View your assigned seat number, real-time library occupancy, and any recent admin notices."
+                title="Check Assigned Seat"
+                desc="Verify your allotted seat number and read any newly posted library updates on your dashboard."
               />
               <StepCard
                 delay={140}
                 step={3}
                 title="Scan QR at Entry"
-                desc="Tap 'Scan Entry' on your smartphone and aim your camera at the library desk QR code to mark check-in."
+                desc="Tap 'Scan Entry' on your mobile camera and scan the library's dynamic desk QR code."
               />
               <StepCard
                 delay={210}
                 step={4}
-                title="Study with Focus"
-                desc="Your presence is safely marked. Head directly to your allotted seat and study in a quiet atmosphere."
+                title="Enter & Study in Peace"
+                desc="Your check-in time is recorded. Take your dedicated seat and focus on your studies."
               />
               <StepCard
                 delay={280}
                 step={5}
                 title="Scan QR on Exit"
-                desc="Scan the exit QR when leaving. Your session duration and attendance are recorded automatically."
+                desc="Scan the exit QR code before departing. Your total study duration is automatically logged."
               />
             </div>
 
-            {/* Visual Preview Card */}
+            {/* Visual Preview Graphic */}
             <SectionReveal delay={150}>
-              <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-8 sm:p-10 text-white shadow-2xl border border-indigo-900/50">
+              <div className="bg-slate-900 rounded-3xl p-8 sm:p-10 text-white shadow-2xl border border-slate-800">
                 <div className="flex items-center gap-3.5 mb-8">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/25 flex items-center justify-center border border-indigo-400/30">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center border border-indigo-400/30">
                     <QrCode className="w-6 h-6 text-indigo-300" />
                   </div>
                   <div>
                     <h3 className="font-extrabold text-base sm:text-lg">Smart QR Attendance</h3>
-                    <p className="text-indigo-300 text-xs">Automated • Accurate • Fast</p>
+                    <p className="text-indigo-300 text-xs">Automated • Tamper-proof • Fast</p>
                   </div>
                 </div>
 
                 <div className="space-y-3.5">
-                  {['Login with Credentials', 'Verify Assigned Seat', 'Scan Entry QR Code', 'Deep Focus Study Session', 'Scan Exit QR on Departure'].map((step, i) => (
+                  {[
+                    '1. Log into personal student portal',
+                    '2. View allotted seat & announcements',
+                    '3. Scan dynamic Entry QR on arrival',
+                    '4. Quiet study session at seat',
+                    '5. Scan Exit QR to record visit hours',
+                  ].map((step, i) => (
                     <div
                       key={step}
-                      className="flex items-center gap-3.5 p-3 rounded-xl bg-white/5 border border-white/10"
+                      className="flex items-center gap-3.5 p-3 rounded-xl bg-slate-800/80 border border-slate-700/60"
                     >
                       <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
                         {i + 1}
                       </div>
-                      <p className="flex-1 text-xs sm:text-sm font-semibold text-slate-200">{step}</p>
+                      <p className="flex-1 text-xs sm:text-sm font-medium text-slate-200">{step}</p>
                       {i < 4 ? (
                         <ChevronRight className="w-4 h-4 text-indigo-400 flex-shrink-0" />
                       ) : (
@@ -639,9 +710,9 @@ export const LandingPage: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="mt-8 pt-5 border-t border-white/10 text-center">
+                <div className="mt-8 pt-5 border-t border-slate-800 text-center">
                   <p className="text-xs text-indigo-300 font-medium">
-                    🛡️ Dynamic QR codes renew automatically for maximum security
+                    🛡️ Dynamic QR codes expire every 45 seconds for foolproof security
                   </p>
                 </div>
               </div>
@@ -651,54 +722,55 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* ==============================================================
-          5. LAKSHYA CLASSES — SECONDARY ASSOCIATED INITIATIVE
+          7. LAKSHYA CLASSES — WARM IVORY / SOFT CREAM / ACADEMIC
       ============================================================== */}
-      <section id="lakshya-classes" className="py-20 sm:py-24 bg-slate-50/70 border-b border-slate-200/60">
+      <section id="lakshya-classes" className="py-20 sm:py-24 bg-[#fcf9f2] border-b border-amber-200/60">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <SectionReveal>
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-8 sm:p-12 shadow-xl border border-indigo-900/40">
-              <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="rounded-3xl bg-white p-8 sm:p-12 shadow-lg border border-amber-200/80 relative overflow-hidden">
+              {/* Subtle warm decorative accents */}
+              <div className="absolute top-0 right-0 w-80 h-80 bg-amber-100/40 rounded-full blur-3xl pointer-events-none" />
 
               <div className="relative z-10">
                 {/* Secondary badge */}
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-indigo-500/20 border border-indigo-400/25 rounded-full text-indigo-300 text-xs font-bold mb-6">
-                  <Building2 className="w-3.5 h-3.5" />
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-amber-100 border border-amber-300/60 rounded-full text-amber-900 text-xs font-bold mb-6">
+                  <Building2 className="w-3.5 h-3.5 text-amber-700" />
                   <span>An Associated Educational Initiative</span>
                 </div>
 
-                <h2 className="text-3xl sm:text-4xl font-black text-white mb-2 tracking-tight">
+                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-2 tracking-tight">
                   Lakshya Classes
                 </h2>
-                <p className="text-indigo-300 font-bold text-base sm:text-lg mb-5">
+                <p className="text-indigo-600 font-bold text-base sm:text-lg mb-4">
                   Classes 9th – 12th
                 </p>
 
-                <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-8 max-w-2xl">
-                  Lakshya Classes provides focused academic mentoring and foundation courses for students from Class 9 to Class 12. Conveniently located right above Lakshya Smart Library, it creates a complete self-study and coaching ecosystem under one roof.
+                <p className="text-slate-700 text-sm sm:text-base leading-relaxed mb-8 max-w-2xl">
+                  Lakshya Classes provides focused academic guidance and learning support for students from Class 9 to Class 12. Conveniently located right above Lakshya Smart Library, creating a unified academic ecosystem for both coaching and quiet self-study.
                 </p>
 
-                {/* Key Details List */}
+                {/* Details highlights */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                  <div className="flex items-center gap-3 text-slate-300 text-sm p-3 rounded-xl bg-white/5 border border-white/10">
-                    <Users className="w-5 h-5 text-indigo-400 flex-shrink-0" />
-                    <span>Directed by <strong className="text-white">Monu Kumar</strong></span>
+                  <div className="flex items-center gap-3 text-slate-800 text-sm p-4 rounded-2xl bg-[#faf7ef] border border-amber-200/60 font-medium">
+                    <Users className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                    <span>Directed by <strong className="text-slate-900 font-bold">Monu Kumar</strong></span>
                   </div>
-                  <div className="flex items-center gap-3 text-slate-300 text-sm p-3 rounded-xl bg-white/5 border border-white/10">
-                    <MapPin className="w-5 h-5 text-indigo-400 flex-shrink-0" />
+                  <div className="flex items-center gap-3 text-slate-800 text-sm p-4 rounded-2xl bg-[#faf7ef] border border-amber-200/60 font-medium">
+                    <MapPin className="w-5 h-5 text-indigo-600 flex-shrink-0" />
                     <span>Located just above Lakshya Smart Library</span>
                   </div>
                 </div>
 
-                {/* Contact and Call CTA */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2 border-t border-white/10">
+                {/* Call CTA */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4 border-t border-amber-200/60">
                   <a
                     href="tel:9155435493"
-                    className="flex items-center justify-center gap-2.5 px-7 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-2xl transition-all shadow-lg shadow-indigo-600/30"
+                    className="flex items-center justify-center gap-2.5 px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm sm:text-base rounded-2xl transition-all shadow-md"
                     aria-label="Call Lakshya Classes at 9155435493"
                   >
-                    <Phone className="w-4 h-4" /> Call Now: 9155435493
+                    <Phone className="w-4 h-4 text-amber-400" /> Call Now: 9155435493
                   </a>
-                  <div className="flex items-center justify-center px-5 py-3 rounded-2xl bg-white/5 text-slate-300 text-xs sm:text-sm">
+                  <div className="flex items-center justify-center px-5 py-3 rounded-2xl bg-amber-50 text-amber-900 text-xs sm:text-sm font-semibold border border-amber-200/50">
                     For More Information — Talk to the Director
                   </div>
                 </div>
@@ -709,9 +781,9 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* ==============================================================
-          6. LIBRARY MANAGEMENT — SEPARATE SECTION
+          8. LIBRARY MANAGEMENT — COMPLETELY SEPARATE SECTION
       ============================================================== */}
-      <section id="management" className="py-20 sm:py-24 bg-white border-b border-slate-200/60">
+      <section id="management" className="py-20 sm:py-24 bg-white border-b border-stone-200/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <SectionReveal className="text-center mb-12 sm:mb-16">
             <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
@@ -725,7 +797,7 @@ export const LandingPage: React.FC = () => {
             </p>
           </SectionReveal>
 
-          {/* Side-by-side on desktop/tablet, stacked vertically on mobile */}
+          {/* Exactly 2 cards side-by-side on desktop, vertical stack on mobile */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-10 justify-items-center max-w-3xl mx-auto">
             <SectionReveal delay={0}>
               <PersonCard
@@ -734,7 +806,6 @@ export const LandingPage: React.FC = () => {
                 name="Monu Kumar"
                 title="Director"
                 org="Lakshya Smart Library"
-                badge="Director"
               />
             </SectionReveal>
 
@@ -745,7 +816,6 @@ export const LandingPage: React.FC = () => {
                 name="Sonu Singh"
                 title="Manager"
                 org="Lakshya Smart Library"
-                badge="Manager"
               />
             </SectionReveal>
           </div>
@@ -753,9 +823,9 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* ==============================================================
-          7. DESIGNED & DEVELOPED BY — SEPARATE SECTION
+          9. DESIGNED & DEVELOPED BY — COMPLETELY SEPARATE SECTION
       ============================================================== */}
-      <section id="developers" className="py-20 sm:py-24 bg-slate-50/70 border-b border-slate-200/60">
+      <section id="developers" className="py-20 sm:py-24 bg-[#faf9f6] border-b border-stone-200/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <SectionReveal className="text-center mb-12 sm:mb-16">
             <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
@@ -769,7 +839,7 @@ export const LandingPage: React.FC = () => {
             </p>
           </SectionReveal>
 
-          {/* Side-by-side on desktop/tablet, stacked vertically on mobile */}
+          {/* Exactly 2 developer cards side-by-side on desktop, vertical stack on mobile */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-10 justify-items-center max-w-3xl mx-auto">
             <SectionReveal delay={0}>
               <PersonCard
@@ -778,7 +848,6 @@ export const LandingPage: React.FC = () => {
                 name="Kunal Kumar"
                 title="Full Stack Developer"
                 org="Lakshya Smart Library"
-                badge="Developer"
               />
             </SectionReveal>
 
@@ -789,7 +858,6 @@ export const LandingPage: React.FC = () => {
                 name="Chhotu Kumar"
                 title="Full Stack Developer"
                 org="Lakshya Smart Library"
-                badge="Developer"
               />
             </SectionReveal>
           </div>
@@ -797,37 +865,38 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* ==============================================================
-          8. FOOTER
+          10. FOOTER WITH YOUTUBE & INSTAGRAM SOCIAL BUTTONS
       ============================================================== */}
-      <footer className="bg-slate-900 text-slate-400 py-14 border-t border-slate-800">
+      <footer className="bg-slate-950 text-slate-400 py-16 border-t border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-10">
-            {/* Brand column */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 sm:gap-12 mb-12">
+            {/* Column 1: Brand & Purpose */}
             <div>
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center">
-                  <BookOpen className="w-4 h-4 text-white" />
+              <div className="flex items-center gap-2.5 mb-3.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md">
+                  <BookOpen className="w-4 h-4" />
                 </div>
                 <span className="text-base font-black text-white tracking-tight">
                   LAKSHYA SMART LIBRARY
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-sm mb-4">
-                Personal Library Management &amp; Attendance System. One personal library, 50 numbered smart seats, encrypted dynamic QR attendance, and digital student support.
+                Personal Library Management &amp; Attendance System. 50 numbered smart desks, encrypted dynamic QR attendance, and digital student support.
               </p>
-              <div className="inline-block px-3 py-1 rounded-full bg-slate-800 text-[11px] font-semibold text-indigo-300">
+              <div className="inline-block px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] font-semibold text-indigo-300">
                 Single Library • 50 Seats
               </div>
             </div>
 
-            {/* Navigation links */}
+            {/* Column 2: Navigation Links */}
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-white mb-4">
-                Quick Navigation
+                Quick Links
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm">
                 {[
                   { label: 'Home', id: 'home' },
+                  { label: 'Benefits', id: 'benefits' },
                   { label: 'About', id: 'about' },
                   { label: 'Features', id: 'features' },
                   { label: 'How It Works', id: 'how-it-works' },
@@ -849,27 +918,76 @@ export const LandingPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Associated institute */}
+            {/* Column 3: CONNECT WITH US — Official YouTube & Instagram Buttons */}
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-white mb-4">
-                Associated Institution
+                Connect With Us
               </p>
-              <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/60">
-                <p className="text-sm font-bold text-white mb-1">Lakshya Classes</p>
-                <p className="text-xs text-indigo-300 mb-2">Classes 9th – 12th</p>
-                <p className="text-xs text-slate-400 mb-3">
-                  Directed by Monu Kumar. Located just above the library.
-                </p>
+              <div className="space-y-3">
+                {/* YouTube Button */}
+                <a
+                  href={URL_YOUTUBE}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Visit Lakshya Classes on YouTube"
+                  className="flex items-center gap-3 p-3 rounded-2xl bg-slate-900 border border-slate-800 hover:border-red-500/50 hover:bg-slate-900/80 transition-all duration-300 group"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-red-600/15 flex items-center justify-center text-red-500 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                    <Youtube className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white group-hover:text-red-400 transition-colors">
+                      YouTube
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      @lakshyaclassesbymonusir
+                    </p>
+                  </div>
+                </a>
+
+                {/* Instagram Button */}
+                <a
+                  href={URL_INSTAGRAM}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Visit Lakshya Classes on Instagram"
+                  className="flex items-center gap-3 p-3 rounded-2xl bg-slate-900 border border-slate-800 hover:border-pink-500/50 hover:bg-slate-900/80 transition-all duration-300 group"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-pink-600/15 flex items-center justify-center text-pink-500 group-hover:bg-pink-600 group-hover:text-white transition-colors">
+                    <Instagram className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white group-hover:text-pink-400 transition-colors">
+                      Instagram
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      @lakshayaclasses9431
+                    </p>
+                  </div>
+                </a>
+
+                {/* Phone Link */}
                 <a
                   href="tel:9155435493"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 transition-all duration-300 group"
                 >
-                  <Phone className="w-3.5 h-3.5" /> 9155435493
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600/15 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">
+                      Helpline
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      9155435493
+                    </p>
+                  </div>
                 </a>
               </div>
             </div>
           </div>
 
+          {/* Bottom Bar */}
           <div className="border-t border-slate-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
             <p className="text-slate-500 text-center sm:text-left">
               &copy; {new Date().getFullYear()} Lakshya Smart Library. All rights reserved.
