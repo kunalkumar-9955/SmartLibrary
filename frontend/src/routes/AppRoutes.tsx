@@ -9,6 +9,7 @@ import { StudentLayout } from '../layouts/StudentLayout';
 
 // Public Pages
 import { LoginPage } from '../pages/auth/LoginPage';
+import { LandingPage } from '../pages/LandingPage';
 
 // Student Pages
 import { StudentDashboard } from '../pages/student/StudentDashboard';
@@ -56,17 +57,9 @@ const ProtectedRoute: React.FC<{
 };
 
 export const AppRoutes: React.FC = () => {
-  const { user, isAuthenticated } = useAuth();
-
-  const getDefaultHome = () => {
-    if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
-    if (user.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
-    return <Navigate to="/student/dashboard" replace />;
-  };
-
   return (
     <Routes>
-      <Route path="/" element={getDefaultHome()} />
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
 
       {/* Student Routes */}

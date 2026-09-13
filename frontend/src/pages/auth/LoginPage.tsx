@@ -1,16 +1,22 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { Lock, Mail, ArrowRight, BookOpen } from 'lucide-react';
+import { Lock, Mail, ArrowRight, BookOpen, ArrowLeft } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user, isAuthenticated } = useAuth();
   const { success, error } = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      navigate(user.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,10 +28,10 @@ export const LoginPage: React.FC = () => {
 
     try {
       setLoading(true);
-      const user = await login({ email: cleanEmail, password });
-      success(`Welcome back, ${user.name}!`);
+      const loggedUser = await login({ email: cleanEmail, password });
+      success(`Welcome back, ${loggedUser.name}!`);
 
-      if (user.role === 'ADMIN') {
+      if (loggedUser.role === 'ADMIN') {
         navigate('/admin/dashboard');
       } else {
         navigate('/student/dashboard');
@@ -44,13 +50,23 @@ export const LoginPage: React.FC = () => {
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-8 shadow-2xl border border-slate-200 dark:border-slate-800">
+        {/* Back to Home button */}
+        <div className="mb-4">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 transition"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Home
+          </Link>
+        </div>
+
         {/* Brand Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white font-black text-2xl shadow-lg shadow-indigo-600/30 mb-3">
             <BookOpen className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-            SMART LIBRARY
+            LAKSHYA SMART LIBRARY
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Personal Library Management & Attendance System
