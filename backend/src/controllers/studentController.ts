@@ -99,6 +99,7 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
       email: user.email,
       studentIdNumber: user.studentIdNumber || cleanStudentId,
       course: user.course,
+      assignedSeatNumber: user.assignedSeatNumber || cleanSeat || undefined,
     });
 
     return sendSuccess(
