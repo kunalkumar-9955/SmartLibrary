@@ -50,8 +50,11 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
   try {
     const { name, email, password, phone, studentIdNumber, course, assignedSeatNumber } = req.body;
 
-    if (!name || !email || !studentIdNumber || !password) {
-      return sendError(res, 'Name, email, Student ID, and initial Password are required', 400);
+    // Initial password is student's registered mobile number (or explicit password if provided)
+    const initialPassword = (password && String(password).trim()) || (phone && String(phone).trim());
+
+    if (!name || !email || !studentIdNumber || !initialPassword) {
+      return sendError(res, 'Name, email, Student ID, and registered Mobile Number (as initial Password) are required', 400);
     }
 
     const cleanEmail = email.toLowerCase().trim();
@@ -77,10 +80,11 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
       }
     }
 
+    // 1. Save student to MongoDB first — bcrypt hash is handled by UserSchema pre('save') hook. Raw password is NEVER stored.
     const user = await User.create({
       name: name.trim(),
       email: cleanEmail,
-      password: password.trim(),
+      password: initialPassword,
       role: 'STUDENT',
       studentIdNumber: cleanStudentId,
       phone: phone?.trim(),

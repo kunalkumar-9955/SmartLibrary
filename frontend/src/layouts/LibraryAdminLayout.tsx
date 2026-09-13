@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { LogoutConfirmationModal } from '../components/LogoutConfirmationModal';
+import { useAuthBoundaryBackGuard } from '../hooks/useAuthBoundaryBackGuard';
 import {
   LayoutDashboard,
   Users,
@@ -15,14 +17,19 @@ import {
   LogOut,
   Menu,
   X,
-  BookOpen,
 } from 'lucide-react';
 
 export const LibraryAdminLayout: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const {
+    showLogoutConfirm,
+    isLoggingOut,
+    handleCancelLogout,
+    handleConfirmLogout,
+    triggerLogoutConfirm,
+  } = useAuthBoundaryBackGuard();
 
   // Exact 10 navigation items from requirements
   const navItems = [
@@ -37,11 +44,6 @@ export const LibraryAdminLayout: React.FC = () => {
     { label: 'Reports', path: '/admin/reports', icon: BarChart3 },
     { label: 'Settings', path: '/admin/settings', icon: Settings },
   ];
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex font-sans">
@@ -96,8 +98,8 @@ export const LibraryAdminLayout: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-950/40 transition"
+            onClick={triggerLogoutConfirm}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-950/40 transition cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
             Logout
@@ -140,8 +142,11 @@ export const LibraryAdminLayout: React.FC = () => {
               </Link>
             ))}
             <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-rose-400 hover:bg-slate-800 rounded-lg"
+              onClick={() => {
+                setMobileOpen(false);
+                triggerLogoutConfirm();
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 text-xs font-medium text-rose-400 hover:bg-slate-800 rounded-lg cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
               Logout
@@ -154,6 +159,14 @@ export const LibraryAdminLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Logout Confirmation Modal for Back-button & Manual Logout */}
+      <LogoutConfirmationModal
+        isOpen={showLogoutConfirm}
+        onClose={handleCancelLogout}
+        onLogout={handleConfirmLogout}
+        isLoggingOut={isLoggingOut}
+      />
     </div>
   );
 };

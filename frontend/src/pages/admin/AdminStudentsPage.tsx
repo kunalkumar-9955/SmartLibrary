@@ -71,8 +71,9 @@ export const AdminStudentsPage: React.FC = () => {
 
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !studentIdNumber.trim() || !password.trim()) {
-      error('Full Name, Email, Student ID, and initial Password are required');
+    const effectivePassword = password.trim() || phone.trim();
+    if (!name.trim() || !email.trim() || !studentIdNumber.trim() || !effectivePassword) {
+      error('Full Name, Email, Student ID, and Mobile Number (for initial Password) are required');
       return;
     }
 
@@ -81,7 +82,7 @@ export const AdminStudentsPage: React.FC = () => {
       const res = await studentService.createStudent({
         name: name.trim(),
         email: email.trim(),
-        password: password.trim(),
+        password: effectivePassword,
         phone: phone.trim(),
         studentIdNumber: studentIdNumber.trim(),
         course: course.trim(),
@@ -555,17 +556,19 @@ export const AdminStudentsPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Initial Login Password *
+            <label className="block font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
+              Initial Login Password
             </label>
             <input
               type="password"
-              required
-              placeholder="Set student login password"
+              placeholder={phone.trim() ? `Defaults to registered mobile: ${phone.trim()}` : 'Defaults to registered mobile number'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
             />
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+              Leave blank to automatically use the student&apos;s registered mobile number as their initial login password.
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

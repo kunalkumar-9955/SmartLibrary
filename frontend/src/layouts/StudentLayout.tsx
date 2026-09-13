@@ -1,6 +1,8 @@
 import React from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { LogoutConfirmationModal } from '../components/LogoutConfirmationModal';
+import { useAuthBoundaryBackGuard } from '../hooks/useAuthBoundaryBackGuard';
 import {
   Home,
   QrCode,
@@ -8,18 +10,18 @@ import {
   LifeBuoy,
   User as UserIcon,
   LogOut,
-  BookOpen,
 } from 'lucide-react';
 
 export const StudentLayout: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
+  const {
+    showLogoutConfirm,
+    isLoggingOut,
+    handleCancelLogout,
+    handleConfirmLogout,
+    triggerLogoutConfirm,
+  } = useAuthBoundaryBackGuard();
 
   const navItems = [
     { label: 'Home', path: '/student/dashboard', icon: Home },
@@ -62,8 +64,8 @@ export const StudentLayout: React.FC = () => {
 
             {/* Logout */}
             <button
-              onClick={handleLogout}
-              className="p-2 text-slate-400 hover:text-rose-500 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              onClick={triggerLogoutConfirm}
+              className="p-2 text-slate-400 hover:text-rose-500 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               title="Logout"
             >
               <LogOut className="w-4 h-4" />
@@ -116,6 +118,14 @@ export const StudentLayout: React.FC = () => {
           );
         })}
       </nav>
+
+      {/* Logout Confirmation Modal for Back-button & Manual Logout */}
+      <LogoutConfirmationModal
+        isOpen={showLogoutConfirm}
+        onClose={handleCancelLogout}
+        onLogout={handleConfirmLogout}
+        isLoggingOut={isLoggingOut}
+      />
     </div>
   );
 };
