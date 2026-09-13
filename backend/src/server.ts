@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -11,9 +12,9 @@ import { User } from './models/User';
 import { seedDatabase } from './seed/seedData';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
-// Middleware
+// Middleware - Secure & Production-Ready CORS
 const rawOrigins = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : ['http://localhost:5173'];
 const allowedOrigins = rawOrigins.map((o) => o.trim().replace(/\/$/, '')).filter(Boolean);
 
@@ -22,16 +23,32 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (e.g., mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
+
       const cleanOrigin = origin.replace(/\/$/, '');
-      if (
-        allowedOrigins.includes('*') ||
-        allowedOrigins.includes(cleanOrigin) ||
-        cleanOrigin.includes('localhost') ||
-        cleanOrigin.includes('127.0.0.1')
-      ) {
+      const isLocalhost = cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1');
+
+      // Always allow localhost for development/debugging
+      if (isLocalhost) {
         return callback(null, true);
       }
-      return callback(null, true); // Permissive in initial deployments to prevent blocking
+
+      // Check against configured FRONTEND_URL
+      if (allowedOrigins.includes('*') || allowedOrigins.includes(cleanOrigin)) {
+        return callback(null, true);
+      }
+
+      // Allow Vercel preview deployments if main deployment is on Vercel
+      const allowsVercel = allowedOrigins.some((url) => url.includes('vercel.app'));
+      if (allowsVercel && cleanOrigin.endsWith('.vercel.app')) {
+        return callback(null, true);
+      }
+
+      // Allow in non-production environments
+      if (process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked: Origin ${origin} is not allowed by FRONTEND_URL configuration`));
     },
     credentials: true,
   })
@@ -44,14 +61,18 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const uploadDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
 app.use('/uploads', express.static(uploadDir));
 
-// Health Check
-app.get('/api/health', (req, res) => {
+// Health Checks (Both /health and /api/health for Render/Vercel compatibility)
+const sendHealthCheck = (req: express.Request, res: express.Response) => {
   res.status(200).json({
     status: 'UP',
+    database: mongoose.connection.readyState === 1 ? 'CONNECTED' : 'CONNECTING',
     system: 'Smart Library Management & Student Support System',
     timestamp: new Date().toISOString(),
   });
-});
+};
+
+app.get('/health', sendHealthCheck);
+app.get('/api/health', sendHealthCheck);
 
 // API Routes
 app.use('/api', apiRoutes);
@@ -62,6 +83,14 @@ app.use(errorHandler);
 // Bootstrap
 const startServer = async () => {
   try {
+    // Bind to 0.0.0.0 and PORT immediately so Render health checks pass without port timeout
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`=======================================================`);
+      console.log(`🚀 Smart Library Backend Server running on port ${PORT}`);
+      console.log(`📡 Health Check: http://0.0.0.0:${PORT}/health`);
+      console.log(`=======================================================`);
+    });
+
     await connectDB();
 
     // Auto-seed if database is completely empty
@@ -70,13 +99,6 @@ const startServer = async () => {
       console.log('[Bootstrap] No existing users found. Auto-seeding initial development database...');
       await seedDatabase();
     }
-
-    app.listen(PORT, () => {
-      console.log(`=======================================================`);
-      console.log(`🚀 Smart Library Backend Server running on port ${PORT}`);
-      console.log(`📡 Health Check: http://localhost:${PORT}/api/health`);
-      console.log(`=======================================================`);
-    });
   } catch (error: any) {
     console.error('[Bootstrap] Server initialization failed:', error.message);
     process.exit(1);

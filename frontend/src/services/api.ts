@@ -1,7 +1,16 @@
 import axios from 'axios';
 import { QRPayload } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const getApiBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (!envUrl || envUrl.trim() === '' || envUrl === '/api') {
+    return '/api';
+  }
+  const cleanUrl = envUrl.trim().replace(/\/$/, '');
+  return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

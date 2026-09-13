@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Smart Library Management & Student Support System Backend (MERN Stack)",
   "main": "dist/server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
