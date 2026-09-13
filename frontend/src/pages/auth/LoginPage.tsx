@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { Shield, GraduationCap, Lock, Mail, ArrowRight, BookOpen } from 'lucide-react';
+import { Lock, Mail, ArrowRight, BookOpen } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -14,14 +14,15 @@ export const LoginPage: React.FC = () => {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) {
       error('Please enter both email and password');
       return;
     }
 
     try {
       setLoading(true);
-      const user = await login({ email, password });
+      const user = await login({ email: cleanEmail, password });
       success(`Welcome back, ${user.name}!`);
 
       if (user.role === 'ADMIN') {
@@ -34,11 +35,6 @@ export const LoginPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const setDemoCredentials = (roleEmail: string) => {
-    setEmail(roleEmail);
-    setPassword('Password@123');
   };
 
   return (
@@ -61,31 +57,6 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Demo Quick Logins: ADMIN & STUDENT */}
-        <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
-          <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2.5 text-center">
-            One-Click Demo Logins
-          </p>
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => setDemoCredentials('admin@example.com')}
-              className="py-2.5 px-3 bg-white dark:bg-slate-800 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm transition flex items-center justify-center gap-2 group"
-            >
-              <Shield className="w-4 h-4 text-indigo-500 group-hover:text-white" />
-              Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => setDemoCredentials('student@example.com')}
-              className="py-2.5 px-3 bg-white dark:bg-slate-800 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm transition flex items-center justify-center gap-2 group"
-            >
-              <GraduationCap className="w-4 h-4 text-indigo-500 group-hover:text-white" />
-              Student (Rahul)
-            </button>
-          </div>
-        </div>
-
         {/* Login Form */}
         <form onSubmit={handleLoginSubmit} className="space-y-4">
           <div>
@@ -99,7 +70,7 @@ export const LoginPage: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@example.com or student@example.com"
+                placeholder="Enter your registered email"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
               />
             </div>

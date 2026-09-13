@@ -76,7 +76,7 @@ export const StudentDashboard: React.FC = () => {
               Student Dashboard
             </span>
             <h2 className="text-2xl font-black text-slate-900 dark:text-white">
-              Welcome, {user?.name?.split(' ')[0] || 'Rahul'}
+              Welcome, {user?.name?.split(' ')[0] || 'Student'}
             </h2>
             <p className="text-xs text-slate-400 font-mono mt-0.5">
               ID: {user?.studentIdNumber || 'ST001'} {user?.course && `• ${user.course}`}

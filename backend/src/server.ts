@@ -8,8 +8,7 @@ dotenv.config();
 import { connectDB } from './config/db';
 import { errorHandler } from './middleware/errorHandler';
 import apiRoutes from './routes';
-import { User } from './models/User';
-import { seedDatabase } from './seed/seedData';
+import { bootstrapSystem } from './config/bootstrap';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -92,13 +91,7 @@ const startServer = async () => {
     });
 
     await connectDB();
-
-    // Auto-seed if database is completely empty
-    const userCount = await User.countDocuments();
-    if (userCount === 0) {
-      console.log('[Bootstrap] No existing users found. Auto-seeding initial development database...');
-      await seedDatabase();
-    }
+    await bootstrapSystem();
   } catch (error: any) {
     console.error('[Bootstrap] Server initialization failed:', error.message);
     process.exit(1);

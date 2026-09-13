@@ -38,10 +38,12 @@ export const seedDatabase = async () => {
   });
 
   // 2. Single Admin Account
+  const adminEmail = (process.env.ADMIN_EMAIL || 'sonusingh7759@gmail.com').toLowerCase().trim();
+  const adminPassword = process.env.ADMIN_PASSWORD || 'Password@123';
   const admin = await User.create({
     name: 'Library Admin',
-    email: 'admin@example.com',
-    password: 'Password@123',
+    email: adminEmail,
+    password: adminPassword,
     role: 'ADMIN',
     phone: '+91 9876543210',
     status: 'ACTIVE',
@@ -251,11 +253,8 @@ export const seedDatabase = async () => {
     },
   ]);
 
-  console.log('[Seed] Database seeded successfully!');
-  console.log('----------------------------------------------------');
-  console.log('ADMIN:   admin@example.com   / Password@123');
-  console.log('STUDENT: student@example.com / Password@123 (ST001 - Rahul Kumar)');
-  console.log('----------------------------------------------------');
+  console.log('[Seed] Personal Library database seeded successfully.');
+  console.log(`[Seed] Admin Email: ${adminEmail}`);
 };
 
 if (require.main === module) {

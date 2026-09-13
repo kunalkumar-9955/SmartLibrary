@@ -334,7 +334,7 @@ export const AdminStudentsPage: React.FC = () => {
               <input
                 type="text"
                 required
-                placeholder="e.g. Rahul Kumar"
+                placeholder="e.g. Student Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
@@ -363,7 +363,7 @@ export const AdminStudentsPage: React.FC = () => {
               <input
                 type="email"
                 required
-                placeholder="student@example.com"
+                placeholder="student@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
