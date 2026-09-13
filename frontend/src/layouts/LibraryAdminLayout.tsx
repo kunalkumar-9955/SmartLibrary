@@ -49,14 +49,14 @@ export const LibraryAdminLayout: React.FC = () => {
       <aside className="hidden lg:flex lg:flex-col w-64 bg-slate-900 text-slate-300 border-r border-slate-800 p-4 shrink-0">
         <div className="px-3 py-4 mb-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-sm shadow">
-              <BookOpen className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center text-white font-black text-sm shadow shrink-0">
+              <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-lg" />
             </div>
             <div className="min-w-0">
-              <h1 className="font-bold text-white text-base truncate leading-tight">
-                SMART LIBRARY
+              <h1 className="font-extrabold text-white text-sm truncate leading-tight tracking-tight">
+                LAKSHYA SMART LIBRARY
               </h1>
-              <span className="text-[11px] font-medium text-indigo-400">
+              <span className="text-[10px] font-semibold text-[#d62976] block mt-0.5">
                 Admin Panel • 50 Seats
               </span>
             </div>
@@ -110,11 +110,11 @@ export const LibraryAdminLayout: React.FC = () => {
         {/* Mobile Header */}
         <header className="lg:hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-xs">
-              <BookOpen className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 rounded-lg bg-white p-0.5 flex items-center justify-center shadow shrink-0">
+              <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-md" />
             </div>
             <div className="text-xs">
-              <p className="font-bold text-sm">SMART LIBRARY</p>
+              <p className="font-extrabold text-sm tracking-tight text-white">LAKSHYA SMART LIBRARY</p>
             </div>
           </div>
           <button

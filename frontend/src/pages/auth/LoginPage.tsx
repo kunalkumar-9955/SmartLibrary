@@ -62,8 +62,8 @@ export const LoginPage: React.FC = () => {
 
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white font-black text-2xl shadow-lg shadow-indigo-600/30 mb-3">
-            <BookOpen className="w-7 h-7" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white p-1.5 shadow-lg shadow-pink-500/20 mb-3 border border-pink-100">
+            <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-xl" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
             LAKSHYA SMART LIBRARY

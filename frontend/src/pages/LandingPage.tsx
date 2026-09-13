@@ -174,11 +174,25 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
 
+  const menuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 30);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
 
   const scrollTo = (id: string) => {
     setMenuOpen(false);
@@ -207,10 +221,8 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
             className="flex items-center gap-2.5 group cursor-pointer text-left"
             aria-label="Go to top"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#feda75] via-[#d62976] to-[#4f5bd5] flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform p-0.5">
-              <div className="w-full h-full bg-white/15 rounded-[10px] flex items-center justify-center backdrop-blur-sm">
-                <BookOpen className="w-5 h-5 text-white" />
-              </div>
+            <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform shrink-0 border border-white/30">
+              <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-lg" />
             </div>
             <div>
               <span className={`text-sm sm:text-base font-black tracking-tight block transition-colors ${
@@ -276,26 +288,29 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
         </div>
       </div>
 
-      {/* Mobile menu drawer */}
+      {/* Compact Mobile Dropdown (Smooth 200ms animation, non-full-screen) */}
       {menuOpen && (
-        <div className="lg:hidden bg-white border-t border-pink-100 shadow-2xl">
-          <div className="px-4 pt-3 pb-5 space-y-1">
+        <div
+          ref={menuRef}
+          className="lg:hidden absolute top-full left-0 right-0 bg-white/98 backdrop-blur-xl border-b border-pink-200 shadow-2xl transition-all duration-200"
+        >
+          <div className="max-w-md mx-auto px-5 py-3.5 space-y-1">
             {NAV_LINKS.map(link => (
               <button
                 key={link.href}
                 onClick={() => scrollTo(link.href)}
-                className="block w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:text-[#d62976] hover:bg-pink-50 transition-colors cursor-pointer"
+                className="block w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-[#d62976] hover:bg-pink-50 transition-colors cursor-pointer"
               >
                 {link.label}
               </button>
             ))}
-            <div className="pt-3 border-t border-pink-100 mt-2">
+            <div className="pt-2.5 border-t border-pink-100 mt-2">
               <Link
                 to="/login"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-center gap-2 w-full py-2.5 bg-gradient-to-r from-[#d62976] to-[#fa7e1e] text-white font-bold text-sm rounded-xl transition-all shadow-md"
+                className="flex items-center justify-center gap-2 w-full py-2.5 bg-gradient-to-r from-[#d62976] to-[#fa7e1e] text-white font-extrabold text-xs rounded-xl transition-all shadow-md"
               >
-                <LogIn className="w-4 h-4" /> {isAuth ? 'Go to Dashboard' : 'Sign In'}
+                <LogIn className="w-3.5 h-3.5" /> {isAuth ? 'Go to Dashboard' : 'Sign In'}
               </Link>
             </div>
           </div>
@@ -862,9 +877,9 @@ export const LandingPage: React.FC = () => {
             <SectionReveal delay={0}>
               <PersonCard
                 img={IMG_DEV_KUNAL}
-                alt="Kunal Kumar - Full Stack Developer"
+                alt="Kunal Kumar - Software Engineer"
                 name="Kunal Kumar"
-                title="Full Stack Developer"
+                title="Software Engineer"
                 org="Lakshya Smart Library"
               />
             </SectionReveal>
@@ -872,9 +887,9 @@ export const LandingPage: React.FC = () => {
             <SectionReveal delay={120}>
               <PersonCard
                 img={IMG_DEV_CHHOTU}
-                alt="Chhotu Kumar - Full Stack Developer"
+                alt="Chhotu Kumar - Software Engineer"
                 name="Chhotu Kumar"
-                title="Full Stack Developer"
+                title="Software Engineer"
                 org="Lakshya Smart Library"
               />
             </SectionReveal>
@@ -895,8 +910,8 @@ export const LandingPage: React.FC = () => {
             {/* Column 1: Brand & Purpose */}
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-white text-[#d62976] flex items-center justify-center shadow-lg font-black">
-                  <BookOpen className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-white p-1 text-[#d62976] flex items-center justify-center shadow-lg shrink-0">
+                  <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-lg" />
                 </div>
                 <span className="text-lg font-black text-white tracking-tight drop-shadow-sm">
                   LAKSHYA SMART LIBRARY

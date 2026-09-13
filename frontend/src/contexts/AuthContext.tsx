@@ -28,23 +28,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initAuth = async () => {
-      if (token) {
+      const savedToken = localStorage.getItem('smart_library_token');
+      if (savedToken) {
         try {
           const res = await authService.getMe();
-          if (res.data.success) {
+          if (res.data?.success) {
             const userData = res.data.data.user || res.data.data;
             setUser(userData);
             localStorage.setItem('smart_library_user', JSON.stringify(userData));
           }
-        } catch (error) {
-          console.warn('[AuthContext] Session expired or invalid');
-          logout();
+        } catch (error: any) {
+          // Only clear session if token is truly rejected by the backend (401 Unauthorized / 403 Forbidden)
+          if (error?.response && (error.response.status === 401 || error.response.status === 403)) {
+            console.warn('[AuthContext] Session expired or invalid on backend');
+            await logout();
+          } else {
+            console.warn('[AuthContext] Backend unreachable during init, keeping existing offline session');
+          }
         }
       }
       setIsLoading(false);
     };
     initAuth();
-  }, [token]);
+  }, []);
 
   const login = async (credentials: { email: string; password: string }): Promise<User> => {
     setIsLoading(true);

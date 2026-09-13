@@ -1,0 +1,18 @@
+{
+  "short_name": "Lakshya Library",
+  "name": "Lakshya Smart Library",
+  "icons": [
+    {
+      "src": "/Logo.png",
+      "type": "image/png",
+      "sizes": "192x192 512x512 1024x1024",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#faf7f5",
+  "theme_color": "#d62976",
+  "display": "standalone",
+  "orientation": "portrait",
+  "description": "Personal Library Management & Attendance System - Lakshya Smart Library"
+}

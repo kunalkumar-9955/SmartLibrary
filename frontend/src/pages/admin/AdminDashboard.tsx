@@ -71,7 +71,7 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              SMART LIBRARY DASHBOARD
+              LAKSHYA SMART LIBRARY DASHBOARD
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">

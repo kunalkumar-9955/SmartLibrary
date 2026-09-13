@@ -86,7 +86,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     }
 
     const secret = process.env.JWT_SECRET || 'smart_library_jwt_secret_key_2026';
-    const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+    const expiresIn = process.env.JWT_EXPIRES_IN || '365d';
 
     const token = jwt.sign(
       {

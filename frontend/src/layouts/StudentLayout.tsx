@@ -35,14 +35,14 @@ export const StudentLayout: React.FC = () => {
       <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-4 sm:px-6 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <Link to="/student/dashboard" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-xs shadow-md">
-              <BookOpen className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-white p-0.5 flex items-center justify-center text-white font-black text-xs shadow-md border border-slate-200 dark:border-slate-700 shrink-0">
+              <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-lg" />
             </div>
             <div>
-              <p className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight">
-                SMART LIBRARY
+              <p className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight tracking-tight">
+                LAKSHYA SMART LIBRARY
               </p>
-              <p className="text-[10px] text-slate-400 font-medium">Student Portal</p>
+              <p className="text-[10px] text-pink-600 dark:text-pink-400 font-semibold">Student Portal</p>
             </div>
           </Link>
 

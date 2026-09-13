@@ -126,7 +126,7 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({ initialType 
       {/* Title */}
       <div className="text-center mb-6">
         <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white uppercase">
-          SMART LIBRARY ATTENDANCE QR
+          LAKSHYA SMART LIBRARY ATTENDANCE QR
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
           Scan to mark {qrType === 'ENTRY' ? 'entry and occupy seat' : 'exit and release seat'}
