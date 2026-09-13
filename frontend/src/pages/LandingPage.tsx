@@ -288,34 +288,70 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
         </div>
       </div>
 
-      {/* Compact Mobile Dropdown (Smooth 200ms animation, non-full-screen) */}
+      {/* Mobile Drawer Backdrop Overlay */}
       {menuOpen && (
         <div
-          ref={menuRef}
-          className="lg:hidden absolute top-full left-0 right-0 bg-white/98 backdrop-blur-xl border-b border-pink-200 shadow-2xl transition-all duration-200"
-        >
-          <div className="max-w-md mx-auto px-5 py-3.5 space-y-1">
-            {NAV_LINKS.map(link => (
-              <button
-                key={link.href}
-                onClick={() => scrollTo(link.href)}
-                className="block w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-[#d62976] hover:bg-pink-50 transition-colors cursor-pointer"
-              >
-                {link.label}
-              </button>
-            ))}
-            <div className="pt-2.5 border-t border-pink-100 mt-2">
-              <Link
-                to="/login"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-center gap-2 w-full py-2.5 bg-gradient-to-r from-[#d62976] to-[#fa7e1e] text-white font-extrabold text-xs rounded-xl transition-all shadow-md"
-              >
-                <LogIn className="w-3.5 h-3.5" /> {isAuth ? 'Go to Dashboard' : 'Sign In'}
-              </Link>
+          className="fixed inset-0 bg-black/65 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300"
+          onClick={() => setMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Half-Screen Opaque Mobile Slide Drawer (Zero overlap, solid background) */}
+      <div
+        ref={menuRef}
+        className={`fixed top-0 right-0 bottom-0 w-[72vw] max-w-[280px] bg-[#180b22] text-white z-50 shadow-2xl flex flex-col p-5 lg:hidden border-l border-white/20 transition-transform duration-300 ease-in-out ${
+          menuOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+        }`}
+      >
+        {/* Drawer Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-white/15 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-white p-1 flex items-center justify-center shadow shrink-0">
+              <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-lg" />
+            </div>
+            <div>
+              <span className="text-xs font-black tracking-tight text-white block">
+                LAKSHYA
+              </span>
+              <span className="text-[9px] font-bold text-yellow-300 tracking-wide block">
+                SMART LIBRARY
+              </span>
             </div>
           </div>
+          <button
+            onClick={() => setMenuOpen(false)}
+            className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Close menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
-      )}
+
+        {/* Navigation Links */}
+        <div className="flex-1 overflow-y-auto space-y-1.5 py-1 pr-1">
+          {NAV_LINKS.map(link => (
+            <button
+              key={link.href}
+              onClick={() => scrollTo(link.href)}
+              className="block w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold text-white/90 hover:text-white hover:bg-white/15 active:bg-white/25 transition-colors cursor-pointer"
+            >
+              {link.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Drawer Bottom CTA */}
+        <div className="pt-4 border-t border-white/15 mt-auto">
+          <Link
+            to={isAuth ? (role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard') : '/login'}
+            onClick={() => setMenuOpen(false)}
+            className="flex items-center justify-center gap-2 w-full py-2.5 bg-gradient-to-r from-[#d62976] via-[#962fbf] to-[#4f5bd5] hover:opacity-95 text-white font-extrabold text-xs rounded-xl transition-all shadow-lg active:scale-98"
+          >
+            <LogIn className="w-3.5 h-3.5" /> {isAuth ? 'Go to Dashboard' : 'Sign In'}
+          </Link>
+        </div>
+      </div>
     </nav>
   );
 };
@@ -973,11 +1009,8 @@ export const LandingPage: React.FC = () => {
                     <Youtube className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-white group-hover:text-yellow-200 transition-colors">
+                    <p className="text-sm font-bold text-white group-hover:text-yellow-200 transition-colors">
                       YouTube
-                    </p>
-                    <p className="text-[11px] text-white/80 font-medium">
-                      @lakshyaclassesbymonusir
                     </p>
                   </div>
                 </a>
@@ -994,11 +1027,8 @@ export const LandingPage: React.FC = () => {
                     <Instagram className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-white group-hover:text-yellow-200 transition-colors">
+                    <p className="text-sm font-bold text-white group-hover:text-yellow-200 transition-colors">
                       Instagram
-                    </p>
-                    <p className="text-[11px] text-white/80 font-medium">
-                      @lakshayaclasses9431
                     </p>
                   </div>
                 </a>
