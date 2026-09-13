@@ -76,22 +76,24 @@ interface PersonCardProps {
 }
 
 const PersonCard: React.FC<PersonCardProps> = ({ img, alt, name, title, org }) => (
-  <div className="w-full max-w-[360px] sm:max-w-[380px] bg-white rounded-3xl p-6 sm:p-7 shadow-sm hover:shadow-xl border border-slate-200/90 transition-all duration-300 hover:-translate-y-1.5 flex flex-col items-center text-center group">
-    {/* Large Square Photo Container */}
-    <div className="w-full max-w-[260px] sm:max-w-[280px] aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-stone-100 border border-slate-200 shadow-inner mb-5 flex items-center justify-center">
-      <img
-        src={img}
-        alt={alt}
-        loading="lazy"
-        className="w-full h-full object-cover object-top group-hover:scale-[1.03] transition-transform duration-500"
-      />
+  <div className="w-full max-w-[360px] sm:max-w-[380px] bg-white rounded-3xl p-6 sm:p-7 shadow-md hover:shadow-2xl border border-pink-100 transition-all duration-300 hover:-translate-y-2 flex flex-col items-center text-center group">
+    {/* Large Square Photo Container with subtle Instagram gradient ring on hover */}
+    <div className="w-full max-w-[260px] sm:max-w-[280px] aspect-square rounded-2xl sm:rounded-3xl overflow-hidden bg-stone-100 border border-stone-200 shadow-inner mb-5 flex items-center justify-center p-0.5 group-hover:bg-gradient-to-tr group-hover:from-[#feda75] group-hover:via-[#d62976] group-hover:to-[#4f5bd5] transition-all duration-500">
+      <div className="w-full h-full rounded-[22px] overflow-hidden">
+        <img
+          src={img}
+          alt={alt}
+          loading="lazy"
+          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+        />
+      </div>
     </div>
 
     {/* Exact Hierarchy: Name -> Spacing -> Designation -> Spacing -> Organization */}
     <h3 className="text-xl font-black text-slate-900 tracking-tight mb-1">
       {name}
     </h3>
-    <p className="text-sm font-bold text-indigo-600 mb-1">
+    <p className="text-sm font-bold text-[#d62976] mb-1">
       {title}
     </p>
     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -114,9 +116,9 @@ const FeatureCard: React.FC<FeatureCardProps> = ({ icon, title, desc, delay = 0 
         transform: visible ? 'translateY(0)' : 'translateY(22px)',
         transition: `opacity 0.6s ease ${delay}ms, transform 0.6s ease ${delay}ms`,
       }}
-      className="group bg-white rounded-2xl p-6 sm:p-7 border border-slate-200/80 shadow-sm hover:shadow-xl hover:-translate-y-1.5 hover:border-indigo-200 transition-all duration-300 flex flex-col h-full"
+      className="group bg-white rounded-2xl p-6 sm:p-7 border border-pink-100/80 shadow-sm hover:shadow-xl hover:-translate-y-1.5 hover:border-pink-300 transition-all duration-300 flex flex-col h-full"
     >
-      <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300 shadow-sm">
+      <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#fbeaf0] to-[#fff1e6] text-[#d62976] flex items-center justify-center mb-4 group-hover:bg-gradient-to-tr group-hover:from-[#d62976] group-hover:to-[#fa7e1e] group-hover:text-white transition-all duration-300 shadow-sm">
         {icon}
       </div>
       <h3 className="text-base font-bold text-slate-900 mb-2">{title}</h3>
@@ -140,9 +142,9 @@ const StepCard: React.FC<{ step: number; title: string; desc: string; delay?: nu
         transform: visible ? 'translateY(0)' : 'translateY(20px)',
         transition: `opacity 0.6s ease ${delay}ms, transform 0.6s ease ${delay}ms`,
       }}
-      className="flex gap-4 items-start bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-sm hover:shadow-md transition-shadow"
+      className="flex gap-4 items-start bg-white p-5 sm:p-6 rounded-2xl border border-pink-100 shadow-sm hover:shadow-md transition-shadow"
     >
-      <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-indigo-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-indigo-600/20">
+      <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-tr from-[#d62976] to-[#fa7e1e] text-white font-black text-sm flex items-center justify-center shadow-md shadow-pink-500/25">
         {step}
       </div>
       <div className="pt-0.5">
@@ -192,8 +194,8 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'bg-white/95 backdrop-blur-md shadow-md border-b border-slate-200/80 py-2.5'
-          : 'bg-slate-950/80 backdrop-blur-md border-b border-white/10 py-3.5'
+          ? 'bg-white/95 backdrop-blur-md shadow-lg border-b border-pink-100 py-2.5'
+          : 'bg-black/25 backdrop-blur-md border-b border-white/20 py-3.5'
       }`}
       aria-label="Main navigation"
     >
@@ -205,8 +207,10 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
             className="flex items-center gap-2.5 group cursor-pointer text-left"
             aria-label="Go to top"
           >
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md group-hover:bg-indigo-700 transition-colors">
-              <BookOpen className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#feda75] via-[#d62976] to-[#4f5bd5] flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform p-0.5">
+              <div className="w-full h-full bg-white/15 rounded-[10px] flex items-center justify-center backdrop-blur-sm">
+                <BookOpen className="w-5 h-5 text-white" />
+              </div>
             </div>
             <div>
               <span className={`text-sm sm:text-base font-black tracking-tight block transition-colors ${
@@ -214,7 +218,9 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
               }`}>
                 LAKSHYA SMART LIBRARY
               </span>
-              <span className="text-[10px] block text-indigo-400 font-medium tracking-wide">
+              <span className={`text-[10px] block font-bold tracking-wide ${
+                scrolled ? 'text-[#d62976]' : 'text-yellow-200'
+              }`}>
                 50 Smart Seats • Personal System
               </span>
             </div>
@@ -226,10 +232,10 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
               <button
                 key={link.href}
                 onClick={() => scrollTo(link.href)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   scrolled
-                    ? 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/70'
-                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                    ? 'text-slate-700 hover:text-[#d62976] hover:bg-pink-50'
+                    : 'text-white/90 hover:text-white hover:bg-white/15'
                 }`}
               >
                 {link.label}
@@ -242,14 +248,14 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
             {isAuth ? (
               <button
                 onClick={() => navigate(role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard')}
-                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-[#d62976] via-[#962fbf] to-[#4f5bd5] hover:opacity-95 text-white text-xs font-extrabold rounded-xl transition-all shadow-md hover:scale-105 cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" /> Go to Dashboard
               </button>
             ) : (
               <Link
                 to="/login"
-                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md"
+                className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-[#d62976] via-[#962fbf] to-[#4f5bd5] hover:opacity-95 text-white text-xs font-extrabold rounded-xl transition-all shadow-md hover:scale-105"
               >
                 <LogIn className="w-3.5 h-3.5" /> Sign In
               </Link>
@@ -272,22 +278,22 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
 
       {/* Mobile menu drawer */}
       {menuOpen && (
-        <div className="lg:hidden bg-white border-t border-slate-200 shadow-2xl">
+        <div className="lg:hidden bg-white border-t border-pink-100 shadow-2xl">
           <div className="px-4 pt-3 pb-5 space-y-1">
             {NAV_LINKS.map(link => (
               <button
                 key={link.href}
                 onClick={() => scrollTo(link.href)}
-                className="block w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                className="block w-full text-left px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:text-[#d62976] hover:bg-pink-50 transition-colors cursor-pointer"
               >
                 {link.label}
               </button>
             ))}
-            <div className="pt-3 border-t border-slate-100 mt-2">
+            <div className="pt-3 border-t border-pink-100 mt-2">
               <Link
                 to="/login"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-center gap-2 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-colors shadow-sm"
+                className="flex items-center justify-center gap-2 w-full py-2.5 bg-gradient-to-r from-[#d62976] to-[#fa7e1e] text-white font-bold text-sm rounded-xl transition-all shadow-md"
               >
                 <LogIn className="w-4 h-4" /> {isAuth ? 'Go to Dashboard' : 'Sign In'}
               </Link>
@@ -328,47 +334,49 @@ export const LandingPage: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen font-sans bg-[#faf9f6] text-slate-900 antialiased selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen font-sans bg-[#faf7f5] text-slate-900 antialiased selection:bg-pink-500 selection:text-white">
       {/* 1. NAVBAR */}
       <Navbar isAuth={isAuthenticated} role={user?.role} />
 
       {/* ==============================================================
-          2. HERO — RESTORED TO CLEAN OPEN DESIGN (NO BLUE, NO CLUTTER BOX)
+          2. HERO — VIBRANT ANIMATED INSTAGRAM LOGO GRADIENT
       ============================================================== */}
       <section
         id="home"
-        className="relative min-h-[92vh] sm:min-h-screen flex items-center justify-center overflow-hidden bg-slate-950 pt-28 sm:pt-36 pb-20 sm:pb-28 px-4 sm:px-6"
+        className="relative min-h-[92vh] sm:min-h-screen flex items-center justify-center overflow-hidden bg-insta-gradient-animated pt-28 sm:pt-36 pb-20 sm:pb-28 px-4 sm:px-6"
       >
-        {/* Subtle grid pattern */}
+        {/* Animated ambient glowing orbs */}
+        <div className="absolute top-1/4 left-10 w-72 h-72 bg-yellow-300/25 rounded-full blur-3xl animate-float-slow pointer-events-none" />
+        <div className="absolute bottom-1/4 right-10 w-80 h-80 bg-purple-500/30 rounded-full blur-3xl animate-float-reverse pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-400/25 rounded-full blur-3xl animate-pulse-glow pointer-events-none" />
+
+        {/* Subtle mesh dot overlay */}
         <div
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 opacity-[0.06]"
           style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,.6) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.6) 1px,transparent 1px)`,
-            backgroundSize: '48px 48px',
+            backgroundImage: `radial-gradient(rgba(255,255,255,0.9) 1px, transparent 1px)`,
+            backgroundSize: '32px 32px',
           }}
         />
 
-        {/* Subtle soft neutral ambient glow (NOT blue) */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-slate-800/30 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Open, Spacious Hero Layout — Exact "phle jaisa" design */}
+        {/* Open, Spacious Hero Layout */}
         <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
           {/* Tagline Pill */}
           <div
             style={anim(heroVisible, 100, -14)}
-            className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 border border-white/15 rounded-full text-slate-200 text-xs sm:text-sm font-semibold mb-6 backdrop-blur-sm shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/20 hover:bg-white/25 border border-white/35 rounded-full text-white text-xs sm:text-sm font-bold mb-6 backdrop-blur-md shadow-lg transition-all"
           >
-            <BookOpen className="w-4 h-4 text-indigo-400" />
+            <Sparkles className="w-4 h-4 text-yellow-200 animate-pulse" />
             <span>Personal Library Management &amp; Attendance System</span>
           </div>
 
           {/* Main Title */}
           <h1
             style={anim(heroVisible, 250)}
-            className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight tracking-tight mb-5 drop-shadow-sm"
+            className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight tracking-tight mb-5 drop-shadow-lg"
           >
             LAKSHYA{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-pink-100 to-white drop-shadow">
               SMART
             </span>{' '}
             LIBRARY
@@ -377,7 +385,7 @@ export const LandingPage: React.FC = () => {
           {/* Subtitle */}
           <p
             style={anim(heroVisible, 400)}
-            className="text-lg sm:text-xl text-slate-300 font-medium mb-6 max-w-2xl mx-auto leading-relaxed"
+            className="text-lg sm:text-xl text-white/95 font-semibold mb-6 max-w-2xl mx-auto leading-relaxed drop-shadow"
           >
             A Smarter Way to Manage Your Library Experience
           </p>
@@ -396,9 +404,9 @@ export const LandingPage: React.FC = () => {
             ].map(tag => (
               <span
                 key={tag}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white/5 border border-white/10 rounded-full text-xs font-medium text-slate-300"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white/20 hover:bg-white/30 border border-white/35 rounded-full text-xs font-semibold text-white backdrop-blur-md shadow-sm transition-all hover:scale-105"
               >
-                <CheckCircle className="w-3.5 h-3.5 text-indigo-400" />
+                <CheckCircle className="w-3.5 h-3.5 text-yellow-200" />
                 {tag}
               </span>
             ))}
@@ -407,12 +415,12 @@ export const LandingPage: React.FC = () => {
           {/* Action Buttons */}
           <div
             style={anim(heroVisible, 650)}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3.5"
+            className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             {isAuthenticated ? (
               <button
                 onClick={() => navigate(user?.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard')}
-                className="flex items-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-xl transition-all shadow-xl shadow-indigo-600/30 group cursor-pointer"
+                className="flex items-center gap-2 px-8 py-4 bg-white hover:bg-white/90 text-purple-900 font-extrabold text-sm sm:text-base rounded-2xl transition-all shadow-2xl hover:scale-105 group cursor-pointer"
               >
                 Go to Dashboard
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -421,14 +429,14 @@ export const LandingPage: React.FC = () => {
               <>
                 <Link
                   to="/login"
-                  className="flex items-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-xl transition-all shadow-xl shadow-indigo-600/30 group"
+                  className="flex items-center gap-2 px-8 py-4 bg-white hover:bg-white/90 text-purple-900 font-extrabold text-sm sm:text-base rounded-2xl transition-all shadow-2xl hover:scale-105 group"
                 >
                   Get Started
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <button
                   onClick={() => scrollTo('features')}
-                  className="flex items-center gap-2 px-8 py-3.5 bg-white/10 hover:bg-white/15 border border-white/15 text-white font-semibold text-sm sm:text-base rounded-xl transition-all cursor-pointer"
+                  className="flex items-center gap-2 px-8 py-4 bg-white/20 hover:bg-white/30 border border-white/40 text-white font-bold text-sm sm:text-base rounded-2xl transition-all backdrop-blur-md hover:scale-105 cursor-pointer shadow-lg"
                 >
                   Explore Features
                 </button>
@@ -438,19 +446,19 @@ export const LandingPage: React.FC = () => {
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-40 pointer-events-none">
-          <div className="w-px h-10 bg-gradient-to-b from-transparent to-white/70" />
-          <span className="text-[10px] text-white/70 tracking-widest uppercase">Scroll</span>
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-70 pointer-events-none">
+          <div className="w-px h-8 bg-gradient-to-b from-transparent to-white" />
+          <span className="text-[10px] text-white tracking-widest uppercase font-bold">Scroll</span>
         </div>
       </section>
 
       {/* ==============================================================
           3. LIBRARY BENEFITS (CORE VALUE PILLARS)
       ============================================================== */}
-      <section id="benefits" className="py-16 sm:py-20 bg-white border-b border-stone-200/80">
+      <section id="benefits" className="py-16 sm:py-20 bg-white border-b border-pink-100/70">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <SectionReveal className="text-center mb-12">
-            <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
+            <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#d62976] mb-2 px-3 py-1 rounded-full bg-pink-50 border border-pink-200">
               Why Lakshya Smart Library
             </span>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-3">
@@ -464,29 +472,29 @@ export const LandingPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
-                icon: <Armchair className="w-6 h-6 text-indigo-600" />,
+                icon: <Armchair className="w-6 h-6 text-[#d62976]" />,
                 title: '50 Reserved Desks',
                 desc: 'A dedicated personal space. No seat hunting, no reservations confusion.',
               },
               {
-                icon: <Clock className="w-6 h-6 text-indigo-600" />,
+                icon: <Clock className="w-6 h-6 text-[#d62976]" />,
                 title: 'Contactless Check-In',
                 desc: 'Scan the dynamic QR code on entry and exit in less than 5 seconds.',
               },
               {
-                icon: <Award className="w-6 h-6 text-indigo-600" />,
+                icon: <Award className="w-6 h-6 text-[#d62976]" />,
                 title: 'Daily Study Tracking',
                 desc: 'Monitor your study hours, consistency, and monthly visit percentages.',
               },
               {
-                icon: <LifeBuoy className="w-6 h-6 text-indigo-600" />,
+                icon: <LifeBuoy className="w-6 h-6 text-[#d62976]" />,
                 title: 'Fast Issue Resolution',
                 desc: 'Report Wi-Fi, AC, or maintenance issues directly to library management.',
               },
             ].map((item, i) => (
               <SectionReveal key={item.title} delay={i * 60}>
-                <div className="p-6 rounded-2xl bg-stone-50/70 border border-stone-200/80 hover:bg-white hover:border-indigo-200 hover:shadow-md transition-all duration-300 h-full flex flex-col">
-                  <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-4">
+                <div className="p-6 rounded-2xl bg-gradient-to-tr from-pink-50/50 via-white to-amber-50/40 border border-pink-100 hover:border-pink-300 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 h-full flex flex-col group">
+                  <div className="w-12 h-12 rounded-xl bg-white border border-pink-100 flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 transition-transform">
                     {item.icon}
                   </div>
                   <h3 className="text-base font-bold text-slate-900 mb-1.5">{item.title}</h3>
@@ -501,13 +509,13 @@ export const LandingPage: React.FC = () => {
       {/* ==============================================================
           4. ABOUT LAKSHYA SMART LIBRARY (WITH BANNER SHOWCASE)
       ============================================================== */}
-      <section id="about" className="py-20 sm:py-24 bg-[#faf9f6] border-b border-stone-200/80">
+      <section id="about" className="py-20 sm:py-24 bg-[#fdfaf8] border-b border-pink-100/70">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Left Column: About Narrative */}
             <SectionReveal delay={0}>
               <div>
-                <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
+                <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#d62976] mb-2 px-3 py-1 rounded-full bg-pink-50 border border-pink-200">
                   About Our Institution
                 </span>
                 <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-5 leading-snug">
@@ -527,7 +535,7 @@ export const LandingPage: React.FC = () => {
                     'Direct communication with Director Monu Kumar & Manager Sonu Singh',
                   ].map(feat => (
                     <div key={feat} className="flex items-center gap-3 text-xs sm:text-sm font-semibold text-slate-800">
-                      <CheckCircle2 className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-[#d62976] flex-shrink-0" />
                       <span>{feat}</span>
                     </div>
                   ))}
@@ -539,28 +547,30 @@ export const LandingPage: React.FC = () => {
             <SectionReveal delay={120}>
               <div className="space-y-6">
                 {/* Official Library Banner Image cleanly showcased */}
-                <div className="rounded-2xl overflow-hidden border border-stone-200 shadow-md bg-white">
-                  <img
-                    src={IMG_BANNER}
-                    alt="Lakshya Smart Library Official Banner"
-                    className="w-full h-auto object-cover"
-                  />
+                <div className="rounded-3xl overflow-hidden border-2 border-pink-200 shadow-xl bg-white p-1">
+                  <div className="rounded-[20px] overflow-hidden">
+                    <img
+                      src={IMG_BANNER}
+                      alt="Lakshya Smart Library Official Banner"
+                      className="w-full h-auto object-cover hover:scale-105 transition-transform duration-500"
+                    />
+                  </div>
                 </div>
 
                 {/* Digital Specs Card */}
-                <div className="bg-white rounded-2xl p-6 border border-stone-200/90 shadow-sm">
+                <div className="bg-white rounded-2xl p-6 border border-pink-100 shadow-md">
                   <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="p-3 rounded-xl bg-stone-50 border border-stone-200/60">
-                      <p className="text-xl font-black text-slate-900">50</p>
-                      <p className="text-[11px] text-slate-500 font-medium">Smart Seats</p>
+                    <div className="p-3.5 rounded-xl bg-pink-50/60 border border-pink-100">
+                      <p className="text-2xl font-black text-[#d62976]">50</p>
+                      <p className="text-[11px] text-slate-600 font-semibold">Smart Seats</p>
                     </div>
-                    <div className="p-3 rounded-xl bg-stone-50 border border-stone-200/60">
-                      <p className="text-xl font-black text-slate-900">100%</p>
-                      <p className="text-[11px] text-slate-500 font-medium">Digital Attendance</p>
+                    <div className="p-3.5 rounded-xl bg-purple-50/60 border border-purple-100">
+                      <p className="text-2xl font-black text-[#962fbf]">100%</p>
+                      <p className="text-[11px] text-slate-600 font-semibold">Digital Attendance</p>
                     </div>
-                    <div className="p-3 rounded-xl bg-stone-50 border border-stone-200/60">
-                      <p className="text-xl font-black text-slate-900">45s</p>
-                      <p className="text-[11px] text-slate-500 font-medium">QR Cycle</p>
+                    <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-100">
+                      <p className="text-2xl font-black text-[#fa7e1e]">45s</p>
+                      <p className="text-[11px] text-slate-600 font-semibold">QR Cycle</p>
                     </div>
                   </div>
                 </div>
@@ -573,10 +583,10 @@ export const LandingPage: React.FC = () => {
       {/* ==============================================================
           5. SMART LIBRARY FEATURES
       ============================================================== */}
-      <section id="features" className="py-20 sm:py-24 bg-white border-b border-stone-200/80">
+      <section id="features" className="py-20 sm:py-24 bg-white border-b border-pink-100/70">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <SectionReveal className="text-center mb-12 sm:mb-16">
-            <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
+            <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#d62976] mb-2 px-3 py-1 rounded-full bg-pink-50 border border-pink-200">
               System Highlights
             </span>
             <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-4">
@@ -631,10 +641,10 @@ export const LandingPage: React.FC = () => {
       {/* ==============================================================
           6. HOW IT WORKS (5-STEP PROCESS)
       ============================================================== */}
-      <section id="how-it-works" className="py-20 sm:py-24 bg-[#faf9f6] border-b border-stone-200/80">
+      <section id="how-it-works" className="py-20 sm:py-24 bg-[#fdfaf8] border-b border-pink-100/70">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <SectionReveal className="text-center mb-12 sm:mb-16">
-            <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
+            <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#d62976] mb-2 px-3 py-1 rounded-full bg-pink-50 border border-pink-200">
               User Workflow
             </span>
             <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-4">
@@ -680,16 +690,16 @@ export const LandingPage: React.FC = () => {
               />
             </div>
 
-            {/* Visual Preview Graphic */}
+            {/* Visual Preview Graphic with Instagram Gradient */}
             <SectionReveal delay={150}>
-              <div className="bg-slate-900 rounded-3xl p-8 sm:p-10 text-white shadow-2xl border border-slate-800">
+              <div className="bg-gradient-to-br from-[#4f5bd5] via-[#962fbf] to-[#d62976] rounded-3xl p-8 sm:p-10 text-white shadow-2xl">
                 <div className="flex items-center gap-3.5 mb-8">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center border border-indigo-400/30">
-                    <QrCode className="w-6 h-6 text-indigo-300" />
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center border border-white/30 backdrop-blur-sm">
+                    <QrCode className="w-6 h-6 text-yellow-200" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-base sm:text-lg">Smart QR Attendance</h3>
-                    <p className="text-indigo-300 text-xs">Automated • Tamper-proof • Fast</p>
+                    <h3 className="font-black text-base sm:text-lg">Smart QR Attendance</h3>
+                    <p className="text-yellow-200 text-xs font-semibold">Automated • Tamper-proof • Fast</p>
                   </div>
                 </div>
 
@@ -703,23 +713,23 @@ export const LandingPage: React.FC = () => {
                   ].map((step, i) => (
                     <div
                       key={step}
-                      className="flex items-center gap-3.5 p-3 rounded-xl bg-slate-800/80 border border-slate-700/60"
+                      className="flex items-center gap-3.5 p-3 rounded-xl bg-white/15 border border-white/20 backdrop-blur-sm"
                     >
-                      <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
+                      <div className="w-7 h-7 rounded-lg bg-white text-[#d62976] text-xs font-black flex items-center justify-center flex-shrink-0 shadow-sm">
                         {i + 1}
                       </div>
-                      <p className="flex-1 text-xs sm:text-sm font-medium text-slate-200">{step}</p>
+                      <p className="flex-1 text-xs sm:text-sm font-semibold text-white">{step}</p>
                       {i < 4 ? (
-                        <ChevronRight className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                        <ChevronRight className="w-4 h-4 text-yellow-200 flex-shrink-0" />
                       ) : (
-                        <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <CheckCircle className="w-4 h-4 text-emerald-300 flex-shrink-0" />
                       )}
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-8 pt-5 border-t border-slate-800 text-center">
-                  <p className="text-xs text-indigo-300 font-medium">
+                <div className="mt-8 pt-5 border-t border-white/20 text-center">
+                  <p className="text-xs text-yellow-200 font-semibold">
                     🛡️ Dynamic QR codes expire every 45 seconds for foolproof security
                   </p>
                 </div>
@@ -735,7 +745,7 @@ export const LandingPage: React.FC = () => {
       <section id="lakshya-classes" className="py-20 sm:py-24 bg-[#fcf9f2] border-b border-amber-200/60">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <SectionReveal>
-            <div className="rounded-3xl bg-white p-8 sm:p-12 shadow-lg border border-amber-200/80 relative overflow-hidden">
+            <div className="rounded-3xl bg-white p-8 sm:p-12 shadow-xl border border-amber-200/80 relative overflow-hidden">
               {/* Subtle warm decorative accents */}
               <div className="absolute top-0 right-0 w-80 h-80 bg-amber-100/40 rounded-full blur-3xl pointer-events-none" />
 
@@ -749,7 +759,7 @@ export const LandingPage: React.FC = () => {
                 <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-2 tracking-tight">
                   Lakshya Classes
                 </h2>
-                <p className="text-indigo-600 font-bold text-base sm:text-lg mb-4">
+                <p className="text-[#d62976] font-bold text-base sm:text-lg mb-4">
                   Classes 9th – 12th
                 </p>
 
@@ -760,11 +770,11 @@ export const LandingPage: React.FC = () => {
                 {/* Details highlights */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                   <div className="flex items-center gap-3 text-slate-800 text-sm p-4 rounded-2xl bg-[#faf7ef] border border-amber-200/60 font-medium">
-                    <Users className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                    <Users className="w-5 h-5 text-[#d62976] flex-shrink-0" />
                     <span>Directed by <strong className="text-slate-900 font-bold">Monu Kumar</strong></span>
                   </div>
                   <div className="flex items-center gap-3 text-slate-800 text-sm p-4 rounded-2xl bg-[#faf7ef] border border-amber-200/60 font-medium">
-                    <MapPin className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                    <MapPin className="w-5 h-5 text-[#d62976] flex-shrink-0" />
                     <span>Located just above Lakshya Smart Library</span>
                   </div>
                 </div>
@@ -773,10 +783,10 @@ export const LandingPage: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4 border-t border-amber-200/60">
                   <a
                     href="tel:9155435493"
-                    className="flex items-center justify-center gap-2.5 px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm sm:text-base rounded-2xl transition-all shadow-md"
+                    className="flex items-center justify-center gap-2.5 px-8 py-3.5 bg-gradient-to-r from-[#d62976] via-[#fa7e1e] to-[#feda75] hover:opacity-95 text-white font-extrabold text-sm sm:text-base rounded-2xl transition-all shadow-lg hover:scale-105"
                     aria-label="Call Lakshya Classes at 9155435493"
                   >
-                    <Phone className="w-4 h-4 text-amber-400" /> Call Now: 9155435493
+                    <Phone className="w-4 h-4 text-white" /> Call Now: 9155435493
                   </a>
                   <div className="flex items-center justify-center px-5 py-3 rounded-2xl bg-amber-50 text-amber-900 text-xs sm:text-sm font-semibold border border-amber-200/50">
                     For More Information — Talk to the Director
@@ -791,10 +801,10 @@ export const LandingPage: React.FC = () => {
       {/* ==============================================================
           8. LIBRARY MANAGEMENT — COMPLETELY SEPARATE SECTION
       ============================================================== */}
-      <section id="management" className="py-20 sm:py-24 bg-white border-b border-stone-200/80">
+      <section id="management" className="py-20 sm:py-24 bg-white border-b border-pink-100/70">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <SectionReveal className="text-center mb-12 sm:mb-16">
-            <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
+            <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#d62976] mb-2 px-3 py-1 rounded-full bg-pink-50 border border-pink-200">
               Leadership
             </span>
             <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-3">
@@ -833,10 +843,10 @@ export const LandingPage: React.FC = () => {
       {/* ==============================================================
           9. DESIGNED & DEVELOPED BY — COMPLETELY SEPARATE SECTION
       ============================================================== */}
-      <section id="developers" className="py-20 sm:py-24 bg-[#faf9f6] border-b border-stone-200/80">
+      <section id="developers" className="py-20 sm:py-24 bg-[#fdfaf8] border-b border-pink-100/70">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <SectionReveal className="text-center mb-12 sm:mb-16">
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-indigo-600 mb-2">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-[#d62976] mb-2 px-3 py-1 rounded-full bg-pink-50 border border-pink-200">
               <Code2 className="w-3.5 h-3.5" /> Engineering
             </div>
             <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-3">
@@ -873,35 +883,39 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* ==============================================================
-          10. FOOTER WITH YOUTUBE & INSTAGRAM SOCIAL BUTTONS
+          10. FOOTER WITH INSTAGRAM LOGO COLOR GRADIENT
       ============================================================== */}
-      <footer className="bg-slate-950 text-slate-400 py-16 border-t border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+      <footer className="bg-insta-gradient text-white py-16 relative overflow-hidden border-t border-white/25">
+        {/* Subtle decorative glow */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-black/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 sm:gap-12 mb-12">
             {/* Column 1: Brand & Purpose */}
             <div>
-              <div className="flex items-center gap-2.5 mb-3.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md">
-                  <BookOpen className="w-4 h-4" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-white text-[#d62976] flex items-center justify-center shadow-lg font-black">
+                  <BookOpen className="w-5 h-5" />
                 </div>
-                <span className="text-base font-black text-white tracking-tight">
+                <span className="text-lg font-black text-white tracking-tight drop-shadow-sm">
                   LAKSHYA SMART LIBRARY
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-sm mb-4">
+              <p className="text-xs sm:text-sm text-white/90 leading-relaxed max-w-sm mb-5 font-medium">
                 Personal Library Management &amp; Attendance System. 50 numbered smart desks, encrypted dynamic QR attendance, and digital student support.
               </p>
-              <div className="inline-block px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] font-semibold text-indigo-300">
+              <div className="inline-block px-3.5 py-1.5 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-xs font-bold text-white shadow-sm">
                 Single Library • 50 Seats
               </div>
             </div>
 
             {/* Column 2: Navigation Links */}
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-white mb-4">
+              <p className="text-xs font-extrabold uppercase tracking-widest text-yellow-200 mb-4 drop-shadow-sm">
                 Quick Links
               </p>
-              <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm">
+              <div className="grid grid-cols-2 gap-2.5 text-xs sm:text-sm">
                 {[
                   { label: 'Home', id: 'home' },
                   { label: 'Benefits', id: 'benefits' },
@@ -915,12 +929,12 @@ export const LandingPage: React.FC = () => {
                   <button
                     key={item.id}
                     onClick={() => scrollTo(item.id)}
-                    className="text-slate-400 hover:text-white transition-colors text-left py-1 cursor-pointer"
+                    className="text-white/85 hover:text-white hover:translate-x-1 font-semibold transition-all text-left py-1 cursor-pointer"
                   >
                     {item.label}
                   </button>
                 ))}
-                <Link to="/login" className="text-indigo-400 hover:text-indigo-300 transition-colors py-1 font-semibold">
+                <Link to="/login" className="text-yellow-200 hover:text-white transition-colors py-1 font-bold">
                   Sign In →
                 </Link>
               </div>
@@ -928,7 +942,7 @@ export const LandingPage: React.FC = () => {
 
             {/* Column 3: CONNECT WITH US — Official YouTube & Instagram Buttons */}
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-white mb-4">
+              <p className="text-xs font-extrabold uppercase tracking-widest text-yellow-200 mb-4 drop-shadow-sm">
                 Connect With Us
               </p>
               <div className="space-y-3">
@@ -938,16 +952,16 @@ export const LandingPage: React.FC = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Visit Lakshya Classes on YouTube"
-                  className="flex items-center gap-3 p-3 rounded-2xl bg-slate-900 border border-slate-800 hover:border-red-500/50 hover:bg-slate-900/80 transition-all duration-300 group"
+                  className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md transition-all duration-300 hover:scale-[1.02] shadow-md group"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-red-600/15 flex items-center justify-center text-red-500 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-white text-red-600 flex items-center justify-center shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform">
                     <Youtube className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-white group-hover:text-red-400 transition-colors">
+                    <p className="text-xs font-bold text-white group-hover:text-yellow-200 transition-colors">
                       YouTube
                     </p>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-white/80 font-medium">
                       @lakshyaclassesbymonusir
                     </p>
                   </div>
@@ -959,16 +973,16 @@ export const LandingPage: React.FC = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Visit Lakshya Classes on Instagram"
-                  className="flex items-center gap-3 p-3 rounded-2xl bg-slate-900 border border-slate-800 hover:border-pink-500/50 hover:bg-slate-900/80 transition-all duration-300 group"
+                  className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md transition-all duration-300 hover:scale-[1.02] shadow-md group"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-pink-600/15 flex items-center justify-center text-pink-500 group-hover:bg-pink-600 group-hover:text-white transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-white text-[#d62976] flex items-center justify-center shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform">
                     <Instagram className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-white group-hover:text-pink-400 transition-colors">
+                    <p className="text-xs font-bold text-white group-hover:text-yellow-200 transition-colors">
                       Instagram
                     </p>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-white/80 font-medium">
                       @lakshayaclasses9431
                     </p>
                   </div>
@@ -977,16 +991,16 @@ export const LandingPage: React.FC = () => {
                 {/* Phone Link */}
                 <a
                   href="tel:9155435493"
-                  className="flex items-center gap-3 p-3 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 transition-all duration-300 group"
+                  className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-md transition-all duration-300 hover:scale-[1.02] shadow-md group"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-indigo-600/15 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-white text-purple-700 flex items-center justify-center shadow-sm flex-shrink-0 group-hover:scale-105 transition-transform">
                     <Phone className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">
+                    <p className="text-xs font-bold text-white group-hover:text-yellow-200 transition-colors">
                       Helpline
                     </p>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-white/80 font-medium">
                       9155435493
                     </p>
                   </div>
@@ -996,15 +1010,15 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Bottom Bar */}
-          <div className="border-t border-slate-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-            <p className="text-slate-500 text-center sm:text-left">
+          <div className="border-t border-white/25 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium">
+            <p className="text-white/85 text-center sm:text-left">
               &copy; {new Date().getFullYear()} Lakshya Smart Library. All rights reserved.
             </p>
-            <p className="text-slate-500 text-center sm:text-right">
+            <p className="text-white/85 text-center sm:text-right">
               Designed &amp; Developed by{' '}
               <button
                 onClick={() => scrollTo('developers')}
-                className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors cursor-pointer"
+                className="text-yellow-200 hover:text-white font-bold transition-colors cursor-pointer underline underline-offset-4"
               >
                 Kunal Kumar &amp; Chhotu Kumar
               </button>
