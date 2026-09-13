@@ -183,15 +183,24 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+    const handleOutside = (event: MouseEvent | TouchEvent) => {
+      const toggleBtn = document.getElementById('mobile-menu-toggle-btn');
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node) &&
+        (!toggleBtn || !toggleBtn.contains(event.target as Node))
+      ) {
         setMenuOpen(false);
       }
     };
     if (menuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('mousedown', handleOutside);
+      document.addEventListener('touchstart', handleOutside);
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
   }, [menuOpen]);
 
   const scrollTo = (id: string) => {
@@ -205,107 +214,114 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
   };
 
   return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-white/95 backdrop-blur-md shadow-lg border-b border-pink-100 py-2.5'
-          : 'bg-black/25 backdrop-blur-md border-b border-white/20 py-3.5'
-      }`}
-      aria-label="Main navigation"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-12 sm:h-14">
-          {/* Brand */}
-          <button
-            onClick={() => scrollTo('home')}
-            className="flex items-center gap-2.5 group cursor-pointer text-left"
-            aria-label="Go to top"
-          >
-            <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform shrink-0 border border-white/30">
-              <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-lg" />
+    <>
+      <nav
+        className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
+          scrolled
+            ? 'bg-white/95 backdrop-blur-md shadow-lg border-b border-pink-100 py-2.5'
+            : 'bg-black/25 backdrop-blur-md border-b border-white/20 py-3.5'
+        }`}
+        aria-label="Main navigation"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-12 sm:h-14">
+            {/* Brand */}
+            <button
+              onClick={() => scrollTo('home')}
+              className="flex items-center gap-2.5 group cursor-pointer text-left"
+              aria-label="Go to top"
+            >
+              <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform shrink-0 border border-white/30">
+                <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-lg" />
+              </div>
+              <div>
+                <span className={`text-sm sm:text-base font-black tracking-tight block transition-colors ${
+                  scrolled ? 'text-slate-900' : 'text-white'
+                }`}>
+                  LAKSHYA SMART LIBRARY
+                </span>
+                <span className={`text-[10px] block font-bold tracking-wide ${
+                  scrolled ? 'text-[#d62976]' : 'text-yellow-200'
+                }`}>
+                  50 Smart Seats • Personal System
+                </span>
+              </div>
+            </button>
+
+            {/* Desktop Navigation */}
+            <div className="hidden lg:flex items-center gap-1">
+              {NAV_LINKS.map(link => (
+                <button
+                  key={link.href}
+                  onClick={() => scrollTo(link.href)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    scrolled
+                      ? 'text-slate-700 hover:text-[#d62976] hover:bg-pink-50'
+                      : 'text-white/90 hover:text-white hover:bg-white/15'
+                  }`}
+                >
+                  {link.label}
+                </button>
+              ))}
             </div>
-            <div>
-              <span className={`text-sm sm:text-base font-black tracking-tight block transition-colors ${
-                scrolled ? 'text-slate-900' : 'text-white'
-              }`}>
-                LAKSHYA SMART LIBRARY
-              </span>
-              <span className={`text-[10px] block font-bold tracking-wide ${
-                scrolled ? 'text-[#d62976]' : 'text-yellow-200'
-              }`}>
-                50 Smart Seats • Personal System
-              </span>
+
+            {/* CTA Right */}
+            <div className="hidden lg:block">
+              {isAuth ? (
+                <button
+                  onClick={() => navigate(role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard')}
+                  className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-[#d62976] via-[#962fbf] to-[#4f5bd5] hover:opacity-95 text-white text-xs font-extrabold rounded-xl transition-all shadow-md hover:scale-105 cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" /> Go to Dashboard
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-[#d62976] via-[#962fbf] to-[#4f5bd5] hover:opacity-95 text-white text-xs font-extrabold rounded-xl transition-all shadow-md hover:scale-105"
+                >
+                  <LogIn className="w-3.5 h-3.5" /> Sign In
+                </Link>
+              )}
             </div>
-          </button>
 
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-1">
-            {NAV_LINKS.map(link => (
-              <button
-                key={link.href}
-                onClick={() => scrollTo(link.href)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  scrolled
-                    ? 'text-slate-700 hover:text-[#d62976] hover:bg-pink-50'
-                    : 'text-white/90 hover:text-white hover:bg-white/15'
-                }`}
-              >
-                {link.label}
-              </button>
-            ))}
+            {/* Mobile menu toggle */}
+            <button
+              id="mobile-menu-toggle-btn"
+              className={`lg:hidden p-2 rounded-lg transition-colors cursor-pointer ${
+                scrolled ? 'text-slate-700' : 'text-white'
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(!menuOpen);
+              }}
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={menuOpen}
+            >
+              {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
           </div>
-
-          {/* CTA Right */}
-          <div className="hidden lg:block">
-            {isAuth ? (
-              <button
-                onClick={() => navigate(role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard')}
-                className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-[#d62976] via-[#962fbf] to-[#4f5bd5] hover:opacity-95 text-white text-xs font-extrabold rounded-xl transition-all shadow-md hover:scale-105 cursor-pointer"
-              >
-                <LogIn className="w-3.5 h-3.5" /> Go to Dashboard
-              </button>
-            ) : (
-              <Link
-                to="/login"
-                className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-[#d62976] via-[#962fbf] to-[#4f5bd5] hover:opacity-95 text-white text-xs font-extrabold rounded-xl transition-all shadow-md hover:scale-105"
-              >
-                <LogIn className="w-3.5 h-3.5" /> Sign In
-              </Link>
-            )}
-          </div>
-
-          {/* Mobile menu toggle */}
-          <button
-            className={`lg:hidden p-2 rounded-lg transition-colors cursor-pointer ${
-              scrolled ? 'text-slate-700' : 'text-white'
-            }`}
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-            aria-expanded={menuOpen}
-          >
-            {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
         </div>
-      </div>
+      </nav>
 
-      {/* Mobile Drawer Backdrop Overlay */}
+      {/* Mobile Drawer Backdrop Overlay (Closes on tap/click outside) */}
       {menuOpen && (
         <div
-          className="fixed inset-0 bg-black/65 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-black/65 backdrop-blur-sm z-50 lg:hidden transition-opacity duration-300"
           onClick={() => setMenuOpen(false)}
+          onTouchStart={() => setMenuOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Half-Screen Opaque Mobile Slide Drawer (Zero overlap, solid background) */}
-      <div
+      {/* Half-Screen Opaque Mobile Slide Drawer (Zero overlap, solid background, full screen height) */}
+      <aside
         ref={menuRef}
-        className={`fixed top-0 right-0 bottom-0 w-[72vw] max-w-[280px] bg-[#180b22] text-white z-50 shadow-2xl flex flex-col p-5 lg:hidden border-l border-white/20 transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 h-screen h-[100dvh] w-[75vw] max-w-[280px] bg-[#180b22] text-white z-[60] shadow-2xl flex flex-col p-5 lg:hidden border-l border-white/20 transition-transform duration-300 ease-in-out ${
           menuOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
         }`}
       >
         {/* Drawer Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/15 mb-3">
+        <div className="flex items-center justify-between pb-4 border-b border-white/15 mb-3 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-white p-1 flex items-center justify-center shadow shrink-0">
               <img src="/Logo.png" alt="Lakshya Smart Library" className="w-full h-full object-contain rounded-lg" />
@@ -328,8 +344,8 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
           </button>
         </div>
 
-        {/* Navigation Links */}
-        <div className="flex-1 overflow-y-auto space-y-1.5 py-1 pr-1">
+        {/* Navigation Links (Full options list) */}
+        <div className="flex-1 overflow-y-auto space-y-1.5 py-2 pr-1">
           {NAV_LINKS.map(link => (
             <button
               key={link.href}
@@ -342,7 +358,7 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
         </div>
 
         {/* Drawer Bottom CTA */}
-        <div className="pt-4 border-t border-white/15 mt-auto">
+        <div className="pt-4 border-t border-white/15 mt-auto shrink-0">
           <Link
             to={isAuth ? (role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard') : '/login'}
             onClick={() => setMenuOpen(false)}
@@ -351,8 +367,8 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
             <LogIn className="w-3.5 h-3.5" /> {isAuth ? 'Go to Dashboard' : 'Sign In'}
           </Link>
         </div>
-      </div>
-    </nav>
+      </aside>
+    </>
   );
 };
 
