@@ -70,7 +70,7 @@ describe('Smart Personal Library Management System Suite', () => {
 
     // Create Student
     const student = await User.create({
-      name: 'Rahul Kumar',
+      name: 'Test Student',
       email: 'student@test.com',
       password: 'Password@123',
       role: 'STUDENT',

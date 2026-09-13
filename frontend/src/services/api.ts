@@ -62,6 +62,9 @@ export const studentService = {
   getStudentById: (id: string) => api.get(`/students/${id}`),
   updateStudent: (id: string, data: any) => api.put(`/students/${id}`, data),
   updateStatus: (id: string, status: string) => api.patch(`/students/${id}/status`, { status }),
+  resetPassword: (id: string, newPassword: string) =>
+    api.post(`/students/${id}/reset-password`, { newPassword }),
+  deleteStudent: (id: string) => api.delete(`/students/${id}`),
 };
 
 // QR Services

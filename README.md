@@ -26,14 +26,11 @@ A clean, modern, and production-ready **Personal Library Management System** des
 
 ---
 
-## Default Credentials
+## Authentication & Account Architecture
 
-| Role | Email | Password | Details |
-|---|---|---|---|
-| **Admin** | `admin@example.com` | `Password@123` | Complete library management |
-| **Student** | `student@example.com` | `Password@123` | Rahul Kumar (`ST001`, Seat 04) |
-
-*The login page includes 1-click Quick Login buttons for both accounts.*
+- **Admin Account**: Managed securely via environment variables (`ADMIN_EMAIL` and `ADMIN_PASSWORD` in Render/local `.env`).
+- **Student Accounts**: Created and managed exclusively by the Library Admin through the Admin Student Management panel with initial passwords set by Admin.
+- **Roles**: Strictly `ADMIN` and `STUDENT`. No demo or guest accounts.
 
 ---
 

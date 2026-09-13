@@ -13,6 +13,8 @@ import {
   CalendarCheck,
   LifeBuoy,
   Edit2,
+  KeyRound,
+  Trash2,
 } from 'lucide-react';
 
 export const AdminStudentsPage: React.FC = () => {
@@ -27,13 +29,19 @@ export const AdminStudentsPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
+  const [resetTargetStudent, setResetTargetStudent] = useState<User | null>(null);
+  const [deleteTargetStudent, setDeleteTargetStudent] = useState<User | null>(null);
 
   // Form state
   const [editId, setEditId] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('Password@123');
+  const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [studentIdNumber, setStudentIdNumber] = useState('');
   const [course, setCourse] = useState('');
@@ -62,20 +70,20 @@ export const AdminStudentsPage: React.FC = () => {
 
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !studentIdNumber) {
-      error('Name, email, and Student ID are required');
+    if (!name.trim() || !email.trim() || !studentIdNumber.trim() || !password.trim()) {
+      error('Full Name, Email, Student ID, and initial Password are required');
       return;
     }
 
     try {
       setSubmitting(true);
       const res = await studentService.createStudent({
-        name,
-        email,
-        password: password || 'Password@123',
-        phone,
-        studentIdNumber,
-        course,
+        name: name.trim(),
+        email: email.trim(),
+        password: password.trim(),
+        phone: phone.trim(),
+        studentIdNumber: studentIdNumber.trim(),
+        course: course.trim(),
       });
 
       if (res.data.success) {
@@ -83,6 +91,7 @@ export const AdminStudentsPage: React.FC = () => {
         setIsAddModalOpen(false);
         setName('');
         setEmail('');
+        setPassword('');
         setPhone('');
         setStudentIdNumber('');
         setCourse('');
@@ -110,10 +119,10 @@ export const AdminStudentsPage: React.FC = () => {
     try {
       setSubmitting(true);
       const res = await studentService.updateStudent(editId, {
-        name,
-        phone,
-        studentIdNumber,
-        course,
+        name: name.trim(),
+        phone: phone.trim(),
+        studentIdNumber: studentIdNumber.trim(),
+        course: course.trim(),
       });
       if (res.data.success) {
         success('Student updated successfully');
@@ -121,7 +130,61 @@ export const AdminStudentsPage: React.FC = () => {
         fetchStudents();
       }
     } catch (err: any) {
-      error(err.response?.data?.message || 'Update failed');
+      error(err.response?.data?.message || 'Failed to update student');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetPasswordOpen = (student: User) => {
+    setResetTargetStudent(student);
+    setNewPassword('');
+    setIsResetModalOpen(true);
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetTargetStudent) return;
+    if (!newPassword.trim() || newPassword.trim().length < 6) {
+      error('New password must be at least 6 characters');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const studentId = resetTargetStudent._id || resetTargetStudent.id;
+      const res = await studentService.resetPassword(studentId, newPassword.trim());
+      if (res.data.success) {
+        success(`Password reset successfully for ${resetTargetStudent.name}`);
+        setIsResetModalOpen(false);
+        setNewPassword('');
+      }
+    } catch (err: any) {
+      error(err.response?.data?.message || 'Failed to reset password');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteOpen = (student: User) => {
+    setDeleteTargetStudent(student);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTargetStudent) return;
+    try {
+      setSubmitting(true);
+      const studentId = deleteTargetStudent._id || deleteTargetStudent.id;
+      const res = await studentService.deleteStudent(studentId);
+      if (res.data.success) {
+        success('Student deleted successfully');
+        setIsDeleteModalOpen(false);
+        setDeleteTargetStudent(null);
+        fetchStudents();
+      }
+    } catch (err: any) {
+      error(err.response?.data?.message || 'Failed to delete student');
     } finally {
       setSubmitting(false);
     }
@@ -159,7 +222,7 @@ export const AdminStudentsPage: React.FC = () => {
             Student Management
           </h2>
           <p className="text-xs text-slate-500">
-            Register students, manage account status, and inspect attendance history and complaints.
+            Register students, manage login credentials, and inspect attendance history and complaints.
           </p>
         </div>
 
@@ -167,6 +230,7 @@ export const AdminStudentsPage: React.FC = () => {
           onClick={() => {
             setName('');
             setEmail('');
+            setPassword('');
             setPhone('');
             setStudentIdNumber('');
             setCourse('');
@@ -179,153 +243,205 @@ export const AdminStudentsPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      {/* Filters Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Search by student name, ID, phone, or email..."
+            placeholder="Search by name, student ID, email, or phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold"
-          >
-            <option value="">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-            <option value="BLOCKED">Blocked</option>
-          </select>
-        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Statuses</option>
+          <option value="ACTIVE">Active Only</option>
+          <option value="BLOCKED">Blocked Only</option>
+          <option value="INACTIVE">Inactive Only</option>
+        </select>
       </div>
 
       {/* Students Table */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="p-10 text-center text-xs text-slate-400">Loading student directory...</div>
-        ) : students.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-400">No student records found.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <tr>
+                <th className="px-6 py-3.5">Student</th>
+                <th className="px-6 py-3.5">Student ID</th>
+                <th className="px-6 py-3.5">Course</th>
+                <th className="px-6 py-3.5">Current Status</th>
+                <th className="px-6 py-3.5">Account</th>
+                <th className="px-6 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {loading ? (
                 <tr>
-                  <th className="px-6 py-3.5">Student</th>
-                  <th className="px-6 py-3.5">Student ID</th>
-                  <th className="px-6 py-3.5">Course</th>
-                  <th className="px-6 py-3.5">Current Status</th>
-                  <th className="px-6 py-3.5">Account Status</th>
-                  <th className="px-6 py-3.5 text-right">Actions</th>
+                  <td colSpan={6} className="text-center py-10 text-slate-400">
+                    <span className="inline-block w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-2" />
+                    <p>Loading students...</p>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {students.map((s: any) => {
-                  return (
-                    <tr key={s._id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                      <td className="px-6 py-4">
+              ) : students.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-slate-400">
+                    <p className="font-semibold">No students found.</p>
+                    <p className="text-[11px] mt-1">Click "Add Student" to register student accounts.</p>
+                  </td>
+                </tr>
+              ) : (
+                students.map((s: User) => (
+                  <tr key={s._id || s.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 font-bold flex items-center justify-center text-xs">
+                          {s.name.charAt(0).toUpperCase()}
+                        </div>
                         <div>
                           <p className="font-bold text-slate-900 dark:text-white">{s.name}</p>
-                          <p className="text-[11px] text-slate-400">{s.email}</p>
-                          <p className="text-[10px] text-slate-400 font-mono">{s.phone}</p>
+                          <p className="text-slate-400 text-[11px]">{s.email}</p>
+                          {s.phone && <p className="text-slate-400 text-[10px]">{s.phone}</p>}
                         </div>
-                      </td>
+                      </div>
+                    </td>
 
-                      <td className="px-6 py-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                        {s.studentIdNumber || 'ST001'}
-                      </td>
+                    <td className="px-6 py-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                      {s.studentIdNumber || 'N/A'}
+                    </td>
 
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300">
-                        {s.course || 'Enrolled'}
-                      </td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">
+                      {s.course || 'Enrolled'}
+                    </td>
 
-                      <td className="px-6 py-4">
-                        {s.isCurrentlyInside ? (
-                          <div>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                              INSIDE
-                            </span>
-                            <span className="block mt-0.5 font-bold text-indigo-600 text-[11px]">
-                              Seat {s.currentSeatNumber || 'Assigned'}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                            OUTSIDE
+                    <td className="px-6 py-4">
+                      {s.isCurrentlyInside ? (
+                        <div>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                            INSIDE
                           </span>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <Badge
-                          variant={
-                            s.status === 'ACTIVE'
-                              ? 'success'
-                              : s.status === 'BLOCKED'
-                              ? 'danger'
-                              : 'neutral'
-                          }
-                          size="sm"
-                        >
-                          {s.status}
-                        </Badge>
-                      </td>
-
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleViewOpen(s)}
-                            title="View Student Attendance & Complaints"
-                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-
-                          <button
-                            onClick={() => handleEditOpen(s)}
-                            title="Edit Student"
-                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-
-                          {s.status === 'ACTIVE' ? (
-                            <button
-                              onClick={() => handleToggleStatus(s, 'BLOCKED')}
-                              title="Block Student"
-                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                            >
-                              <Ban className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleToggleStatus(s, 'ACTIVE')}
-                              title="Activate Student"
-                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
-                            >
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <span className="block mt-0.5 font-bold text-indigo-600 text-[11px]">
+                            Seat {s.currentSeatNumber || 'Assigned'}
+                          </span>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                          OUTSIDE
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <Badge
+                        variant={
+                          s.status === 'ACTIVE'
+                            ? 'success'
+                            : s.status === 'BLOCKED'
+                            ? 'danger'
+                            : 'neutral'
+                        }
+                        size="sm"
+                      >
+                        {s.status}
+                      </Badge>
+                    </td>
+
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleViewOpen(s)}
+                          title="View Attendance & Complaints"
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleEditOpen(s)}
+                          title="Edit Student"
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleResetPasswordOpen(s)}
+                          title="Reset Password"
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 cursor-pointer"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
+
+                        {s.status === 'ACTIVE' ? (
+                          <button
+                            onClick={() => handleToggleStatus(s, 'BLOCKED')}
+                            title="Block Student"
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleToggleStatus(s, 'ACTIVE')}
+                            title="Activate Student"
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleDeleteOpen(s)}
+                          title="Delete Student"
+                          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+            <span className="text-slate-500">
+              Page {page} of {totalPages}
+            </span>
+            <div className="flex gap-1">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+                className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-800 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage(page + 1)}
+                className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-800 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>
 
       {/* Add Student Modal */}
-      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add New Student" maxWidth="md">
-        <form onSubmit={handleCreateStudent} className="space-y-4 text-xs font-sans">
+      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add New Student">
+        <form onSubmit={handleCreateStudent} className="space-y-4 text-xs">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
@@ -375,7 +491,7 @@ export const AdminStudentsPage: React.FC = () => {
               </label>
               <input
                 type="tel"
-                placeholder="9876543210"
+                placeholder="e.g. 9876543210"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
@@ -385,11 +501,11 @@ export const AdminStudentsPage: React.FC = () => {
 
           <div>
             <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Course / Branch
+              Course / Exam Goal
             </label>
             <input
               type="text"
-              placeholder="e.g. B.Tech / UPSC / MBBS"
+              placeholder="e.g. B.Tech / UPSC / NEET"
               value={course}
               onChange={(e) => setCourse(e.target.value)}
               className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
@@ -398,10 +514,12 @@ export const AdminStudentsPage: React.FC = () => {
 
           <div>
             <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Initial Password
+              Initial Login Password *
             </label>
             <input
               type="password"
+              required
+              placeholder="Set student login password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
@@ -428,39 +546,35 @@ export const AdminStudentsPage: React.FC = () => {
       </Modal>
 
       {/* Edit Student Modal */}
-      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit Student Profile" maxWidth="md">
-        <form onSubmit={handleUpdateStudent} className="space-y-4 text-xs font-sans">
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit Student">
+        <form onSubmit={handleUpdateStudent} className="space-y-4 text-xs">
+          <div>
+            <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Full Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
-                Full Name
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-              />
-            </div>
             <div>
               <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
                 Student ID
               </label>
               <input
                 type="text"
-                required
                 value={studentIdNumber}
                 onChange={(e) => setStudentIdNumber(e.target.value)}
                 className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
-                Mobile Number
+                Phone
               </label>
               <input
                 type="tel"
@@ -469,17 +583,18 @@ export const AdminStudentsPage: React.FC = () => {
                 className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
               />
             </div>
-            <div>
-              <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
-                Course
-              </label>
-              <input
-                type="text"
-                value={course}
-                onChange={(e) => setCourse(e.target.value)}
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-              />
-            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
+              Course
+            </label>
+            <input
+              type="text"
+              value={course}
+              onChange={(e) => setCourse(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -501,92 +616,145 @@ export const AdminStudentsPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* View Student Details Modal */}
+      {/* Reset Password Modal */}
+      <Modal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        title={`Reset Password: ${resetTargetStudent?.name || 'Student'}`}
+      >
+        <form onSubmit={handleResetPasswordSubmit} className="space-y-4 text-xs">
+          <p className="text-slate-500">
+            Enter a new password for <span className="font-bold text-slate-800 dark:text-slate-200">{resetTargetStudent?.name}</span> ({resetTargetStudent?.email}).
+          </p>
+          <div>
+            <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
+              New Password *
+            </label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              placeholder="Minimum 6 characters"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsResetModalOpen(false)}
+              className="px-4 py-2 rounded-xl border font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow"
+            >
+              {submitting ? 'Resetting...' : 'Update Password'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete Student Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Student Account"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-slate-600 dark:text-slate-300">
+            Are you sure you want to permanently delete the student account for{' '}
+            <span className="font-bold text-slate-900 dark:text-white">{deleteTargetStudent?.name}</span> ({deleteTargetStudent?.studentIdNumber})?
+          </p>
+          <p className="text-rose-500 text-[11px]">
+            This action cannot be undone. If the student is currently occupying a seat, the seat will be automatically released.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="px-4 py-2 rounded-xl border font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={handleDeleteConfirm}
+              className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow"
+            >
+              {submitting ? 'Deleting...' : 'Delete Student'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* View Student Modal */}
       {selectedStudent && (
         <Modal
           isOpen={isViewModalOpen}
           onClose={() => setIsViewModalOpen(false)}
-          title={`Student: ${selectedStudent.student.name} (${selectedStudent.student.studentIdNumber || 'ST001'})`}
-          maxWidth="lg"
+          title={`Student: ${selectedStudent.student?.name || 'Details'}`}
         >
-          <div className="space-y-5 text-xs font-sans">
-            {/* Student Info Card */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="space-y-6 text-xs max-h-[75vh] overflow-y-auto pr-1">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
               <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Student ID</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-white">
-                  {selectedStudent.student.studentIdNumber || 'ST001'}
-                </span>
+                <p className="text-base font-black text-slate-900 dark:text-white">
+                  {selectedStudent.student?.name}
+                </p>
+                <p className="text-slate-500 font-mono text-[11px] mt-0.5">
+                  ID: {selectedStudent.student?.studentIdNumber} • {selectedStudent.student?.email}
+                </p>
+                {selectedStudent.student?.phone && (
+                  <p className="text-slate-500 text-[11px] mt-0.5">Phone: {selectedStudent.student?.phone}</p>
+                )}
               </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Mobile</span>
-                <span className="font-bold text-slate-900 dark:text-white">
-                  {selectedStudent.student.phone || 'N/A'}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Course</span>
-                <span className="font-bold text-slate-900 dark:text-white">
-                  {selectedStudent.student.course || 'General'}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
-                <Badge variant={selectedStudent.student.status === 'ACTIVE' ? 'success' : 'danger'} size="sm">
-                  {selectedStudent.student.status}
-                </Badge>
-              </div>
+              <Badge variant={selectedStudent.student?.status === 'ACTIVE' ? 'success' : 'danger'}>
+                {selectedStudent.student?.status}
+              </Badge>
             </div>
 
             {/* Attendance History */}
             <div>
-              <h4 className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5">
-                <CalendarCheck className="w-4 h-4 text-indigo-500" />
-                Recent Attendance Logs
+              <h4 className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 text-sm">
+                <CalendarCheck className="w-4 h-4 text-indigo-600" />
+                Recent Attendance History
               </h4>
               {selectedStudent.recentAttendance?.length === 0 ? (
-                <p className="text-slate-400 py-3">No attendance recorded yet.</p>
+                <p className="text-slate-400 py-3">No attendance logs recorded yet.</p>
               ) : (
-                <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2">Date</th>
-                        <th className="px-3 py-2">Seat</th>
-                        <th className="px-3 py-2">Entry</th>
-                        <th className="px-3 py-2">Exit</th>
-                        <th className="px-3 py-2">Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {selectedStudent.recentAttendance.map((att: any) => (
-                        <tr key={att._id}>
-                          <td className="px-3 py-2 font-mono">{att.attendanceDate}</td>
-                          <td className="px-3 py-2 font-bold text-indigo-600">
-                            Seat {att.seatNumber || 'N/A'}
-                          </td>
-                          <td className="px-3 py-2 font-mono">
-                            {new Date(att.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td className="px-3 py-2 font-mono">
-                            {att.exitTime
-                              ? new Date(att.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                              : 'Active'}
-                          </td>
-                          <td className="px-3 py-2 font-mono text-emerald-600 font-bold">
-                            {att.durationMinutes ? `${att.durationMinutes}m` : '--'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-1.5">
+                  {selectedStudent.recentAttendance.map((a: any) => (
+                    <div
+                      key={a._id}
+                      className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
+                          {new Date(a.entryTime).toLocaleDateString()}
+                        </span>
+                        <span className="text-slate-400 ml-2 font-mono text-[11px]">
+                          Seat {a.seatNumber || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-bold text-indigo-600">
+                          {a.durationMinutes ? `${Math.floor(a.durationMinutes / 60)}h ${a.durationMinutes % 60}m` : 'In Session'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
             {/* Complaints */}
             <div>
-              <h4 className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5">
+              <h4 className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 text-sm">
                 <LifeBuoy className="w-4 h-4 text-rose-500" />
                 Complaints Raised
               </h4>

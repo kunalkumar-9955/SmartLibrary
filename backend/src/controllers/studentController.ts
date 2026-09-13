@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/User';
 import { Attendance } from '../models/Attendance';
 import { Ticket } from '../models/Ticket';
+import { Seat } from '../models/Seat';
 import { sendSuccess, sendError } from '../utils/response';
 
 export const getStudents = async (req: Request, res: Response, next: NextFunction) => {
@@ -48,21 +49,29 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
   try {
     const { name, email, password, phone, studentIdNumber, course } = req.body;
 
-    if (!name || !email || !studentIdNumber) {
-      return sendError(res, 'Name, email, and Student ID are required', 400);
+    if (!name || !email || !studentIdNumber || !password) {
+      return sendError(res, 'Name, email, Student ID, and initial Password are required', 400);
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
-    if (existingUser) {
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanStudentId = studentIdNumber.trim();
+
+    const existingEmail = await User.findOne({ email: cleanEmail });
+    if (existingEmail) {
       return sendError(res, 'A student with this email address already exists', 409);
+    }
+
+    const existingStudentId = await User.findOne({ studentIdNumber: cleanStudentId });
+    if (existingStudentId) {
+      return sendError(res, 'A student with this Student ID already exists', 409);
     }
 
     const user = await User.create({
       name: name.trim(),
-      email: email.toLowerCase().trim(),
-      password: password || 'Password@123',
+      email: cleanEmail,
+      password: password.trim(),
       role: 'STUDENT',
-      studentIdNumber: studentIdNumber.trim(),
+      studentIdNumber: cleanStudentId,
       phone: phone?.trim(),
       course: course?.trim(),
       status: 'ACTIVE',
@@ -105,9 +114,25 @@ export const updateStudent = async (req: Request, res: Response, next: NextFunct
     const { id } = req.params;
     const { name, phone, course, studentIdNumber } = req.body;
 
+    if (studentIdNumber) {
+      const cleanStudentId = studentIdNumber.trim();
+      const existingStudentId = await User.findOne({
+        _id: { $ne: id },
+        studentIdNumber: cleanStudentId,
+      });
+      if (existingStudentId) {
+        return sendError(res, 'A student with this Student ID already exists', 409);
+      }
+    }
+
     const student = await User.findByIdAndUpdate(
       id,
-      { name, phone, course, studentIdNumber },
+      {
+        name: name?.trim(),
+        phone: phone?.trim(),
+        course: course?.trim(),
+        ...(studentIdNumber ? { studentIdNumber: studentIdNumber.trim() } : {}),
+      },
       { new: true }
     ).select('-password');
 
@@ -139,6 +164,55 @@ export const updateStudentStatus = async (req: Request, res: Response, next: Nex
     await student.save();
 
     return sendSuccess(res, student, `Student marked as ${status}`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetStudentPassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      return sendError(res, 'New password is required and must be at least 6 characters', 400);
+    }
+
+    const student = await User.findById(id);
+    if (!student || student.role !== 'STUDENT') {
+      return sendError(res, 'Student not found', 404);
+    }
+
+    student.password = newPassword.trim();
+    await student.save();
+
+    return sendSuccess(res, null, 'Student password reset successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteStudent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const student = await User.findById(id);
+    if (!student || student.role !== 'STUDENT') {
+      return sendError(res, 'Student not found', 404);
+    }
+
+    // If currently occupying a seat, release it
+    if (student.currentSeatNumber) {
+      await Seat.findOneAndUpdate(
+        { seatNumber: student.currentSeatNumber },
+        {
+          status: 'AVAILABLE',
+          $unset: { currentStudentId: 1, currentStudentName: 1, currentAttendanceId: 1 },
+        }
+      );
+    }
+
+    await User.findByIdAndDelete(id);
+    return sendSuccess(res, null, 'Student deleted successfully');
   } catch (error) {
     next(error);
   }
