@@ -1,7 +1,9 @@
 node_modules/
 dist/
+build/
 .env
-.env.local
-*.log
-uploads/*
+.env.*
+!.env.example
+uploads/
 !uploads/.gitkeep
+*.log
