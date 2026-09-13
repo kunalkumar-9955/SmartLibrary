@@ -18,7 +18,7 @@ const IMG_DEV_KUNAL  = '/Kunal_Kumar_Developer.png';
 const IMG_DEV_CHHOTU = '/Chhotu_Kumar_Developer.jpeg';
 
 // Social URLs (Provided strictly by user)
-const URL_YOUTUBE = 'https://youtube.com/@lakshyaclassesbymonusir?si=lrf3-BwXjqxBCW1w';
+const URL_YOUTUBE   = 'https://youtube.com/@lakshyaclassesbymonusir?si=lrf3-BwXjqxBCW1w';
 const URL_INSTAGRAM = 'https://www.instagram.com/lakshayaclasses9431?stkn=YWpxcnY2dGxybTRy';
 
 // -----------------------------------------------------------------------
@@ -193,7 +193,7 @@ const Navbar: React.FC<{ isAuth: boolean; role?: string }> = ({ isAuth, role }) 
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
           ? 'bg-white/95 backdrop-blur-md shadow-md border-b border-slate-200/80 py-2.5'
-          : 'bg-slate-950/75 backdrop-blur-md border-b border-white/10 py-3.5'
+          : 'bg-slate-950/80 backdrop-blur-md border-b border-white/10 py-3.5'
       }`}
       aria-label="Main navigation"
     >
@@ -333,94 +333,114 @@ export const LandingPage: React.FC = () => {
       <Navbar isAuth={isAuthenticated} role={user?.role} />
 
       {/* ==============================================================
-          2. HERO — REDESIGNED TO PREVENT LOGO COLLISION & DUPLICATION
+          2. HERO — RESTORED TO CLEAN OPEN DESIGN (NO BLUE, NO CLUTTER BOX)
       ============================================================== */}
       <section
         id="home"
-        className="relative min-h-[92vh] sm:min-h-screen flex items-center justify-center overflow-hidden pt-28 sm:pt-36 pb-20 sm:pb-28 px-4 sm:px-6"
+        className="relative min-h-[92vh] sm:min-h-screen flex items-center justify-center overflow-hidden bg-slate-950 pt-28 sm:pt-36 pb-20 sm:pb-28 px-4 sm:px-6"
       >
-        {/* Full-width banner background with sophisticated multi-layer overlay */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src={IMG_BANNER}
-            alt="Lakshya Smart Library Background"
-            className="w-full h-full object-cover object-center filter brightness-[0.92]"
-          />
-          {/* Multi-layer gentle overlay: preserves original banner graphics and colors while ensuring crisp text readability */}
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/70 via-slate-900/40 to-slate-950/75" />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-black/30" />
+        {/* Subtle grid pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `linear-gradient(rgba(255,255,255,.6) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.6) 1px,transparent 1px)`,
+            backgroundSize: '48px 48px',
+          }}
+        />
+
+        {/* Subtle soft neutral ambient glow (NOT blue) */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-slate-800/30 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Open, Spacious Hero Layout — Exact "phle jaisa" design */}
+        <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
+          {/* Tagline Pill */}
+          <div
+            style={anim(heroVisible, 100, -14)}
+            className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 border border-white/15 rounded-full text-slate-200 text-xs sm:text-sm font-semibold mb-6 backdrop-blur-sm shadow-sm"
+          >
+            <BookOpen className="w-4 h-4 text-indigo-400" />
+            <span>Personal Library Management &amp; Attendance System</span>
+          </div>
+
+          {/* Main Title */}
+          <h1
+            style={anim(heroVisible, 250)}
+            className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight tracking-tight mb-5 drop-shadow-sm"
+          >
+            LAKSHYA{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">
+              SMART
+            </span>{' '}
+            LIBRARY
+          </h1>
+
+          {/* Subtitle */}
+          <p
+            style={anim(heroVisible, 400)}
+            className="text-lg sm:text-xl text-slate-300 font-medium mb-6 max-w-2xl mx-auto leading-relaxed"
+          >
+            A Smarter Way to Manage Your Library Experience
+          </p>
+
+          {/* Feature Badges */}
+          <div
+            style={anim(heroVisible, 530)}
+            className="flex flex-wrap items-center justify-center gap-2.5 mb-10 max-w-2xl mx-auto"
+          >
+            {[
+              'Smart QR Attendance',
+              '50 Smart Seats',
+              'Attendance History',
+              'Notices & Complaints',
+              'Secure Student Access',
+            ].map(tag => (
+              <span
+                key={tag}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white/5 border border-white/10 rounded-full text-xs font-medium text-slate-300"
+              >
+                <CheckCircle className="w-3.5 h-3.5 text-indigo-400" />
+                {tag}
+              </span>
+            ))}
+          </div>
+
+          {/* Action Buttons */}
+          <div
+            style={anim(heroVisible, 650)}
+            className="flex flex-col sm:flex-row items-center justify-center gap-3.5"
+          >
+            {isAuthenticated ? (
+              <button
+                onClick={() => navigate(user?.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard')}
+                className="flex items-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-xl transition-all shadow-xl shadow-indigo-600/30 group cursor-pointer"
+              >
+                Go to Dashboard
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="flex items-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-xl transition-all shadow-xl shadow-indigo-600/30 group"
+                >
+                  Get Started
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <button
+                  onClick={() => scrollTo('features')}
+                  className="flex items-center gap-2 px-8 py-3.5 bg-white/10 hover:bg-white/15 border border-white/15 text-white font-semibold text-sm sm:text-base rounded-xl transition-all cursor-pointer"
+                >
+                  Explore Features
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Hero Content Panel — Translucent glass panel so text never competes with background banner logo */}
-        <div className="relative z-10 max-w-3xl mx-auto text-center w-full">
-          <div
-            style={anim(heroVisible, 100)}
-            className="bg-slate-950/60 backdrop-blur-md border border-white/20 rounded-3xl p-6 sm:p-10 shadow-2xl"
-          >
-            {/* System Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/25 border border-indigo-400/40 rounded-full text-indigo-200 text-xs sm:text-sm font-semibold mb-6 shadow-inner">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-              <span>Personal Library Management &amp; Attendance System</span>
-            </div>
-
-            {/* Primary Headline — Value focused, NO duplicate giant brand name over banner */}
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4 drop-shadow-sm">
-              A Smarter Way to Manage Your Library Experience
-            </h1>
-
-            {/* Subtitle */}
-            <p className="text-base sm:text-lg text-slate-200 font-medium mb-7 max-w-xl mx-auto leading-relaxed">
-              Personal digital attendance, 50 dedicated seats, automated visit history, and instant student support.
-            </p>
-
-            {/* Feature Pills */}
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 mb-8">
-              {[
-                'Smart QR Attendance',
-                '50 Smart Seats',
-                'Attendance History',
-                'Notices & Complaints',
-                'Secure Student Access',
-              ].map(tag => (
-                <span
-                  key={tag}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/15 rounded-full text-xs font-medium text-slate-200 backdrop-blur-sm"
-                >
-                  <CheckCircle className="w-3 h-3 text-indigo-300 flex-shrink-0" />
-                  {tag}
-                </span>
-              ))}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 w-full sm:w-auto">
-              {isAuthenticated ? (
-                <button
-                  onClick={() => navigate(user?.role === 'ADMIN' ? '/admin/dashboard' : '/student/dashboard')}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-2xl transition-all shadow-xl shadow-indigo-600/30 group cursor-pointer"
-                >
-                  Go to Dashboard
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </button>
-              ) : (
-                <>
-                  <Link
-                    to="/login"
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm sm:text-base rounded-2xl transition-all shadow-xl shadow-indigo-600/30 group"
-                  >
-                    Get Started
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </Link>
-                  <button
-                    onClick={() => scrollTo('features')}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white font-bold text-sm sm:text-base rounded-2xl transition-all backdrop-blur-sm cursor-pointer"
-                  >
-                    Explore Features
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-40 pointer-events-none">
+          <div className="w-px h-10 bg-gradient-to-b from-transparent to-white/70" />
+          <span className="text-[10px] text-white/70 tracking-widest uppercase">Scroll</span>
         </div>
       </section>
 
@@ -437,7 +457,7 @@ export const LandingPage: React.FC = () => {
               Designed for Focused Academic Excellence
             </h2>
             <p className="text-slate-600 max-w-xl mx-auto text-sm leading-relaxed">
-              Every feature is built around the student's productivity, discipline, and comfort.
+              Every feature is built around student productivity, discipline, and comfort.
             </p>
           </SectionReveal>
 
@@ -479,7 +499,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* ==============================================================
-          4. ABOUT LAKSHYA SMART LIBRARY (TWO-COLUMN DESKTOP LAYOUT)
+          4. ABOUT LAKSHYA SMART LIBRARY (WITH BANNER SHOWCASE)
       ============================================================== */}
       <section id="about" className="py-20 sm:py-24 bg-[#faf9f6] border-b border-stone-200/80">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -515,45 +535,33 @@ export const LandingPage: React.FC = () => {
               </div>
             </SectionReveal>
 
-            {/* Right Column: Digital Specs Card */}
+            {/* Right Column: Library Banner Showcase + Specs */}
             <SectionReveal delay={120}>
-              <div className="bg-white rounded-3xl p-8 sm:p-10 border border-stone-200/90 shadow-lg">
-                <div className="flex items-center justify-between pb-6 mb-6 border-b border-stone-100">
-                  <div>
-                    <h3 className="text-lg font-extrabold text-slate-900">Lakshya Smart Library</h3>
-                    <p className="text-xs text-indigo-600 font-semibold">Official Study Center</p>
-                  </div>
-                  <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
-                    Active &amp; Open
-                  </span>
+              <div className="space-y-6">
+                {/* Official Library Banner Image cleanly showcased */}
+                <div className="rounded-2xl overflow-hidden border border-stone-200 shadow-md bg-white">
+                  <img
+                    src={IMG_BANNER}
+                    alt="Lakshya Smart Library Official Banner"
+                    className="w-full h-auto object-cover"
+                  />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/60">
-                    <p className="text-2xl font-black text-slate-900">50</p>
-                    <p className="text-xs text-slate-500 font-medium">Smart Seats</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/60">
-                    <p className="text-2xl font-black text-slate-900">100%</p>
-                    <p className="text-xs text-slate-500 font-medium">Digital Attendance</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/60">
-                    <p className="text-2xl font-black text-slate-900">45s</p>
-                    <p className="text-xs text-slate-500 font-medium">QR Refresh Cycle</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/60">
-                    <p className="text-2xl font-black text-slate-900">24/7</p>
-                    <p className="text-xs text-slate-500 font-medium">Ticket Filing</p>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
-                    <Building2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">Associated with Lakshya Classes</p>
-                    <p className="text-[11px] text-slate-600">Coaching classes 9th–12th located directly above</p>
+                {/* Digital Specs Card */}
+                <div className="bg-white rounded-2xl p-6 border border-stone-200/90 shadow-sm">
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="p-3 rounded-xl bg-stone-50 border border-stone-200/60">
+                      <p className="text-xl font-black text-slate-900">50</p>
+                      <p className="text-[11px] text-slate-500 font-medium">Smart Seats</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-stone-50 border border-stone-200/60">
+                      <p className="text-xl font-black text-slate-900">100%</p>
+                      <p className="text-[11px] text-slate-500 font-medium">Digital Attendance</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-stone-50 border border-stone-200/60">
+                      <p className="text-xl font-black text-slate-900">45s</p>
+                      <p className="text-[11px] text-slate-500 font-medium">QR Cycle</p>
+                    </div>
                   </div>
                 </div>
               </div>
