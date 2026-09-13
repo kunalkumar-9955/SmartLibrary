@@ -163,3 +163,41 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
   return sendSuccess(res, null, 'Logged out successfully');
 };
+
+export const changePassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      return sendError(res, 'Not authenticated', 401, 'UNAUTHORIZED');
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return sendError(res, 'Current password and new password are required', 400);
+    }
+
+    if (newPassword.length < 8) {
+      return sendError(res, 'New password must be at least 8 characters', 400);
+    }
+
+    // Fetch user WITH password field for bcrypt comparison
+    const user = await User.findById(req.user.id).select('+password');
+    if (!user) {
+      return sendError(res, 'User not found', 404);
+    }
+
+    // Verify current password
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return sendError(res, 'Current password is incorrect', 401, 'WRONG_PASSWORD');
+    }
+
+    // Set new password — bcrypt hashing is done in the UserSchema pre('save') hook
+    user.password = newPassword;
+    await user.save();
+
+    return sendSuccess(res, null, 'Password updated successfully');
+  } catch (error) {
+    next(error);
+  }
+};
