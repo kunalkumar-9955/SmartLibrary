@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const ticketController_1 = require("../controllers/ticketController");
+const auth_1 = require("../middleware/auth");
+const role_1 = require("../middleware/role");
+const upload_1 = require("../middleware/upload");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.post('/', upload_1.upload.single('attachment'), ticketController_1.createTicket);
+router.get('/', ticketController_1.getTickets);
+router.get('/:id', ticketController_1.getTicketById);
+router.patch('/:id/status', (0, role_1.requireRole)('ADMIN'), ticketController_1.updateTicketStatus);
+router.post('/:id/comments', ticketController_1.addTicketComment);
+exports.default = router;

@@ -1,0 +1,28 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const authRoutes_1 = __importDefault(require("./authRoutes"));
+const libraryAdminRoutes_1 = __importDefault(require("./libraryAdminRoutes"));
+const studentRoutes_1 = __importDefault(require("./studentRoutes"));
+const attendanceRoutes_1 = __importDefault(require("./attendanceRoutes"));
+const qrRoutes_1 = __importDefault(require("./qrRoutes"));
+const seatRoutes_1 = __importDefault(require("./seatRoutes"));
+const ticketRoutes_1 = __importDefault(require("./ticketRoutes"));
+const noticeRoutes_1 = __importDefault(require("./noticeRoutes"));
+const reportRoutes_1 = __importDefault(require("./reportRoutes"));
+const settingsRoutes_1 = __importDefault(require("./settingsRoutes"));
+const router = (0, express_1.Router)();
+router.use('/auth', authRoutes_1.default);
+router.use('/library-admin', libraryAdminRoutes_1.default);
+router.use('/students', studentRoutes_1.default);
+router.use('/attendance', attendanceRoutes_1.default);
+router.use('/qr', qrRoutes_1.default);
+router.use('/seats', seatRoutes_1.default);
+router.use('/tickets', ticketRoutes_1.default);
+router.use('/notices', noticeRoutes_1.default);
+router.use('/reports', reportRoutes_1.default);
+router.use('/settings', settingsRoutes_1.default);
+exports.default = router;

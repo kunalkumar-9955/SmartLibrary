@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  database:
+    image: mongo:7.0
+    container_name: smart_library_mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: smart_library
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smart_library_backend
+    restart: always
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      MONGODB_URI: mongodb://database:27017/smart_library
+      JWT_SECRET: super_secret_jwt_key_smart_library_management_2026_x89f
+      JWT_EXPIRES_IN: 7d
+      FRONTEND_URL: http://localhost:5173
+      QR_SECRET: qr_hmac_secret_key_smart_library_entry_exit_2026
+    ports:
+      - "5000:5000"
+    depends_on:
+      - database
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smart_library_frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:

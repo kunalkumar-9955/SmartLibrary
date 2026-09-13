@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const superAdminController_1 = require("../controllers/superAdminController");
+const auth_1 = require("../middleware/auth");
+const role_1 = require("../middleware/role");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate, (0, role_1.requireRole)('SUPER_ADMIN'));
+router.get('/dashboard', superAdminController_1.getSuperAdminDashboard);
+router.get('/libraries', superAdminController_1.getLibraries);
+router.post('/libraries', superAdminController_1.createLibrary);
+router.put('/libraries/:id', superAdminController_1.updateLibrary);
+router.delete('/libraries/:id', superAdminController_1.deleteLibrary);
+router.get('/admins', superAdminController_1.getAdmins);
+exports.default = router;
