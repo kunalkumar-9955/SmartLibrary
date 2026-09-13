@@ -45,6 +45,7 @@ export const AdminStudentsPage: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [studentIdNumber, setStudentIdNumber] = useState('');
   const [course, setCourse] = useState('');
+  const [assignedSeatNumber, setAssignedSeatNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const { success, error } = useToast();
@@ -84,6 +85,7 @@ export const AdminStudentsPage: React.FC = () => {
         phone: phone.trim(),
         studentIdNumber: studentIdNumber.trim(),
         course: course.trim(),
+        assignedSeatNumber: assignedSeatNumber.trim() || undefined,
       });
 
       if (res.data.success) {
@@ -95,6 +97,7 @@ export const AdminStudentsPage: React.FC = () => {
         setPhone('');
         setStudentIdNumber('');
         setCourse('');
+        setAssignedSeatNumber('');
         fetchStudents();
       }
     } catch (err: any) {
@@ -111,6 +114,7 @@ export const AdminStudentsPage: React.FC = () => {
     setPhone(student.phone || '');
     setStudentIdNumber(student.studentIdNumber || '');
     setCourse(student.course || '');
+    setAssignedSeatNumber((student as any).assignedSeatNumber || '');
     setIsEditModalOpen(true);
   };
 
@@ -123,6 +127,7 @@ export const AdminStudentsPage: React.FC = () => {
         phone: phone.trim(),
         studentIdNumber: studentIdNumber.trim(),
         course: course.trim(),
+        assignedSeatNumber: assignedSeatNumber.trim(),
       });
       if (res.data.success) {
         success('Student updated successfully');
@@ -234,6 +239,7 @@ export const AdminStudentsPage: React.FC = () => {
             setPhone('');
             setStudentIdNumber('');
             setCourse('');
+            setAssignedSeatNumber('');
             setIsAddModalOpen(true);
           }}
           className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/30 transition cursor-pointer"
@@ -332,9 +338,16 @@ export const AdminStudentsPage: React.FC = () => {
                           </span>
                         </div>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                          OUTSIDE
-                        </span>
+                        <div>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                            OUTSIDE
+                          </span>
+                          {(s as any).assignedSeatNumber && (
+                            <span className="block mt-0.5 text-[10px] text-slate-400">
+                              Allotted: <span className="font-bold text-indigo-500">#{(s as any).assignedSeatNumber}</span>
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
 
@@ -499,17 +512,34 @@ export const AdminStudentsPage: React.FC = () => {
             </div>
           </div>
 
-          <div>
-            <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Course / Exam Goal
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. B.Tech / UPSC / NEET"
-              value={course}
-              onChange={(e) => setCourse(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Course / Exam Goal
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. B.Tech / UPSC / NEET"
+                value={course}
+                onChange={(e) => setCourse(e.target.value)}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+              />
+            </div>
+            <div>
+              <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Allotted Seat No.
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                placeholder="1 – 50"
+                value={assignedSeatNumber}
+                onChange={(e) => setAssignedSeatNumber(e.target.value)}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">Leave blank for no fixed seat</p>
+            </div>
           </div>
 
           <div>
@@ -585,16 +615,33 @@ export const AdminStudentsPage: React.FC = () => {
             </div>
           </div>
 
-          <div>
-            <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
-              Course
-            </label>
-            <input
-              type="text"
-              value={course}
-              onChange={(e) => setCourse(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Course
+              </label>
+              <input
+                type="text"
+                value={course}
+                onChange={(e) => setCourse(e.target.value)}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+              />
+            </div>
+            <div>
+              <label className="block font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Allotted Seat No.
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                placeholder="1 – 50"
+                value={assignedSeatNumber}
+                onChange={(e) => setAssignedSeatNumber(e.target.value)}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">Leave blank to clear assignment</p>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
