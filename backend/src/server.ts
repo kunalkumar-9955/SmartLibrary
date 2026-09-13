@@ -9,6 +9,7 @@ import { connectDB } from './config/db';
 import { errorHandler } from './middleware/errorHandler';
 import apiRoutes from './routes';
 import { bootstrapSystem } from './config/bootstrap';
+import { User } from './models/User';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -61,10 +62,24 @@ const uploadDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
 app.use('/uploads', express.static(uploadDir));
 
 // Health Checks (Both /health and /api/health for Render/Vercel compatibility)
-const sendHealthCheck = (req: express.Request, res: express.Response) => {
+const sendHealthCheck = async (req: express.Request, res: express.Response) => {
+  const adminEmail = (process.env.ADMIN_EMAIL || 'sonusingh7759@gmail.com').toLowerCase().trim();
+  let adminConfigured = false;
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const exists = await User.exists({ email: adminEmail });
+      adminConfigured = !!exists;
+    }
+  } catch {
+    adminConfigured = false;
+  }
+
   res.status(200).json({
     status: 'UP',
     database: mongoose.connection.readyState === 1 ? 'CONNECTED' : 'CONNECTING',
+    adminConfigured,
+    adminEmail,
+    adminPasswordEnvSet: Boolean(process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.trim() !== ''),
     system: 'Smart Library Management & Student Support System',
     timestamp: new Date().toISOString(),
   });

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { User } from '../models/User';
 import { sendSuccess, sendError } from '../utils/response';
 
@@ -11,12 +12,67 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return sendError(res, 'Email and password are required', 400, 'MISSING_CREDENTIALS');
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const cleanEmail = email.toLowerCase().trim();
+    const adminEmail = (process.env.ADMIN_EMAIL || 'sonusingh7759@gmail.com').toLowerCase().trim();
+
+    let user = await User.findOne({ email: cleanEmail });
+
+    // On-demand Admin Initialization / Recovery
+    if (cleanEmail === adminEmail) {
+      const rawEnvPassword = process.env.ADMIN_PASSWORD;
+
+      if (rawEnvPassword && rawEnvPassword.trim() !== '') {
+        let cleanEnvPass = rawEnvPassword.trim();
+        if (
+          (cleanEnvPass.startsWith('"') && cleanEnvPass.endsWith('"')) ||
+          (cleanEnvPass.startsWith("'") && cleanEnvPass.endsWith("'"))
+        ) {
+          cleanEnvPass = cleanEnvPass.slice(1, -1).trim();
+        }
+
+        if (!user) {
+          // Admin does not exist in DB yet: initialize on-the-fly
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash(cleanEnvPass, salt);
+          user = await User.create({
+            name: 'Library Admin',
+            email: adminEmail,
+            password: hashedPassword,
+            role: 'ADMIN',
+            status: 'ACTIVE',
+            phone: '+91 9876543210',
+          });
+          console.log(`[Auth] Admin user auto-initialized for ${adminEmail}`);
+        } else if (password === cleanEnvPass || password.trim() === cleanEnvPass) {
+          // If password matches environment variable, ensure role is ADMIN & sync DB password if needed
+          const isMatch = await user.comparePassword(password);
+          if (!isMatch) {
+            user.password = cleanEnvPass;
+            user.role = 'ADMIN';
+            user.status = 'ACTIVE';
+            await user.save();
+            console.log(`[Auth] Admin password synchronized with ADMIN_PASSWORD environment variable`);
+          }
+        }
+      } else if (!user) {
+        return sendError(
+          res,
+          'Admin account not initialized. Please set ADMIN_PASSWORD in your Render Environment Variables.',
+          401,
+          'ADMIN_NOT_CONFIGURED'
+        );
+      }
+    }
+
     if (!user) {
       return sendError(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 
-    const isMatch = await user.comparePassword(password);
+    let isMatch = await user.comparePassword(password);
+    if (!isMatch && (password.startsWith(' ') || password.endsWith(' '))) {
+      isMatch = await user.comparePassword(password.trim());
+    }
+
     if (!isMatch) {
       return sendError(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }

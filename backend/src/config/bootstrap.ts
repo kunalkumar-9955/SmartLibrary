@@ -16,14 +16,21 @@ export const bootstrapSystem = async (): Promise<void> => {
   try {
     const rawAdminEmail = process.env.ADMIN_EMAIL || 'sonusingh7759@gmail.com';
     const adminEmail = rawAdminEmail.toLowerCase().trim();
-    const adminPassword = process.env.ADMIN_PASSWORD;
+    const rawPassword = process.env.ADMIN_PASSWORD;
 
     console.log(`[Bootstrap] Verifying library admin account: ${adminEmail}`);
 
     let adminUser = await User.findOne({ email: adminEmail });
 
-    if (adminPassword && adminPassword.trim() !== '') {
-      const cleanPassword = adminPassword.trim();
+    if (rawPassword && rawPassword.trim() !== '') {
+      let cleanPassword = rawPassword.trim();
+      // Strip accidental quotes pasted into Render env vars
+      if (
+        (cleanPassword.startsWith('"') && cleanPassword.endsWith('"')) ||
+        (cleanPassword.startsWith("'") && cleanPassword.endsWith("'"))
+      ) {
+        cleanPassword = cleanPassword.slice(1, -1).trim();
+      }
 
       if (adminUser) {
         // Admin user exists: verify credentials and role
