@@ -16,6 +16,7 @@ export interface IUser extends Document {
   status: UserStatus;
   isCurrentlyInside: boolean;
   currentSeatNumber?: string;
+  assignedSeatNumber?: string;
   lastEntryTime?: Date;
   lastExitTime?: Date;
   createdAt: Date;
@@ -47,6 +48,7 @@ const UserSchema = new Schema<IUser>(
     },
     isCurrentlyInside: { type: Boolean, default: false, index: true },
     currentSeatNumber: { type: String },
+    assignedSeatNumber: { type: String, trim: true },
     lastEntryTime: { type: Date },
     lastExitTime: { type: Date },
   },

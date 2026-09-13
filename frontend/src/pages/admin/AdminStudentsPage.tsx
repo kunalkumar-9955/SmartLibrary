@@ -89,7 +89,19 @@ export const AdminStudentsPage: React.FC = () => {
       });
 
       if (res.data.success) {
-        success('Student registered successfully!');
+        const emailSent: boolean = res.data.data?.emailSent ?? false;
+        const emailMsg: string = res.data.data?.emailMessage || '';
+
+        if (emailSent) {
+          success('Student registered successfully. Welcome email sent.');
+        } else {
+          success('Student registered successfully.');
+          if (emailMsg) {
+            // Show a secondary warning about email
+            setTimeout(() => error(`⚠️ ${emailMsg}`), 600);
+          }
+        }
+
         setIsAddModalOpen(false);
         setName('');
         setEmail('');

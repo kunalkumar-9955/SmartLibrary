@@ -115,6 +115,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
           status: user.status,
           isCurrentlyInside: user.isCurrentlyInside,
           currentSeatNumber: user.currentSeatNumber,
+          assignedSeatNumber: user.assignedSeatNumber,
           lastEntryTime: user.lastEntryTime,
           lastExitTime: user.lastExitTime,
         },
@@ -149,6 +150,7 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
       status: user.status,
       isCurrentlyInside: user.isCurrentlyInside,
       currentSeatNumber: user.currentSeatNumber,
+      assignedSeatNumber: user.assignedSeatNumber,
       lastEntryTime: user.lastEntryTime,
       lastExitTime: user.lastExitTime,
     });

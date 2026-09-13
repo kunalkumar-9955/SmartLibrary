@@ -4,6 +4,7 @@ import { Attendance } from '../models/Attendance';
 import { Ticket } from '../models/Ticket';
 import { Seat } from '../models/Seat';
 import { sendSuccess, sendError } from '../utils/response';
+import { sendStudentWelcomeEmail } from '../services/emailService';
 
 export const getStudents = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -47,7 +48,7 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
 
 export const createStudent = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, email, password, phone, studentIdNumber, course } = req.body;
+    const { name, email, password, phone, studentIdNumber, course, assignedSeatNumber } = req.body;
 
     if (!name || !email || !studentIdNumber || !password) {
       return sendError(res, 'Name, email, Student ID, and initial Password are required', 400);
@@ -66,6 +67,16 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
       return sendError(res, 'A student with this Student ID already exists', 409);
     }
 
+    let cleanSeat = '';
+    if (assignedSeatNumber && String(assignedSeatNumber).trim() !== '') {
+      const parsedNum = parseInt(String(assignedSeatNumber).trim(), 10);
+      if (!isNaN(parsedNum) && parsedNum >= 1 && parsedNum <= 50) {
+        cleanSeat = parsedNum < 10 ? `0${parsedNum}` : `${parsedNum}`;
+      } else {
+        return sendError(res, 'Allotted Seat Number must be between 01 and 50', 400);
+      }
+    }
+
     const user = await User.create({
       name: name.trim(),
       email: cleanEmail,
@@ -74,10 +85,30 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
       studentIdNumber: cleanStudentId,
       phone: phone?.trim(),
       course: course?.trim(),
+      assignedSeatNumber: cleanSeat || undefined,
       status: 'ACTIVE',
     });
 
-    return sendSuccess(res, user, 'Student registered successfully', 201);
+    // Send welcome email via Brevo — non-blocking, never rolls back student creation
+    const emailResult = await sendStudentWelcomeEmail({
+      name: user.name,
+      email: user.email,
+      studentIdNumber: user.studentIdNumber || cleanStudentId,
+      course: user.course,
+    });
+
+    return sendSuccess(
+      res,
+      {
+        student: user,
+        emailSent: emailResult.sent,
+        emailMessage: emailResult.message,
+      },
+      emailResult.sent
+        ? 'Student registered successfully. Welcome email sent.'
+        : `Student registered successfully. ${emailResult.message}.`,
+      201
+    );
   } catch (error) {
     next(error);
   }
@@ -112,7 +143,7 @@ export const getStudentById = async (req: Request, res: Response, next: NextFunc
 export const updateStudent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { name, phone, course, studentIdNumber } = req.body;
+    const { name, phone, course, studentIdNumber, assignedSeatNumber } = req.body;
 
     if (studentIdNumber) {
       const cleanStudentId = studentIdNumber.trim();
@@ -125,14 +156,31 @@ export const updateStudent = async (req: Request, res: Response, next: NextFunct
       }
     }
 
+    let cleanSeat: string | undefined = undefined;
+    if (assignedSeatNumber !== undefined) {
+      if (String(assignedSeatNumber).trim() === '') {
+        cleanSeat = '';
+      } else {
+        const parsedNum = parseInt(String(assignedSeatNumber).trim(), 10);
+        if (!isNaN(parsedNum) && parsedNum >= 1 && parsedNum <= 50) {
+          cleanSeat = parsedNum < 10 ? `0${parsedNum}` : `${parsedNum}`;
+        } else {
+          return sendError(res, 'Allotted Seat Number must be between 01 and 50', 400);
+        }
+      }
+    }
+
+    const updateFields: any = {
+      name: name?.trim(),
+      phone: phone?.trim(),
+      course: course?.trim(),
+      ...(studentIdNumber ? { studentIdNumber: studentIdNumber.trim() } : {}),
+      ...(cleanSeat !== undefined ? { assignedSeatNumber: cleanSeat } : {}),
+    };
+
     const student = await User.findByIdAndUpdate(
       id,
-      {
-        name: name?.trim(),
-        phone: phone?.trim(),
-        course: course?.trim(),
-        ...(studentIdNumber ? { studentIdNumber: studentIdNumber.trim() } : {}),
-      },
+      updateFields,
       { new: true }
     ).select('-password');
 

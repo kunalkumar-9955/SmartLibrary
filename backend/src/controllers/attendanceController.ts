@@ -49,10 +49,13 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
     }
 
     // Seat Assignment
-    let assignedSeat = null;
+    // Seat Assignment: Prefer student's admin-allotted seat, or preferredSeatNumber
+    const targetSeatNumber = student.assignedSeatNumber || preferredSeatNumber;
 
-    if (preferredSeatNumber) {
-      const formattedNum = preferredSeatNumber.toString().padStart(2, '0');
+    let assignedSeat: import('../models/Seat').ISeat | null = null;
+
+    if (targetSeatNumber) {
+      const formattedNum = targetSeatNumber.toString().padStart(2, '0');
       assignedSeat = await Seat.findOne({
         seatNumber: formattedNum,
         status: 'AVAILABLE',

@@ -14,6 +14,7 @@ export interface User {
   status: UserStatus;
   isCurrentlyInside?: boolean;
   currentSeatNumber?: string;
+  assignedSeatNumber?: string;
   lastEntryTime?: string;
   lastExitTime?: string;
   createdAt?: string;
