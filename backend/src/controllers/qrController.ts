@@ -13,11 +13,12 @@ const DEFAULT_QR_TTL_SECONDS = 86400; // 24 hours validity so active QR never ex
 const createNewActiveSession = async (
   qrType: QRMode,
   version: number,
+  reason: string,
   ttlSeconds: number = DEFAULT_QR_TTL_SECONDS
 ): Promise<IQrSession> => {
   const dynamicPayload = generateDynamicQR(qrType, ttlSeconds, version);
 
-  return await QrSession.create({
+  const session = await QrSession.create({
     qrType,
     token: dynamicPayload.token,
     version,
@@ -26,6 +27,9 @@ const createNewActiveSession = async (
     signature: dynamicPayload.signature,
     scanCount: 0,
   });
+
+  console.log(`[QR GENERATED] reason = ${reason}, qrType = ${qrType}, version = ${version}`);
+  return session;
 };
 
 /**
@@ -40,7 +44,8 @@ const createNewActiveSession = async (
  */
 export const rotateQRSession = async (
   qrType: QRMode,
-  scannedToken?: string
+  scannedToken?: string,
+  reason: 'ADMIN_MANUAL' | 'INITIAL_SETUP' | 'SUCCESSFUL_ENTRY' | 'SUCCESSFUL_EXIT' = 'ADMIN_MANUAL'
 ): Promise<IQrSession> => {
   const now = new Date();
 
@@ -66,12 +71,12 @@ export const rotateQRSession = async (
       if (existingActive) {
         return existingActive;
       }
-      return await createNewActiveSession(qrType, 1);
+      return await createNewActiveSession(qrType, 1, reason);
     }
 
     // Successfully rotated this specific token -> generate exactly ONE next version
     const nextVersion = currentActive.version + 1;
-    return await createNewActiveSession(qrType, nextVersion);
+    return await createNewActiveSession(qrType, nextVersion, reason);
   }
 
   // Admin manual generate / regenerate: atomically rotate latest ACTIVE session
@@ -88,7 +93,7 @@ export const rotateQRSession = async (
   );
 
   const nextVersion = currentActive ? currentActive.version + 1 : 1;
-  return await createNewActiveSession(qrType, nextVersion);
+  return await createNewActiveSession(qrType, nextVersion, reason);
 };
 
 /**
@@ -104,7 +109,7 @@ export const generateQR = async (req: Request, res: Response, next: NextFunction
     }
 
     const settings = await Library.findOne();
-    const newSession = await rotateQRSession(qrType as QRMode);
+    const newSession = await rotateQRSession(qrType as QRMode, undefined, 'ADMIN_MANUAL');
 
     const payload: QRPayload = {
       qrType: newSession.qrType,
@@ -118,6 +123,7 @@ export const generateQR = async (req: Request, res: Response, next: NextFunction
       ...payload,
       libraryName: settings?.name || 'Smart Library',
       ttl: Math.max(0, Math.floor((newSession.expiresAt.getTime() - Date.now()) / 1000)),
+      status: newSession.status,
     });
   } catch (error) {
     next(error);
@@ -131,6 +137,7 @@ export const generateQR = async (req: Request, res: Response, next: NextFunction
  * CRITICAL RULE:
  * This endpoint NEVER generates or rotates a QR automatically based on timer or polling.
  * QR-A stays fixed until a student successfully scans and completes attendance.
+ * Returned object is strictly immutable while waiting for a scan (no dynamic Date.now() recalculations).
  */
 export const getActiveQR = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -148,7 +155,7 @@ export const getActiveQR = async (req: Request, res: Response, next: NextFunctio
 
     // Only create an initial session if none exists in the database at all
     if (!activeSession) {
-      activeSession = await rotateQRSession(qrType);
+      activeSession = await rotateQRSession(qrType, undefined, 'INITIAL_SETUP');
     }
 
     const settings = await Library.findOne();
@@ -161,10 +168,10 @@ export const getActiveQR = async (req: Request, res: Response, next: NextFunctio
       version: activeSession.version,
     };
 
+    // Notice: Do NOT include dynamic changing ttl here to keep response bit-for-bit identical
     return sendSuccess(res, {
       ...payload,
       libraryName: settings?.name || 'Smart Library',
-      ttl: Math.max(0, Math.floor((activeSession.expiresAt.getTime() - Date.now()) / 1000)),
       status: activeSession.status,
     });
   } catch (error) {

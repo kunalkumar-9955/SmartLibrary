@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { qrService } from '../services/api';
 import { QRPayload } from '../types';
@@ -19,11 +19,6 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({ initialType 
   const containerRef = useRef<HTMLDivElement>(null);
   const currentTokenRef = useRef<string | null>(null);
 
-  // Sync ref with state
-  useEffect(() => {
-    currentTokenRef.current = qrData?.token || null;
-  }, [qrData]);
-
   // Manual regenerate: explicitly call backend generateQR to rotate immediately
   const handleManualRegenerate = async () => {
     try {
@@ -32,9 +27,15 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({ initialType 
       const res = await qrService.generateQR(qrType);
       if (res.data.success) {
         const payload: QRPayload = res.data.data;
-        setQrData(payload);
-        const diff = Math.max(0, Math.floor((payload.expiresAt - Date.now()) / 1000));
-        setSecondsRemaining(diff || 60);
+        currentTokenRef.current = payload.token;
+        setQrData({
+          qrType: payload.qrType,
+          token: payload.token,
+          expiresAt: payload.expiresAt,
+          signature: payload.signature,
+          version: payload.version,
+        });
+        setSecondsRemaining(60);
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to generate dynamic QR');
@@ -44,8 +45,13 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({ initialType 
   };
 
   // Poll for active QR (lightweight 1.5s poll)
+  // CRITICAL: Polling ONLY checks if the backend rotated the token after a student scan.
+  // Polling will NEVER regenerate or alter the QR if the token is unchanged.
   useEffect(() => {
     let isMounted = true;
+    currentTokenRef.current = null;
+    setQrData(null);
+    setLoading(true);
 
     const syncActiveQR = async () => {
       try {
@@ -53,9 +59,15 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({ initialType 
         if (!isMounted || !res.data.success) return;
 
         const payload: QRPayload = res.data.data;
+        const incomingToken = payload.token;
+
+        // If the token hasn't changed, DO NOT update qrData (preserves static QR rendering)
+        if (currentTokenRef.current === incomingToken && qrData !== null) {
+          return;
+        }
 
         // Detect if QR was rotated by backend after student attendance
-        if (currentTokenRef.current && currentTokenRef.current !== payload.token) {
+        if (currentTokenRef.current && currentTokenRef.current !== incomingToken) {
           setIsRotating(true);
           setTimeout(() => {
             if (isMounted) setIsRotating(false);
@@ -63,7 +75,14 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({ initialType 
           setSecondsRemaining(60);
         }
 
-        setQrData(payload);
+        currentTokenRef.current = incomingToken;
+        setQrData({
+          qrType: payload.qrType,
+          token: payload.token,
+          expiresAt: payload.expiresAt,
+          signature: payload.signature,
+          version: payload.version,
+        });
         setError(null);
         setLoading(false);
       } catch (err: any) {
@@ -80,7 +99,7 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({ initialType 
     // Live sync polling interval (1.5 seconds)
     const pollInterval = setInterval(syncActiveQR, 1500);
 
-    // 1-second visual countdown tick
+    // 1-second visual countdown tick (UI display only, does NOT regenerate QR)
     const countdownInterval = setInterval(() => {
       setSecondsRemaining((prev) => (prev > 1 ? prev - 1 : 60));
     }, 1000);
@@ -103,7 +122,18 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({ initialType 
   };
 
   const formattedCountdown = `00:${secondsRemaining < 10 ? '0' : ''}${secondsRemaining}`;
-  const qrString = qrData ? JSON.stringify(qrData) : '';
+
+  // Stable, bit-for-bit immutable string representation for the QR SVG
+  const qrString = useMemo(() => {
+    if (!qrData || !qrData.token) return '';
+    return JSON.stringify({
+      qrType: qrData.qrType,
+      token: qrData.token,
+      expiresAt: qrData.expiresAt,
+      signature: qrData.signature,
+      version: qrData.version,
+    });
+  }, [qrData?.token, qrData?.version]);
 
   return (
     <div

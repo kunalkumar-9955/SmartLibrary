@@ -142,7 +142,7 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
       });
 
       // Trigger automatic QR rotation in the background (non-blocking)
-      rotateQRSession('ENTRY', qrPayload.token).catch((rotErr) => {
+      rotateQRSession('ENTRY', qrPayload.token, 'SUCCESSFUL_ENTRY').catch((rotErr) => {
         console.warn('[QR Rotation] Non-blocking entry rotation error:', rotErr);
       });
 
@@ -273,7 +273,7 @@ export const markExitAttendance = async (req: Request, res: Response, next: Next
     });
 
     // Trigger automatic EXIT QR rotation in the background (non-blocking)
-    rotateQRSession('EXIT', qrPayload.token).catch((rotErr) => {
+    rotateQRSession('EXIT', qrPayload.token, 'SUCCESSFUL_EXIT').catch((rotErr) => {
       console.warn('[QR Rotation] Non-blocking exit rotation error:', rotErr);
     });
 
