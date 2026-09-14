@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Notice } from '../models/Notice';
 import { sendSuccess, sendError } from '../utils/response';
+import { broadcastPushNotification } from '../services/pushService';
 
 export const getNotices = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -22,6 +23,19 @@ export const createNotice = async (req: Request, res: Response, next: NextFuncti
     const notice = await Notice.create({
       title: title.trim(),
       description: description.trim(),
+    });
+
+    // Send Web Push notification to all subscribed users asynchronously
+    broadcastPushNotification({
+      title: notice.title,
+      body: notice.description,
+      url: '/student/notifications',
+      data: {
+        noticeId: notice._id.toString(),
+        createdAt: notice.createdAt,
+      },
+    }).catch((pushErr) => {
+      console.error('Push broadcast error:', pushErr);
     });
 
     return sendSuccess(res, notice, 'Notice published successfully', 201);

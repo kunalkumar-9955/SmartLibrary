@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { Lock, Mail, ArrowRight, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { initPushNotificationsOnLogin } from '../../utils/notificationManager';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -31,6 +32,13 @@ export const LoginPage: React.FC = () => {
       setLoading(true);
       const loggedUser = await login({ email: cleanEmail, password });
       success(`Welcome back, ${loggedUser.name}!`);
+
+      // Initialize Web Push notification permission and subscription immediately after login
+      try {
+        await initPushNotificationsOnLogin();
+      } catch (pushErr) {
+        console.warn('Push notification initialization error:', pushErr);
+      }
 
       if (loggedUser.role === 'ADMIN') {
         navigate('/admin/dashboard');

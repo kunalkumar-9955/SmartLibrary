@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogoutConfirmationModal } from '../components/LogoutConfirmationModal';
 import { useAuthBoundaryBackGuard } from '../hooks/useAuthBoundaryBackGuard';
+import { notificationService } from '../services/api';
+import { syncPushSubscription } from '../utils/notificationManager';
 import {
   Home,
   QrCode,
@@ -10,11 +12,13 @@ import {
   LifeBuoy,
   User as UserIcon,
   LogOut,
+  Bell,
 } from 'lucide-react';
 
 export const StudentLayout: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const [unreadCount, setUnreadCount] = useState<number>(0);
   const {
     showLogoutConfirm,
     isLoggingOut,
@@ -22,6 +26,24 @@ export const StudentLayout: React.FC = () => {
     handleConfirmLogout,
     triggerLogoutConfirm,
   } = useAuthBoundaryBackGuard();
+
+  // Sync push subscription if permission is already granted and fetch unread count
+  useEffect(() => {
+    syncPushSubscription();
+
+    const fetchUnread = async () => {
+      try {
+        const res = await notificationService.getMyNotifications();
+        if (res.data?.success) {
+          setUnreadCount(res.data.data.unreadCount || 0);
+        }
+      } catch {
+        // quiet fallback
+      }
+    };
+
+    fetchUnread();
+  }, [location.pathname]);
 
   const navItems = [
     { label: 'Home', path: '/student/dashboard', icon: Home },
@@ -48,7 +70,21 @@ export const StudentLayout: React.FC = () => {
             </div>
           </Link>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Notification Bell with unread badge */}
+            <Link
+              to="/student/notifications"
+              className="relative p-2 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              title="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
             {/* Profile Link */}
             <Link
               to="/student/profile"

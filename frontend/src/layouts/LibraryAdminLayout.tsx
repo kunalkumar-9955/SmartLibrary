@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogoutConfirmationModal } from '../components/LogoutConfirmationModal';
 import { useAuthBoundaryBackGuard } from '../hooks/useAuthBoundaryBackGuard';
+import { syncPushSubscription } from '../utils/notificationManager';
 import {
   LayoutDashboard,
   Users,
@@ -30,6 +31,10 @@ export const LibraryAdminLayout: React.FC = () => {
     handleConfirmLogout,
     triggerLogoutConfirm,
   } = useAuthBoundaryBackGuard();
+
+  useEffect(() => {
+    syncPushSubscription();
+  }, []);
 
   // Exact 10 navigation items from requirements
   const navItems = [

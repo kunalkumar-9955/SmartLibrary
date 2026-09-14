@@ -127,3 +127,15 @@ export const settingsService = {
   getSettings: () => api.get('/settings'),
   updateSettings: (data: any) => api.put('/settings', data),
 };
+
+// Notification Services
+export const notificationService = {
+  getVapidPublicKey: () => api.get('/notifications/vapid-key'),
+  subscribePush: (data: { subscription: any; userAgent?: string }) =>
+    api.post('/notifications/subscribe', data),
+  unsubscribePush: (data: { endpoint: string }) =>
+    api.post('/notifications/unsubscribe', data),
+  getMyNotifications: () => api.get('/notifications/my'),
+  markAsRead: (id: string) => api.post(`/notifications/read/${id}`),
+  markAllAsRead: () => api.post('/notifications/read-all'),
+};

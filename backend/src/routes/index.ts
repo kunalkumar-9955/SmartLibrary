@@ -9,6 +9,7 @@ import ticketRoutes from './ticketRoutes';
 import noticeRoutes from './noticeRoutes';
 import reportRoutes from './reportRoutes';
 import settingsRoutes from './settingsRoutes';
+import notificationRoutes from './notificationRoutes';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/tickets', ticketRoutes);
 router.use('/notices', noticeRoutes);
 router.use('/reports', reportRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;

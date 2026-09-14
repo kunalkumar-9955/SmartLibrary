@@ -17,6 +17,7 @@ import { StudentScanPage } from '../pages/student/StudentScanPage';
 import { StudentAttendancePage } from '../pages/student/StudentAttendancePage';
 import { StudentTicketsPage } from '../pages/student/StudentTicketsPage';
 import { StudentProfilePage } from '../pages/student/StudentProfilePage';
+import { StudentNotificationsPage } from '../pages/student/StudentNotificationsPage';
 
 // Admin Pages
 import { AdminDashboard } from '../pages/admin/AdminDashboard';
@@ -112,6 +113,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="scan" element={<StudentScanPage />} />
         <Route path="attendance" element={<StudentAttendancePage />} />
         <Route path="tickets" element={<StudentTicketsPage />} />
+        <Route path="notifications" element={<StudentNotificationsPage />} />
         <Route path="profile" element={<StudentProfilePage />} />
       </Route>
 

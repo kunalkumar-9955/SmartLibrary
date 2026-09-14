@@ -115,3 +115,13 @@ export interface QRPayload {
   signature: string;
   libraryName?: string;
 }
+
+export interface NotificationItem {
+  _id: string;
+  title: string;
+  message: string;
+  description?: string;
+  createdAt: string;
+  updatedAt?: string;
+  isRead: boolean;
+}

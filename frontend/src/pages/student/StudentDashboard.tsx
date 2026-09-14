@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { attendanceService, noticeService, ticketService } from '../../services/api';
-import { Notice, Ticket, Attendance } from '../../types';
+import { attendanceService, noticeService, ticketService, notificationService } from '../../services/api';
+import { Notice, Ticket, Attendance, NotificationItem } from '../../types';
 import { Badge } from '../../components/Badge';
 import {
   QrCode,
@@ -14,6 +14,8 @@ import {
   Armchair,
   ArrowRight,
   ChevronRight,
+  Bell,
+  X,
 } from 'lucide-react';
 
 export const StudentDashboard: React.FC = () => {
@@ -23,6 +25,9 @@ export const StudentDashboard: React.FC = () => {
   const [recentAttendance, setRecentAttendance] = useState<Attendance[]>([]);
   const [recentTickets, setRecentTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [latestUnreadNotice, setLatestUnreadNotice] = useState<NotificationItem | null>(null);
+  const [showUnreadToast, setShowUnreadToast] = useState<boolean>(false);
 
   const isInside = user?.isCurrentlyInside;
   const currentSeat = user?.currentSeatNumber;
@@ -31,15 +36,28 @@ export const StudentDashboard: React.FC = () => {
     try {
       setLoading(true);
       await refreshUser();
-      const [noticesRes, attRes, ticketsRes] = await Promise.all([
+      const [noticesRes, attRes, ticketsRes, notifRes] = await Promise.all([
         noticeService.getNotices(),
         attendanceService.getMyHistory({ limit: 5 }),
         ticketService.getTickets({ limit: 3 }),
+        notificationService.getMyNotifications().catch(() => ({ data: { success: false, data: { notifications: [], unreadCount: 0 } } })),
       ]);
 
       if (noticesRes.data.success) setNotices(noticesRes.data.data || []);
       if (attRes.data.success) setRecentAttendance(attRes.data.data.records || []);
       if (ticketsRes.data.success) setRecentTickets(ticketsRes.data.data.tickets || []);
+
+      if (notifRes.data?.success) {
+        const notifList: NotificationItem[] = notifRes.data.data?.notifications || [];
+        const count = notifRes.data.data?.unreadCount || 0;
+        setUnreadCount(count);
+
+        const unreadItems = notifList.filter((n) => !n.isRead);
+        if (unreadItems.length > 0) {
+          setLatestUnreadNotice(unreadItems[0]);
+          setShowUnreadToast(true);
+        }
+      }
     } catch (err: any) {
       console.error('Error loading student dashboard:', err);
     } finally {
@@ -50,6 +68,16 @@ export const StudentDashboard: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // 5-second auto-dismiss for unread notification popup toast
+  useEffect(() => {
+    if (showUnreadToast) {
+      const timer = setTimeout(() => {
+        setShowUnreadToast(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showUnreadToast]);
 
   // Calculate elapsed duration if currently inside
   let durationStr = '--';
@@ -68,6 +96,45 @@ export const StudentDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans max-w-lg mx-auto">
+      {/* 5-Second Toast Popup for Unread Notification */}
+      {showUnreadToast && latestUnreadNotice && (
+        <div className="bg-slate-900 dark:bg-slate-800 text-white p-4 rounded-2xl shadow-xl border border-indigo-500/30 flex items-start gap-3 transition-all">
+          <div className="w-9 h-9 rounded-xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+            <Bell className="w-5 h-5 animate-pulse" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                🔔 New Notification
+              </span>
+              <button
+                onClick={() => setShowUnreadToast(false)}
+                className="text-slate-400 hover:text-white p-1"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <h4 className="text-xs font-bold text-white mt-1">
+              {latestUnreadNotice.title}
+            </h4>
+            <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+              {latestUnreadNotice.message || latestUnreadNotice.description}
+            </p>
+            <div className="mt-2.5 flex items-center justify-between">
+              <Link
+                to="/student/notifications"
+                onClick={() => setShowUnreadToast(false)}
+                className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1"
+              >
+                Open Notification Center <ArrowRight className="w-3 h-3" />
+              </Link>
+              <span className="text-[10px] text-slate-500">Auto-closing in 5s</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Welcome Card */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="flex items-center justify-between">
@@ -158,9 +225,17 @@ export const StudentDashboard: React.FC = () => {
       {/* Active Notices Section */}
       {notices.length > 0 && (
         <div className="bg-amber-50 dark:bg-amber-950/25 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60">
-          <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold text-xs mb-1">
-            <BellRing className="w-4 h-4 text-amber-600" />
-            Notice: {notices[0].title}
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold text-xs">
+              <BellRing className="w-4 h-4 text-amber-600" />
+              Notice: {notices[0].title}
+            </div>
+            <Link
+              to="/student/notifications"
+              className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:underline"
+            >
+              View All
+            </Link>
           </div>
           <p className="text-xs text-amber-800 dark:text-amber-300/90 leading-relaxed">
             {notices[0].description}
@@ -168,7 +243,7 @@ export const StudentDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Quick Links Menu: My Attendance, My Complaints, Notices, Profile */}
+      {/* Quick Links Menu: My Attendance, My Complaints, Notifications, Profile */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800 text-xs">
         <Link
           to="/student/attendance"
@@ -181,6 +256,32 @@ export const StudentDashboard: React.FC = () => {
             <div>
               <p className="font-bold text-slate-900 dark:text-white">My Attendance</p>
               <p className="text-[10px] text-slate-400">View visit history and time logs</p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </Link>
+
+        <Link
+          to="/student/notifications"
+          className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 flex items-center justify-center relative">
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="font-bold text-slate-900 dark:text-white">Notifications</p>
+                {unreadCount > 0 && (
+                  <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-rose-500 text-white shadow-sm shadow-rose-500/30">
+                    {unreadCount}
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400">Library notices & announcements history</p>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />
