@@ -92,26 +92,10 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return sendError(res, 'Your account is currently inactive.', 403, 'ACCOUNT_INACTIVE');
     }
 
-    // Check active session limits before issuing new token
-    // ADMIN: maximum 4 concurrent device sessions.
-    // STUDENT: unlimited concurrent device sessions — no restriction.
-    if (user.role === 'ADMIN') {
-      const now = new Date();
-      const activeAdminSessionCount = await Session.countDocuments({
-        userId: user._id,
-        isRevoked: false,
-        expiresAt: { $gt: now },
-      });
-      if (activeAdminSessionCount >= 4) {
-        return sendError(
-          res,
-          'Maximum 4 active admin sessions reached. Please logout from another device to continue.',
-          429,
-          'MAX_ADMIN_SESSIONS_REACHED'
-        );
-      }
-    }
-    // Students may log in from any number of devices simultaneously.
+    // No device/session count limits for Admin or Student.
+    // Login is granted to any account with valid credentials and ACTIVE status.
+    // Sessions are tracked per-token for per-device logout (tokenHash revocation) only.
+
 
     const secret = process.env.JWT_SECRET || 'smart_library_jwt_secret_key_2026';
     const expiresIn = process.env.JWT_EXPIRES_IN || '365d';

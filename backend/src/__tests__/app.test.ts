@@ -250,32 +250,47 @@ describe('Smart Personal Library Management System Suite', () => {
     expect(relogin.status).toBe(200);
   });
 
-  it('should allow admin up to 4 sessions and reject the 5th attempt', async () => {
+  it('should allow admin to login from unlimited devices simultaneously (no 4-session limit)', async () => {
     // Session 1 is adminToken in beforeEach
     // Login session 2
     const s2 = await request(app)
       .post('/api/auth/login')
       .send({ email: 'admin@test.com', password: 'Password@123' });
     expect(s2.status).toBe(200);
+    expect(s2.body.success).toBe(true);
 
     // Login session 3
     const s3 = await request(app)
       .post('/api/auth/login')
       .send({ email: 'admin@test.com', password: 'Password@123' });
     expect(s3.status).toBe(200);
+    expect(s3.body.success).toBe(true);
 
     // Login session 4
     const s4 = await request(app)
       .post('/api/auth/login')
       .send({ email: 'admin@test.com', password: 'Password@123' });
     expect(s4.status).toBe(200);
+    expect(s4.body.success).toBe(true);
 
-    // 5th attempt should be rejected with 429
+    // 5th, 6th attempts must ALSO succeed (unlimited devices)
     const s5 = await request(app)
       .post('/api/auth/login')
       .send({ email: 'admin@test.com', password: 'Password@123' });
-    expect(s5.status).toBe(429);
-    expect(s5.body.message).toContain('Maximum 4 active admin sessions reached');
+    expect(s5.status).toBe(200);
+    expect(s5.body.success).toBe(true);
+
+    const s6 = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@test.com', password: 'Password@123' });
+    expect(s6.status).toBe(200);
+    expect(s6.body.success).toBe(true);
+
+    // All tokens are valid
+    const me5 = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${s5.body.data.token}`);
+    expect(me5.status).toBe(200);
   });
 
   it('should create AdminNotification when student registers a complaint', async () => {
@@ -664,28 +679,36 @@ describe('Smart Personal Library Management System Suite', () => {
     expect(count).toBe(20);
   });
 
-  it('TEST 8 & 9: Unlimited student login/logout cycles and 1-active-device enforcement', async () => {
+  it('TEST 8 & 9: Unlimited student login/logout cycles and multi-device simultaneous sessions', async () => {
     // 1. studentToken was created in beforeEach (Device 1 is logged in).
-    // Device 2 tries concurrent login -> BLOCKED (429)
-    const blockedRes = await request(app)
+    // Device 2 logs in concurrently -> SUCCEEDS (no device restriction)
+    const device2Res = await request(app)
       .post('/api/auth/login')
       .send({ email: 'student@test.com', password: 'Password@123' });
-    expect(blockedRes.status).toBe(429);
-    expect(blockedRes.body.message).toContain('already logged in on another device');
+    expect(device2Res.status).toBe(200);
+    expect(device2Res.body.success).toBe(true);
+    const device2Token = device2Res.body.data.token;
 
-    // 2. Device 1 logs out -> server session revoked
+    // Device 3 logs in concurrently -> SUCCEEDS
+    const device3Res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'student@test.com', password: 'Password@123' });
+    expect(device3Res.status).toBe(200);
+    expect(device3Res.body.success).toBe(true);
+
+    // 2. Device 1 logs out -> server session for Device 1 is revoked
     const logoutInitial = await request(app)
       .post('/api/auth/logout')
       .set('Authorization', `Bearer ${studentToken}`);
     expect(logoutInitial.status).toBe(200);
 
-    // 3. Device 2 can immediately login successfully!
-    const login1 = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'student@test.com', password: 'Password@123' });
-    expect(login1.status).toBe(200);
-    expect(login1.body.success).toBe(true);
-    let currentTok = login1.body.data.token;
+    // 3. Device 2 is still logged in and active
+    const meDevice2 = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${device2Token}`);
+    expect(meDevice2.status).toBe(200);
+
+    let currentTok = device2Token;
 
     // 4. Repeat Login -> Logout cycle 5 times (Unlimited cycles test)
     for (let cycle = 1; cycle <= 5; cycle++) {
@@ -705,11 +728,12 @@ describe('Smart Personal Library Management System Suite', () => {
       currentTok = loginCycle.body.data.token;
     }
 
-    // 5. While logged in, another device is blocked
-    const concurrentBlocked = await request(app)
+    // 5. Concurrent login while logged in succeeds (unlimited devices)
+    const concurrentAllowed = await request(app)
       .post('/api/auth/login')
       .send({ email: 'student@test.com', password: 'Password@123' });
-    expect(concurrentBlocked.status).toBe(429);
+    expect(concurrentAllowed.status).toBe(200);
+    expect(concurrentAllowed.body.success).toBe(true);
 
     // Final logout
     const finalLogout = await request(app)
