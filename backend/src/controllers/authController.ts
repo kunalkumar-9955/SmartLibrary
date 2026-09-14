@@ -19,68 +19,127 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return sendError(res, 'Email and password are required', 400, 'MISSING_CREDENTIALS');
     }
 
+    const sanitizeEnv = (val?: string): string => {
+      if (!val) return '';
+      let clean = val.trim();
+      if (
+        (clean.startsWith('"') && clean.endsWith('"')) ||
+        (clean.startsWith("'") && clean.endsWith("'"))
+      ) {
+        clean = clean.slice(1, -1).trim();
+      }
+      return clean;
+    };
+
     const cleanEmail = email.toLowerCase().trim();
-    const adminEmail = (process.env.ADMIN_EMAIL || 'sonusingh7759@gmail.com').toLowerCase().trim();
+    const rawAdminEmail = process.env.ADMIN_EMAIL;
+    const cleanAdminEmail = (sanitizeEnv(rawAdminEmail) || 'sonusingh7759@gmail.com').toLowerCase().trim();
+    const rawEnvPassword = process.env.ADMIN_PASSWORD;
+    const cleanEnvPassword = sanitizeEnv(rawEnvPassword);
 
-    let user = await User.findOne({ email: cleanEmail });
+    // Find user record in MongoDB
+    let user = await User.findOne({
+      $or: [{ email: cleanEmail }, { email: cleanAdminEmail }]
+    });
 
-    // On-demand Admin Initialization / Recovery
-    if (cleanEmail === adminEmail) {
-      const rawEnvPassword = process.env.ADMIN_PASSWORD;
+    // If cleanEmail is different from cleanAdminEmail but user exists with cleanEmail, prioritize exact user match
+    if (user && user.email !== cleanEmail) {
+      const directUser = await User.findOne({ email: cleanEmail });
+      if (directUser) {
+        user = directUser;
+      }
+    }
 
-      if (rawEnvPassword && rawEnvPassword.trim() !== '') {
-        let cleanEnvPass = rawEnvPassword.trim();
-        if (
-          (cleanEnvPass.startsWith('"') && cleanEnvPass.endsWith('"')) ||
-          (cleanEnvPass.startsWith("'") && cleanEnvPass.endsWith("'"))
-        ) {
-          cleanEnvPass = cleanEnvPass.slice(1, -1).trim();
+    // Determine if this login attempt targets the Admin account
+    const isTargetAdmin =
+      cleanEmail === cleanAdminEmail ||
+      cleanEmail === 'sonusingh7759@gmail.com' ||
+      user?.role === 'ADMIN';
+
+    let isAuthenticated = false;
+
+    if (isTargetAdmin) {
+      // --- ADMIN AUTHENTICATION PIPELINE ---
+      // Option A: Verify against ADMIN_PASSWORD from Environment Variables (Render / local .env)
+      let envPasswordMatch = false;
+      if (cleanEnvPassword && cleanEnvPassword !== '') {
+        const isBcryptEnv =
+          cleanEnvPassword.startsWith('$2a$') ||
+          cleanEnvPassword.startsWith('$2b$') ||
+          cleanEnvPassword.startsWith('$2y$');
+
+        if (isBcryptEnv) {
+          envPasswordMatch =
+            (await bcrypt.compare(password, cleanEnvPassword)) ||
+            (await bcrypt.compare(password.trim(), cleanEnvPassword));
+        } else {
+          envPasswordMatch =
+            password === cleanEnvPassword ||
+            password === rawEnvPassword ||
+            password.trim() === cleanEnvPassword;
         }
+      }
+
+      // Option B: Verify against stored MongoDB password hash
+      let dbPasswordMatch = false;
+      if (user && user.password) {
+        dbPasswordMatch = await user.comparePassword(password);
+        if (!dbPasswordMatch && (password.startsWith(' ') || password.endsWith(' '))) {
+          dbPasswordMatch = await user.comparePassword(password.trim());
+        }
+      }
+
+      // Safe Diagnostics (Never exposes secrets or passwords)
+      console.log(
+        `[Auth Diagnostic] Admin attempt for: ${cleanEmail} | ADMIN_EMAIL set: ${Boolean(rawAdminEmail)} | ADMIN_PASSWORD set: ${Boolean(cleanEnvPassword)} | DB user exists: ${Boolean(user)} | Env match: ${envPasswordMatch} | DB match: ${dbPasswordMatch}`
+      );
+
+      if (envPasswordMatch || dbPasswordMatch) {
+        isAuthenticated = true;
 
         if (!user) {
-          // Admin does not exist in DB yet: initialize on-the-fly
-          const salt = await bcrypt.genSalt(10);
-          const hashedPassword = await bcrypt.hash(cleanEnvPass, salt);
+          // Admin account configured in environment but not in DB yet: auto-initialize
           user = await User.create({
             name: 'Library Admin',
-            email: adminEmail,
-            password: hashedPassword,
+            email: cleanEmail,
+            password: cleanEnvPassword || password, // UserSchema.pre('save') handles single bcrypt hashing
             role: 'ADMIN',
             status: 'ACTIVE',
             phone: '+91 9876543210',
           });
-          console.log(`[Auth] Admin user auto-initialized for ${adminEmail}`);
-        } else if (password === cleanEnvPass || password.trim() === cleanEnvPass) {
-          // If password matches environment variable, ensure role is ADMIN & sync DB password if needed
-          const isMatch = await user.comparePassword(password);
-          if (!isMatch) {
-            user.password = cleanEnvPass;
+          console.log(`[Auth] Admin user auto-initialized for ${cleanEmail}`);
+        } else {
+          // Ensure role and active status, and synchronize DB hash if environment password matched
+          let needsSave = false;
+          if (user.role !== 'ADMIN') {
             user.role = 'ADMIN';
+            needsSave = true;
+          }
+          if (user.status !== 'ACTIVE') {
             user.status = 'ACTIVE';
+            needsSave = true;
+          }
+          if (envPasswordMatch && !dbPasswordMatch && cleanEnvPassword) {
+            user.password = cleanEnvPassword; // Synchronize with valid environment password
+            needsSave = true;
+            console.log(`[Auth] Synchronized Admin database password hash with environment credentials`);
+          }
+          if (needsSave) {
             await user.save();
-            console.log(`[Auth] Admin password synchronized with ADMIN_PASSWORD environment variable`);
           }
         }
-      } else if (!user) {
-        return sendError(
-          res,
-          'Admin account not initialized. Please set ADMIN_PASSWORD in your Render Environment Variables.',
-          401,
-          'ADMIN_NOT_CONFIGURED'
-        );
+      }
+    } else {
+      // --- STUDENT / STANDARD USER AUTHENTICATION ---
+      if (user && user.password) {
+        isAuthenticated = await user.comparePassword(password);
+        if (!isAuthenticated && (password.startsWith(' ') || password.endsWith(' '))) {
+          isAuthenticated = await user.comparePassword(password.trim());
+        }
       }
     }
 
-    if (!user) {
-      return sendError(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
-    }
-
-    let isMatch = await user.comparePassword(password);
-    if (!isMatch && (password.startsWith(' ') || password.endsWith(' '))) {
-      isMatch = await user.comparePassword(password.trim());
-    }
-
-    if (!isMatch) {
+    if (!user || !isAuthenticated) {
       return sendError(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 

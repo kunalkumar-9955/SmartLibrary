@@ -17,8 +17,20 @@ import { Attendance } from '../models/Attendance';
  */
 export const bootstrapSystem = async (): Promise<void> => {
   try {
-    const rawAdminEmail = process.env.ADMIN_EMAIL || 'sonusingh7759@gmail.com';
-    const adminEmail = rawAdminEmail.toLowerCase().trim();
+    const sanitizeEnv = (val?: string): string => {
+      if (!val) return '';
+      let clean = val.trim();
+      if (
+        (clean.startsWith('"') && clean.endsWith('"')) ||
+        (clean.startsWith("'") && clean.endsWith("'"))
+      ) {
+        clean = clean.slice(1, -1).trim();
+      }
+      return clean;
+    };
+
+    const rawAdminEmail = process.env.ADMIN_EMAIL;
+    const adminEmail = (sanitizeEnv(rawAdminEmail) || 'sonusingh7759@gmail.com').toLowerCase().trim();
     const rawPassword = process.env.ADMIN_PASSWORD;
 
     console.log(`[Bootstrap] Verifying library admin account: ${adminEmail}`);
@@ -85,14 +97,7 @@ export const bootstrapSystem = async (): Promise<void> => {
     let adminUser = await User.findOne({ email: adminEmail });
 
     if (rawPassword && rawPassword.trim() !== '') {
-      let cleanPassword = rawPassword.trim();
-      // Strip accidental surrounding quotes from Render env vars
-      if (
-        (cleanPassword.startsWith('"') && cleanPassword.endsWith('"')) ||
-        (cleanPassword.startsWith("'") && cleanPassword.endsWith("'"))
-      ) {
-        cleanPassword = cleanPassword.slice(1, -1).trim();
-      }
+      const cleanPassword = sanitizeEnv(rawPassword);
 
       if (adminUser) {
         let needsSave = false;
@@ -107,7 +112,18 @@ export const bootstrapSystem = async (): Promise<void> => {
           needsSave = true;
         }
 
-        const isMatch = await adminUser.comparePassword(cleanPassword);
+        const isBcryptHash =
+          cleanPassword.startsWith('$2a$') ||
+          cleanPassword.startsWith('$2b$') ||
+          cleanPassword.startsWith('$2y$');
+
+        let isMatch = false;
+        if (isBcryptHash) {
+          isMatch = adminUser.password === cleanPassword;
+        } else {
+          isMatch = await adminUser.comparePassword(cleanPassword);
+        }
+
         if (!isMatch) {
           adminUser.password = cleanPassword;
           needsSave = true;
@@ -120,13 +136,11 @@ export const bootstrapSystem = async (): Promise<void> => {
           console.log(`[Bootstrap] Admin account verified and active for ${adminEmail}.`);
         }
       } else {
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(cleanPassword, salt);
-
+        // Pass cleanPassword directly to User.create; UserSchema.pre('save') handles bcrypt hashing once
         await User.create({
           name: 'Library Admin',
           email: adminEmail,
-          password: hashedPassword,
+          password: cleanPassword,
           role: 'ADMIN',
           status: 'ACTIVE',
           phone: '+91 9876543210',

@@ -112,6 +112,32 @@ describe('Smart Personal Library Management System Suite', () => {
     expect(meRes.body.data.studentIdNumber).toBe('ST001');
   });
 
+  it('should authenticate Admin using environment variables (even with surrounding quotes) and reject invalid passwords', async () => {
+    process.env.ADMIN_EMAIL = '"envadmin@lakshyalibrary.com"';
+    process.env.ADMIN_PASSWORD = '"SuperSecretEnvPass@2026"';
+
+    // 1. Login with exact env credentials (case-insensitive email, surrounding quotes in env handled)
+    const envLoginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'EnvAdmin@LakshyaLibrary.com ', password: 'SuperSecretEnvPass@2026' });
+
+    expect(envLoginRes.status).toBe(200);
+    expect(envLoginRes.body.success).toBe(true);
+    expect(envLoginRes.body.data.user.role).toBe('ADMIN');
+
+    // 2. Reject wrong password for Admin
+    const wrongPassRes = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'envadmin@lakshyalibrary.com', password: 'WrongPassword@999' });
+
+    expect(wrongPassRes.status).toBe(401);
+    expect(wrongPassRes.body.message).toContain('Invalid email or password');
+
+    // Clean up env vars
+    delete process.env.ADMIN_EMAIL;
+    delete process.env.ADMIN_PASSWORD;
+  });
+
   it('should generate dynamic QR tokens with HMAC signature and validate expiry', () => {
     const entryQR = generateDynamicQR('ENTRY', 45);
     expect(entryQR.qrType).toBe('ENTRY');

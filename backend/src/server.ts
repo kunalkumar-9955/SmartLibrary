@@ -63,7 +63,18 @@ app.use('/uploads', express.static(uploadDir));
 
 // Health Checks (Both /health and /api/health for Render/Vercel compatibility)
 const sendHealthCheck = async (req: express.Request, res: express.Response) => {
-  const adminEmail = (process.env.ADMIN_EMAIL || 'sonusingh7759@gmail.com').toLowerCase().trim();
+  const sanitizeEnv = (val?: string): string => {
+    if (!val) return '';
+    let clean = val.trim();
+    if (
+      (clean.startsWith('"') && clean.endsWith('"')) ||
+      (clean.startsWith("'") && clean.endsWith("'"))
+    ) {
+      clean = clean.slice(1, -1).trim();
+    }
+    return clean;
+  };
+  const adminEmail = (sanitizeEnv(process.env.ADMIN_EMAIL) || 'sonusingh7759@gmail.com').toLowerCase().trim();
   let adminConfigured = false;
   try {
     if (mongoose.connection.readyState === 1) {
@@ -79,7 +90,7 @@ const sendHealthCheck = async (req: express.Request, res: express.Response) => {
     database: mongoose.connection.readyState === 1 ? 'CONNECTED' : 'CONNECTING',
     adminConfigured,
     adminEmail,
-    adminPasswordEnvSet: Boolean(process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.trim() !== ''),
+    adminPasswordEnvSet: Boolean(sanitizeEnv(process.env.ADMIN_PASSWORD) !== ''),
     system: 'Smart Library Management & Student Support System',
     timestamp: new Date().toISOString(),
   });
