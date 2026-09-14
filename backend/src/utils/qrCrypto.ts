@@ -18,7 +18,7 @@ export const createQRSignature = (qrType: string, token: string, expiresAt: numb
 
 export const generateDynamicQR = (
   qrType: 'ENTRY' | 'EXIT',
-  ttlSeconds: number = 60,
+  ttlSeconds: number = 86400,
   version: number = 1
 ): QRPayload => {
   const token = uuidv4();
