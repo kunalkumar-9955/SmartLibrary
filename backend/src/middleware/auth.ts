@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { User, UserRole } from '../models/User';
+import { Session } from '../models/Session';
 import { sendError } from '../utils/response';
 
 export interface AuthUser {
@@ -34,6 +36,19 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       decoded = jwt.verify(token, secret);
     } catch (err: any) {
       return sendError(res, 'Invalid or expired authentication session. Please login again.', 401, 'TOKEN_EXPIRED', req.originalUrl);
+    }
+
+    // Check server-side session validity
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const session = await Session.findOne({ tokenHash });
+    if (!session || session.isRevoked || session.expiresAt <= new Date()) {
+      return sendError(
+        res,
+        'Your session has ended or is no longer valid. Please login again.',
+        401,
+        'SESSION_REVOKED',
+        req.originalUrl
+      );
     }
 
     const user = await User.findById(decoded.id).select('-password');

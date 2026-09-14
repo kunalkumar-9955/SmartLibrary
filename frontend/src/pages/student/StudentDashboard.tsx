@@ -37,9 +37,9 @@ export const StudentDashboard: React.FC = () => {
       setLoading(true);
       await refreshUser();
       const [noticesRes, attRes, ticketsRes, notifRes] = await Promise.all([
-        noticeService.getNotices(),
-        attendanceService.getMyHistory({ limit: 5 }),
-        ticketService.getTickets({ limit: 3 }),
+        noticeService.getNotices().catch(() => ({ data: { success: false, data: [] } })),
+        attendanceService.getMyHistory({ limit: 5 }).catch(() => ({ data: { success: false, data: { records: [] } } })),
+        ticketService.getTickets({ limit: 3 }).catch(() => ({ data: { success: false, data: { tickets: [] } } })),
         notificationService.getMyNotifications().catch(() => ({ data: { success: false, data: { notifications: [], unreadCount: 0 } } })),
       ]);
 

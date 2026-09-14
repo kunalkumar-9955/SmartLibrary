@@ -15,4 +15,6 @@ const NoticeSchema = new Schema<INotice>(
   { timestamps: true }
 );
 
+NoticeSchema.index({ createdAt: -1 });
+
 export const Notice = mongoose.model<INotice>('Notice', NoticeSchema);

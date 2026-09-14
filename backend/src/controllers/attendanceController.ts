@@ -48,71 +48,121 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
       );
     }
 
-    // Seat Assignment
-    // Seat Assignment: Prefer student's admin-allotted seat, or preferredSeatNumber
-    const targetSeatNumber = student.assignedSeatNumber || preferredSeatNumber;
-
+    // Atomic Concurrency-Safe Seat Allocation
+    const requestedSeat = preferredSeatNumber || student.assignedSeatNumber;
     let assignedSeat: import('../models/Seat').ISeat | null = null;
 
-    if (targetSeatNumber) {
-      const formattedNum = targetSeatNumber.toString().padStart(2, '0');
-      assignedSeat = await Seat.findOne({
-        seatNumber: formattedNum,
-        status: 'AVAILABLE',
-      });
+    if (requestedSeat) {
+      const formattedNum = requestedSeat.toString().padStart(2, '0');
+      // Atomically allocate the specific requested seat if available
+      assignedSeat = await Seat.findOneAndUpdate(
+        { seatNumber: formattedNum, status: 'AVAILABLE' },
+        {
+          $set: {
+            status: 'OCCUPIED',
+            currentStudentId: student._id,
+            currentStudentName: student.name,
+          },
+        },
+        { new: true }
+      );
+
+      if (!assignedSeat && preferredSeatNumber) {
+        // If student explicitly requested a seat that is already occupied by someone else:
+        return sendError(res, 'Seat is no longer available.', 409, 'SEAT_UNAVAILABLE');
+      }
+    }
+
+    // If no specific seat or preferred seat was unavailable for general assignment:
+    if (!assignedSeat) {
+      // Atomically lock the lowest numbered available seat from 01 to 50
+      assignedSeat = await Seat.findOneAndUpdate(
+        { status: 'AVAILABLE' },
+        {
+          $set: {
+            status: 'OCCUPIED',
+            currentStudentId: student._id,
+            currentStudentName: student.name,
+          },
+        },
+        { sort: { seatNumber: 1 }, new: true }
+      );
     }
 
     if (!assignedSeat) {
-      // Find the first available seat from 01 to 50
-      assignedSeat = await Seat.findOne({ status: 'AVAILABLE' }).sort({ seatNumber: 1 });
-    }
-
-    if (!assignedSeat) {
-      return sendError(res, 'All 50 seats are currently occupied. Please wait for an available seat.', 409, 'NO_SEATS_AVAILABLE');
+      return sendError(
+        res,
+        'All 50 seats are currently occupied. Please wait for an available seat.',
+        409,
+        'NO_SEATS_AVAILABLE'
+      );
     }
 
     const now = new Date();
     const attendanceDate = now.toISOString().split('T')[0];
 
-    // Create attendance record
-    const attendance = new Attendance({
-      studentId: student._id,
-      studentName: student.name,
-      studentIdNumber: student.studentIdNumber || '',
-      seatNumber: assignedSeat.seatNumber,
-      seatId: assignedSeat._id,
-      entryTime: now,
-      attendanceDate,
-      entryMethod: 'QR',
-      status: 'ACTIVE',
-    });
-    await attendance.save();
-
-    // Mark seat occupied
-    assignedSeat.status = 'OCCUPIED';
-    assignedSeat.currentStudentId = student._id as any;
-    assignedSeat.currentStudentName = student.name;
-    assignedSeat.currentAttendanceId = attendance._id as any;
-    await assignedSeat.save();
-
-    // Update student state
-    student.isCurrentlyInside = true;
-    student.currentSeatNumber = assignedSeat.seatNumber;
-    student.lastEntryTime = now;
-    await student.save();
-
-    return sendSuccess(
-      res,
-      {
-        attendanceId: attendance._id,
+    try {
+      // Create attendance record
+      const attendance = await Attendance.create({
+        studentId: student._id,
         studentName: student.name,
-        date: now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' }),
-        entryTime: now,
+        studentIdNumber: student.studentIdNumber || '',
         seatNumber: assignedSeat.seatNumber,
-      },
-      'Entry Attendance Marked Successfully',
-      201
-    );
+        seatId: assignedSeat._id,
+        entryTime: now,
+        attendanceDate,
+        entryMethod: 'QR',
+        status: 'ACTIVE',
+      });
+
+      // Link attendance ID to seat
+      await Seat.findByIdAndUpdate(assignedSeat._id, {
+        currentAttendanceId: attendance._id,
+      });
+
+      // Update student state
+      await User.findByIdAndUpdate(student._id, {
+        isCurrentlyInside: true,
+        currentSeatNumber: assignedSeat.seatNumber,
+        lastEntryTime: now,
+      });
+
+      return sendSuccess(
+        res,
+        {
+          attendanceId: attendance._id,
+          studentName: student.name,
+          date: now.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          }),
+          entryTime: now,
+          seatNumber: assignedSeat.seatNumber,
+        },
+        'Entry Attendance Marked Successfully',
+        201
+      );
+    } catch (createErr: any) {
+      // Rollback seat allocation immediately if attendance creation fails (e.g. concurrent duplicate entry)
+      await Seat.findByIdAndUpdate(assignedSeat._id, {
+        status: 'AVAILABLE',
+        currentStudentId: null,
+        currentStudentName: '',
+        currentAttendanceId: null,
+      });
+
+      if (createErr.code === 11000) {
+        return sendError(
+          res,
+          'You are already marked inside the library.',
+          409,
+          'ALREADY_INSIDE'
+        );
+      }
+      throw createErr;
+    }
   } catch (error) {
     next(error);
   }
@@ -142,45 +192,53 @@ export const markExitAttendance = async (req: Request, res: Response, next: Next
       return sendError(res, 'Student account not found', 404);
     }
 
-    // Rule 2: Cannot mark exit without an active entry
-    const activeSession = await Attendance.findOne({
-      studentId: student._id,
-      status: 'ACTIVE',
-    });
+    const exitTime = new Date();
+
+    // Concurrency-safe atomic checkout: find and mark COMPLETED in a single atomic database operation
+    const activeSession = await Attendance.findOneAndUpdate(
+      {
+        studentId: student._id,
+        status: 'ACTIVE',
+      },
+      {
+        $set: {
+          exitTime,
+          exitMethod: 'QR',
+          status: 'COMPLETED',
+        },
+      },
+      { new: false } // returns pre-update document containing entryTime and seatId
+    );
 
     if (!activeSession) {
       return sendError(res, 'No active attendance found.', 404, 'NO_ACTIVE_ATTENDANCE');
     }
 
-    const exitTime = new Date();
     const entryTime = activeSession.entryTime;
     const durationMinutes = Math.max(1, Math.round((exitTime.getTime() - entryTime.getTime()) / 60000));
     const hours = Math.floor(durationMinutes / 60);
     const mins = durationMinutes % 60;
     const durationString = `${hours}h ${mins < 10 ? '0' : ''}${mins}m`;
 
-    // Complete attendance record
-    activeSession.exitTime = exitTime;
-    activeSession.durationMinutes = durationMinutes;
-    activeSession.exitMethod = 'QR';
-    activeSession.status = 'COMPLETED';
-    await activeSession.save();
+    // Persist final duration
+    await Attendance.findByIdAndUpdate(activeSession._id, { durationMinutes });
 
-    // Release seat
+    // Atomically release seat
     if (activeSession.seatId) {
       await Seat.findByIdAndUpdate(activeSession.seatId, {
         status: 'AVAILABLE',
         currentStudentId: null,
-        currentStudentName: null,
+        currentStudentName: '',
         currentAttendanceId: null,
       });
     }
 
-    // Update student state
-    student.isCurrentlyInside = false;
-    student.currentSeatNumber = undefined;
-    student.lastExitTime = exitTime;
-    await student.save();
+    // Atomically update student state
+    await User.findByIdAndUpdate(student._id, {
+      isCurrentlyInside: false,
+      currentSeatNumber: undefined,
+      lastExitTime: exitTime,
+    });
 
     return sendSuccess(
       res,

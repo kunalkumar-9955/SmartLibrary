@@ -4,6 +4,13 @@ import bcrypt from 'bcryptjs';
 import { User } from '../models/User';
 import { sendSuccess, sendError } from '../utils/response';
 
+import crypto from 'crypto';
+import { Session } from '../models/Session';
+
+export const hashToken = (token: string): string => {
+  return crypto.createHash('sha256').update(token).digest('hex');
+};
+
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;
@@ -85,8 +92,38 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return sendError(res, 'Your account is currently inactive.', 403, 'ACCOUNT_INACTIVE');
     }
 
+    // Check active session limits before issuing new token
+    const now = new Date();
+    const activeSessionsCount = await Session.countDocuments({
+      userId: user._id,
+      isRevoked: false,
+      expiresAt: { $gt: now },
+    });
+
+    if (user.role === 'ADMIN') {
+      if (activeSessionsCount >= 4) {
+        return sendError(
+          res,
+          'Maximum 4 active admin sessions reached. Please logout from another device to continue.',
+          429,
+          'MAX_ADMIN_SESSIONS_REACHED'
+        );
+      }
+    } else {
+      // STUDENT: Strict limit of 1 active device session
+      if (activeSessionsCount >= 1) {
+        return sendError(
+          res,
+          'You are already logged in on another device. Please logout from your previous session before logging in here.',
+          429,
+          'ACTIVE_SESSION_EXISTS'
+        );
+      }
+    }
+
     const secret = process.env.JWT_SECRET || 'smart_library_jwt_secret_key_2026';
     const expiresIn = process.env.JWT_EXPIRES_IN || '365d';
+    const jti = crypto.randomUUID();
 
     const token = jwt.sign(
       {
@@ -94,10 +131,32 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         email: user.email,
         role: user.role,
         name: user.name,
+        jti,
       },
       secret,
       { expiresIn: expiresIn as any }
     );
+
+    // Calculate exact expiresAt from token payload
+    const decodedToken = jwt.decode(token) as { exp?: number } | null;
+    const expiresAt = decodedToken?.exp
+      ? new Date(decodedToken.exp * 1000)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const tokenHash = hashToken(token);
+    const userAgent = (req.headers['user-agent'] as string) || '';
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+
+    // Register active session
+    await Session.create({
+      userId: user._id,
+      role: user.role,
+      tokenHash,
+      isRevoked: false,
+      expiresAt,
+      userAgent,
+      ipAddress,
+    });
 
     return sendSuccess(
       res,
@@ -161,7 +220,17 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
 };
 
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
-  return sendSuccess(res, null, 'Logged out successfully');
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const tokenHash = hashToken(token);
+      await Session.updateOne({ tokenHash }, { $set: { isRevoked: true } });
+    }
+    return sendSuccess(res, null, 'Logged out successfully');
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const changePassword = async (req: Request, res: Response, next: NextFunction) => {
@@ -195,6 +264,15 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     // Set new password — bcrypt hashing is done in the UserSchema pre('save') hook
     user.password = newPassword;
     await user.save();
+
+    // Revoke all other active sessions across other devices
+    const authHeader = req.headers.authorization;
+    const currentToken = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : '';
+    const currentTokenHash = currentToken ? hashToken(currentToken) : '';
+    await Session.updateMany(
+      { userId: user._id, tokenHash: { $ne: currentTokenHash } },
+      { $set: { isRevoked: true } }
+    );
 
     return sendSuccess(res, null, 'Password updated successfully');
   } catch (error) {

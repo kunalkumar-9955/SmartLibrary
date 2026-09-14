@@ -139,3 +139,12 @@ export const notificationService = {
   markAsRead: (id: string) => api.post(`/notifications/read/${id}`),
   markAllAsRead: () => api.post('/notifications/read-all'),
 };
+
+// Admin Notification Services
+export const adminNotificationService = {
+  getNotifications: (params?: { page?: number; limit?: number; unreadOnly?: boolean }) =>
+    api.get('/admin-notifications', { params }),
+  getUnreadCount: () => api.get('/admin-notifications/unread-count'),
+  markAsRead: (id: string) => api.post(`/admin-notifications/read/${id}`),
+  markAllAsRead: () => api.post('/admin-notifications/read-all'),
+};

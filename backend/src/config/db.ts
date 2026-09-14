@@ -54,12 +54,28 @@ export const connectDB = async (): Promise<void> => {
 
       const dbName = process.env.MONGODB_DB_NAME || process.env.DB_NAME;
       const options: mongoose.ConnectOptions = {
+        maxPoolSize: 50,
+        minPoolSize: 5,
         serverSelectionTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
         ...(dbName ? { dbName } : {}),
       };
 
+      // Set up connection event listeners to gracefully handle reconnects without crashing
+      if (!mongoose.connection.listeners('error').length) {
+        mongoose.connection.on('error', (err) => {
+          console.error('[Database Error] Runtime connection error:', err?.message || err);
+        });
+        mongoose.connection.on('disconnected', () => {
+          console.warn('[Database] Disconnected from MongoDB. Mongoose will automatically reconnect.');
+        });
+        mongoose.connection.on('reconnected', () => {
+          console.log('[Database] Reconnected to MongoDB successfully.');
+        });
+      }
+
       await mongoose.connect(mongoUri, options);
-      console.log('[Database] Connected to MongoDB Atlas successfully.');
+      console.log('[Database] Connected to MongoDB Atlas successfully (Connection Pool: 50).');
       return;
     }
 
@@ -70,7 +86,10 @@ export const connectDB = async (): Promise<void> => {
         console.log(`[Database] Connecting to configured MongoDB (${sanitizedUri})...`);
         const dbName = process.env.MONGODB_DB_NAME || process.env.DB_NAME;
         await mongoose.connect(mongoUri, {
+          maxPoolSize: 50,
+          minPoolSize: 5,
           serverSelectionTimeoutMS: 5000,
+          socketTimeoutMS: 45000,
           ...(dbName ? { dbName } : {}),
         });
         console.log('[Database] Connected to configured MongoDB successfully.');
@@ -83,7 +102,11 @@ export const connectDB = async (): Promise<void> => {
     // In local development, attempt local MongoDB or dynamic in-memory server fallback
     try {
       console.log('[Database] Attempting local MongoDB connection (mongodb://127.0.0.1:27017/smart_library)...');
-      await mongoose.connect('mongodb://127.0.0.1:27017/smart_library', { serverSelectionTimeoutMS: 3000 });
+      await mongoose.connect('mongodb://127.0.0.1:27017/smart_library', {
+        maxPoolSize: 50,
+        minPoolSize: 5,
+        serverSelectionTimeoutMS: 3000,
+      });
       console.log('[Database] Connected to local MongoDB successfully.');
       return;
     } catch {

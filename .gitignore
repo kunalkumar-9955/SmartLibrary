@@ -52,3 +52,6 @@ Thumbs.db
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# Test MongoDB binary cache (downloaded by mongodb-memory-server)
+.mongodb-binaries/

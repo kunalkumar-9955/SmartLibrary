@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { adminService, attendanceService, reportService } from '../../services/api';
+import { adminService, attendanceService, reportService, adminNotificationService } from '../../services/api';
 import { StatCard } from '../../components/StatCard';
 import { Badge } from '../../components/Badge';
 import { useToast } from '../../contexts/ToastContext';
@@ -15,23 +15,29 @@ import {
   ArrowRight,
   Clock,
   CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [statsData, setStatsData] = useState<any>(null);
+  const [unreadComplaints, setUnreadComplaints] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const { success, error } = useToast();
 
   const loadDashboard = async () => {
     try {
-      const [dashRes, statsRes] = await Promise.all([
+      const [dashRes, statsRes, notifRes] = await Promise.all([
         adminService.getDashboard(),
         reportService.getStats(),
+        adminNotificationService.getUnreadCount().catch(() => ({ data: { data: { unreadCount: 0 } } })),
       ]);
 
       if (dashRes.data.success) setDashboardData(dashRes.data.data);
       if (statsRes.data.success) setStatsData(statsRes.data.data);
+      if (notifRes?.data?.data?.unreadCount !== undefined) {
+        setUnreadComplaints(notifRes.data.data.unreadCount);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -90,6 +96,31 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* New Unread Complaints Alert Banner */}
+      {unreadComplaints > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-700 dark:text-rose-300 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-rose-500 text-white rounded-xl shadow">
+              <LifeBuoy className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">
+                {unreadComplaints} New Complaint{unreadComplaints > 1 ? 's' : ''} Awaiting Attention
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Students have submitted maintenance or library issue tickets.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/admin/tickets"
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center justify-center gap-1.5 shrink-0"
+          >
+            Review Complaints <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
+
       {/* Main 6 Cards from prompt */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <StatCard
@@ -132,7 +163,7 @@ export const AdminDashboard: React.FC = () => {
           value={metrics.openTickets ?? '--'}
           icon={LifeBuoy}
           color="rose"
-          subtitle="Pending action"
+          subtitle={unreadComplaints > 0 ? `${unreadComplaints} new unread` : 'Pending action'}
         />
       </div>
 

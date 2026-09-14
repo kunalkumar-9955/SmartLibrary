@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { Ticket, TicketStatus, TicketCategory } from '../models/Ticket';
 import { User } from '../models/User';
+import { AdminNotification } from '../models/AdminNotification';
+import { sendPushToUser } from '../services/pushService';
 import { sendSuccess, sendError } from '../utils/response';
 
 export const createTicket = async (req: Request, res: Response, next: NextFunction) => {
@@ -23,7 +25,9 @@ export const createTicket = async (req: Request, res: Response, next: NextFuncti
     }
 
     const count = await Ticket.countDocuments();
-    const ticketNumber = `LIB-${1000 + count + 1}`;
+    const suffix = Math.floor(100 + Math.random() * 900);
+    const ticketNumber = `LIB-${1000 + count + 1}-${suffix}`;
+    const effectiveSeat = seatNumber?.trim() || student.currentSeatNumber || student.assignedSeatNumber || '';
 
     const ticket = new Ticket({
       ticketNumber,
@@ -33,13 +37,49 @@ export const createTicket = async (req: Request, res: Response, next: NextFuncti
       category: category as TicketCategory,
       title: title.trim(),
       description: description.trim(),
-      seatNumber: seatNumber?.trim() || student.currentSeatNumber,
+      seatNumber: effectiveSeat,
       status: 'OPEN',
       attachmentUrl,
       comments: [],
     });
 
     await ticket.save();
+
+    // Trigger Admin Notification & Web Push (non-blocking)
+    try {
+      const seatInfo = effectiveSeat ? ` (Seat ${effectiveSeat})` : '';
+      const notifTitle = `New Complaint: ${category}`;
+      const notifMessage = `${student.name}${seatInfo} submitted ticket #${ticketNumber}: "${title.trim()}"`;
+
+      await AdminNotification.create({
+        type: 'NEW_COMPLAINT',
+        title: notifTitle,
+        message: notifMessage,
+        relatedTicketId: ticket._id,
+        relatedStudentId: student._id,
+        studentName: student.name,
+        seatNumber: effectiveSeat,
+        isRead: false,
+      });
+
+      // Find all active admins and trigger push
+      const admins = await User.find({ role: 'ADMIN', status: 'ACTIVE' }).select('_id');
+      for (const admin of admins) {
+        sendPushToUser(admin._id.toString(), {
+          title: notifTitle,
+          body: notifMessage,
+          url: '/admin/tickets',
+          data: {
+            ticketId: ticket._id.toString(),
+            ticketNumber,
+          },
+        }).catch((err) => {
+          console.warn('[Push Notification] Push to admin skipped:', err?.message || err);
+        });
+      }
+    } catch (notifError) {
+      console.warn('[Admin Notification] Non-blocking notification creation error:', notifError);
+    }
 
     return sendSuccess(res, ticket, 'Complaint registered successfully', 201);
   } catch (error) {
@@ -145,6 +185,22 @@ export const updateTicketStatus = async (req: Request, res: Response, next: Next
 
     await ticket.save();
 
+    // Push notification to student regarding ticket status update (non-blocking)
+    try {
+      if (status || resolutionNote || adminComment) {
+        sendPushToUser(ticket.studentId.toString(), {
+          title: `Complaint #${ticket.ticketNumber}: ${ticket.status}`,
+          body: resolutionNote || adminComment || `Your complaint status has been updated to ${ticket.status}.`,
+          url: '/student/tickets',
+          data: { ticketId: ticket._id.toString() },
+        }).catch((err) => {
+          console.warn('[Push Notification] Push to student skipped:', err?.message || err);
+        });
+      }
+    } catch (pushErr) {
+      console.warn('[Push Notification] Non-blocking push error:', pushErr);
+    }
+
     return sendSuccess(res, ticket, 'Ticket updated successfully');
   } catch (error) {
     next(error);
@@ -165,16 +221,52 @@ export const addTicketComment = async (req: Request, res: Response, next: NextFu
       return sendError(res, 'Ticket not found', 404);
     }
 
-    ticket.comments.push({
+    // Enforce cross-user data authorization: student can only comment on their own ticket
+    if (req.user?.role === 'STUDENT' && ticket.studentId.toString() !== req.user.id) {
+      return sendError(res, 'Access denied', 403, 'FORBIDDEN');
+    }
+
+    const newComment = {
       userName: req.user?.name || 'User',
       userRole: req.user?.role || 'USER',
       comment: comment.trim(),
       createdAt: new Date(),
-    });
+    };
 
-    await ticket.save();
+    // Concurrency-safe atomic $push
+    const updated = await Ticket.findByIdAndUpdate(
+      id,
+      { $push: { comments: newComment } },
+      { new: true }
+    );
 
-    return sendSuccess(res, ticket.comments, 'Comment added');
+    // Non-blocking push notification
+    try {
+      if (req.user?.role === 'ADMIN') {
+        // Admin commented -> notify student
+        sendPushToUser(ticket.studentId.toString(), {
+          title: `Update on Ticket #${ticket.ticketNumber}`,
+          body: `Admin: ${comment.trim().slice(0, 100)}`,
+          url: '/student/tickets',
+          data: { ticketId: ticket._id.toString() },
+        }).catch((err) => console.warn('Push error:', err));
+      } else {
+        // Student commented -> notify admin
+        const admins = await User.find({ role: 'ADMIN', status: 'ACTIVE' }).select('_id');
+        for (const admin of admins) {
+          sendPushToUser(admin._id.toString(), {
+            title: `Reply on Ticket #${ticket.ticketNumber}`,
+            body: `${req.user?.name || 'Student'}: ${comment.trim().slice(0, 100)}`,
+            url: '/admin/tickets',
+            data: { ticketId: ticket._id.toString() },
+          }).catch((err) => console.warn('Push error:', err));
+        }
+      }
+    } catch (notifErr) {
+      console.warn('Comment notification error:', notifErr);
+    }
+
+    return sendSuccess(res, updated?.comments || [], 'Comment added');
   } catch (error) {
     next(error);
   }

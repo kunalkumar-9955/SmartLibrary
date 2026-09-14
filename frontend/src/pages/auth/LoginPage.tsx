@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { Lock, Mail, ArrowRight, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, ArrowRight, ArrowLeft, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { initPushNotificationsOnLogin } from '../../utils/notificationManager';
 
 export const LoginPage: React.FC = () => {
@@ -10,6 +10,7 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState('');
   const { login, user, isAuthenticated } = useAuth();
   const { success, error } = useToast();
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export const LoginPage: React.FC = () => {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError('');
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
       error('Please enter both email and password');
@@ -46,7 +48,9 @@ export const LoginPage: React.FC = () => {
         navigate('/student/dashboard');
       }
     } catch (err: any) {
-      error(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      const msg = err.response?.data?.message || 'Login failed. Please check your credentials.';
+      setLoginError(msg);
+      error(msg);
     } finally {
       setLoading(false);
     }
@@ -84,6 +88,13 @@ export const LoginPage: React.FC = () => {
 
         {/* Login Form */}
         <form onSubmit={handleLoginSubmit} className="space-y-4">
+          {loginError && (
+            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-700 dark:text-rose-300 text-xs font-semibold leading-relaxed flex items-start gap-2.5 shadow-sm">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
               Email Address

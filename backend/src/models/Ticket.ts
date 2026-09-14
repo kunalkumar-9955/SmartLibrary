@@ -76,4 +76,7 @@ const TicketSchema = new Schema<ITicket>(
   { timestamps: true }
 );
 
+TicketSchema.index({ studentId: 1, createdAt: -1 });
+TicketSchema.index({ status: 1, createdAt: -1 });
+
 export const Ticket = mongoose.model<ITicket>('Ticket', TicketSchema);

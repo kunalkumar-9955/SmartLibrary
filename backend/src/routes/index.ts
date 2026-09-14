@@ -10,8 +10,13 @@ import noticeRoutes from './noticeRoutes';
 import reportRoutes from './reportRoutes';
 import settingsRoutes from './settingsRoutes';
 import notificationRoutes from './notificationRoutes';
+import adminNotificationRoutes from './adminNotificationRoutes';
+import { apiLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
+
+// Apply general rate limiter to API router
+router.use(apiLimiter);
 
 router.use('/auth', authRoutes);
 router.use('/library-admin', libraryAdminRoutes);
@@ -24,5 +29,6 @@ router.use('/notices', noticeRoutes);
 router.use('/reports', reportRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/admin-notifications', adminNotificationRoutes);
 
 export default router;

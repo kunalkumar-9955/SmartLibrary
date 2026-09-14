@@ -19,6 +19,7 @@
     "dotenv": "^16.4.7",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
     "multer": "^1.4.5-lts.1",
@@ -43,5 +44,9 @@
     "ts-jest": "^29.2.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
+  },
+  "mongodbMemoryServer": {
+    "downloadDir": "./.mongodb-binaries",
+    "version": "7.0.24"
   }
 }

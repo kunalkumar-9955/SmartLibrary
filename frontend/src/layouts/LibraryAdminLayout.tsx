@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { LogoutConfirmationModal } from '../components/LogoutConfirmationModal';
 import { useAuthBoundaryBackGuard } from '../hooks/useAuthBoundaryBackGuard';
 import { syncPushSubscription } from '../utils/notificationManager';
+import { adminNotificationService } from '../services/api';
 import {
   LayoutDashboard,
   Users,
@@ -24,6 +25,7 @@ export const LibraryAdminLayout: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unreadComplaints, setUnreadComplaints] = useState<number>(0);
   const {
     showLogoutConfirm,
     isLoggingOut,
@@ -35,6 +37,23 @@ export const LibraryAdminLayout: React.FC = () => {
   useEffect(() => {
     syncPushSubscription();
   }, []);
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try {
+        const res = await adminNotificationService.getUnreadCount();
+        if (res.data.success) {
+          setUnreadComplaints(res.data.data.unreadCount || 0);
+        }
+      } catch (err) {
+        // Silently ignore polling errors
+      }
+    };
+
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 20000);
+    return () => clearInterval(interval);
+  }, [location.pathname]);
 
   // Exact 10 navigation items from requirements
   const navItems = [
@@ -74,18 +93,26 @@ export const LibraryAdminLayout: React.FC = () => {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
+            const isComplaints = item.path === '/admin/tickets';
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+                className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow'
                     : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
                 }`}
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                {item.label}
+                <div className="flex items-center gap-3">
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{item.label}</span>
+                </div>
+                {isComplaints && unreadComplaints > 0 && (
+                  <span className="px-2 py-0.5 text-[10px] font-black bg-rose-500 text-white rounded-full animate-pulse shadow-sm">
+                    {unreadComplaints}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -135,17 +162,27 @@ export const LibraryAdminLayout: React.FC = () => {
         {/* Mobile Dropdown Menu */}
         {mobileOpen && (
           <div className="lg:hidden bg-slate-900 border-b border-slate-800 px-4 py-3 space-y-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg"
-              >
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isComplaints = item.path === '/admin/tickets';
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </div>
+                  {isComplaints && unreadComplaints > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold bg-rose-500 text-white rounded-full">
+                      {unreadComplaints}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
             <button
               onClick={() => {
                 setMobileOpen(false);

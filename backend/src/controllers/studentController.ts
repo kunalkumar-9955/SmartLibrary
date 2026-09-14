@@ -3,6 +3,7 @@ import { User } from '../models/User';
 import { Attendance } from '../models/Attendance';
 import { Ticket } from '../models/Ticket';
 import { Seat } from '../models/Seat';
+import { Session } from '../models/Session';
 import { sendSuccess, sendError } from '../utils/response';
 import { sendStudentWelcomeEmail } from '../services/emailService';
 
@@ -65,6 +66,16 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
       return sendError(res, 'A student with this email address already exists', 409);
     }
 
+    const totalStudents = await User.countDocuments({ role: 'STUDENT' });
+    if (totalStudents >= 50) {
+      return sendError(
+        res,
+        'Maximum limit of 50 students reached for Lakshya Smart Library.',
+        400,
+        'STUDENT_LIMIT_REACHED'
+      );
+    }
+
     const existingStudentId = await User.findOne({ studentIdNumber: cleanStudentId });
     if (existingStudentId) {
       return sendError(res, 'A student with this Student ID already exists', 409);
@@ -122,6 +133,12 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
 export const getStudentById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
+
+    // Cross-user data security: student can ONLY access their own details
+    if (req.user?.role === 'STUDENT' && req.user.id !== id) {
+      return sendError(res, 'Access denied', 403, 'FORBIDDEN');
+    }
+
     const student = await User.findById(id).select('-password');
     if (!student || student.role !== 'STUDENT') {
       return sendError(res, 'Student not found', 404);
@@ -216,6 +233,11 @@ export const updateStudentStatus = async (req: Request, res: Response, next: Nex
     student.status = status;
     await student.save();
 
+    if (status === 'BLOCKED' || status === 'INACTIVE') {
+      // Revoke all active sessions immediately
+      await Session.updateMany({ userId: student._id }, { $set: { isRevoked: true } });
+    }
+
     return sendSuccess(res, student, `Student marked as ${status}`);
   } catch (error) {
     next(error);
@@ -238,6 +260,9 @@ export const resetStudentPassword = async (req: Request, res: Response, next: Ne
 
     student.password = newPassword.trim();
     await student.save();
+
+    // Revoke all active sessions so the student is forced to login with the new password
+    await Session.updateMany({ userId: student._id }, { $set: { isRevoked: true } });
 
     return sendSuccess(res, null, 'Student password reset successfully');
   } catch (error) {
@@ -263,6 +288,9 @@ export const deleteStudent = async (req: Request, res: Response, next: NextFunct
         }
       );
     }
+
+    // Revoke all sessions
+    await Session.updateMany({ userId: student._id }, { $set: { isRevoked: true } });
 
     await User.findByIdAndDelete(id);
     return sendSuccess(res, null, 'Student deleted successfully');

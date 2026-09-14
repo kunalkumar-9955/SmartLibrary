@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ticketService } from '../../services/api';
+import { ticketService, adminNotificationService } from '../../services/api';
 import { Ticket, TicketStatus } from '../../types';
 import { Badge } from '../../components/Badge';
 import { Modal } from '../../components/Modal';
@@ -49,6 +49,11 @@ export const AdminTicketsPage: React.FC = () => {
   useEffect(() => {
     fetchTickets();
   }, [search, statusFilter, categoryFilter]);
+
+  useEffect(() => {
+    // Clear unread notification badge once admin reviews tickets
+    adminNotificationService.markAllAsRead().catch(() => {});
+  }, []);
 
   const handleOpenTicket = (ticket: Ticket) => {
     setSelectedTicket(ticket);

@@ -41,18 +41,28 @@ export const updateSeatStatus = async (req: Request, res: Response, next: NextFu
       return sendError(res, 'Status must be AVAILABLE, OCCUPIED, or MAINTENANCE', 400);
     }
 
-    const seat = await Seat.findById(id);
+    // Atomically ensure we do not overwrite an actively OCCUPIED seat unless keeping it occupied
+    const filter: any = { _id: id };
+    if (status !== 'OCCUPIED') {
+      filter.status = { $ne: 'OCCUPIED' };
+    }
+
+    const updateDoc: any = { status };
+    if (notes !== undefined) updateDoc.notes = notes;
+
+    const seat = await Seat.findOneAndUpdate(filter, { $set: updateDoc }, { new: true });
+
     if (!seat) {
-      return sendError(res, 'Seat not found', 404);
+      const exists = await Seat.findById(id);
+      if (!exists) {
+        return sendError(res, 'Seat not found', 404);
+      }
+      return sendError(
+        res,
+        'Cannot change status of currently occupied seat. Please check out the student first.',
+        400
+      );
     }
-
-    if (seat.status === 'OCCUPIED' && status !== 'OCCUPIED') {
-      return sendError(res, 'Cannot change status of currently occupied seat. Please check out the student first.', 400);
-    }
-
-    seat.status = status as SeatStatus;
-    if (notes !== undefined) seat.notes = notes;
-    await seat.save();
 
     return sendSuccess(res, seat, 'Seat status updated');
   } catch (error) {

@@ -36,7 +36,7 @@ const UserSchema = new Schema<IUser>(
       required: true,
       index: true,
     },
-    studentIdNumber: { type: String, trim: true },
+    studentIdNumber: { type: String, trim: true, index: true },
     phone: { type: String, trim: true },
     course: { type: String, trim: true },
     avatar: { type: String, default: '' },

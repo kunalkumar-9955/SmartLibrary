@@ -10,14 +10,15 @@ import {
 import { exportAttendanceExcel } from '../controllers/excelController';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../middleware/role';
+import { attendanceLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
 router.use(authenticate);
 
 // Student actions
-router.post('/entry', requireRole('STUDENT'), markEntryAttendance);
-router.post('/exit', requireRole('STUDENT'), markExitAttendance);
+router.post('/entry', requireRole('STUDENT'), attendanceLimiter, markEntryAttendance);
+router.post('/exit', requireRole('STUDENT'), attendanceLimiter, markExitAttendance);
 router.get('/my', requireRole('STUDENT'), getMyAttendanceHistory);
 
 // Admin actions

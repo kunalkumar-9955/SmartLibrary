@@ -10,6 +10,8 @@ import { User } from '../models/User';
 import { Library } from '../models/Library';
 import { Attendance } from '../models/Attendance';
 import { Seat } from '../models/Seat';
+import { Session } from '../models/Session';
+import { AdminNotification } from '../models/AdminNotification';
 
 let mongod: MongoMemoryServer;
 let app: express.Application;
@@ -24,7 +26,7 @@ beforeAll(async () => {
   app.use(express.json());
   app.use('/api', apiRoutes);
   app.use(errorHandler);
-});
+}, 120000);
 
 afterAll(async () => {
   await mongoose.disconnect();
@@ -41,6 +43,8 @@ describe('Smart Personal Library Management System Suite', () => {
     await Library.deleteMany({});
     await Attendance.deleteMany({});
     await Seat.deleteMany({});
+    await Session.deleteMany({});
+    await AdminNotification.deleteMany({});
 
     // Create Library Settings
     await Library.create({
@@ -92,7 +96,7 @@ describe('Smart Personal Library Management System Suite', () => {
       .post('/api/auth/login')
       .send({ email: 'student@test.com', password: 'Password@123' });
     studentToken = studentLogin.body.data.token;
-  });
+  }, 30000);
 
   it('should authenticate Admin and Student with valid roles', async () => {
     expect(adminToken).toBeDefined();
@@ -192,5 +196,90 @@ describe('Smart Personal Library Management System Suite', () => {
     expect(exportRes.status).toBe(200);
     expect(exportRes.headers['content-type']).toContain('spreadsheetml');
     expect(exportRes.headers['content-disposition']).toContain('.xlsx');
+  });
+
+  it('should reject second concurrent login for student (max 1 device limit)', async () => {
+    // studentToken was already obtained in beforeEach
+    const secondLoginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'student@test.com', password: 'Password@123' });
+
+    expect(secondLoginRes.status).toBe(429);
+    expect(secondLoginRes.body.message).toContain('already logged in on another device');
+
+    // After logout, student can log in again
+    await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    const thirdLoginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'student@test.com', password: 'Password@123' });
+
+    expect(thirdLoginRes.status).toBe(200);
+    expect(thirdLoginRes.body.success).toBe(true);
+  });
+
+  it('should allow admin up to 4 sessions and reject the 5th attempt', async () => {
+    // Session 1 is adminToken in beforeEach
+    // Login session 2
+    const s2 = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@test.com', password: 'Password@123' });
+    expect(s2.status).toBe(200);
+
+    // Login session 3
+    const s3 = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@test.com', password: 'Password@123' });
+    expect(s3.status).toBe(200);
+
+    // Login session 4
+    const s4 = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@test.com', password: 'Password@123' });
+    expect(s4.status).toBe(200);
+
+    // 5th attempt should be rejected with 429
+    const s5 = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@test.com', password: 'Password@123' });
+    expect(s5.status).toBe(429);
+    expect(s5.body.message).toContain('Maximum 4 active admin sessions reached');
+  });
+
+  it('should create AdminNotification when student registers a complaint', async () => {
+    const ticketRes = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({
+        category: 'Wi-Fi',
+        title: 'Slow internet at seat 05',
+        description: 'Connection drops frequently while downloading study notes',
+        seatNumber: '05',
+      });
+
+    expect(ticketRes.status).toBe(201);
+    expect(ticketRes.body.success).toBe(true);
+
+    // Verify AdminNotification exists in DB
+    const adminNotifRes = await request(app)
+      .get('/api/admin-notifications')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(adminNotifRes.status).toBe(200);
+    expect(adminNotifRes.body.data.notifications.length).toBe(1);
+    expect(adminNotifRes.body.data.unreadCount).toBe(1);
+    expect(adminNotifRes.body.data.notifications[0].type).toBe('NEW_COMPLAINT');
+    expect(adminNotifRes.body.data.notifications[0].studentName).toBe('Test Student');
+
+    // Mark as read
+    const notifId = adminNotifRes.body.data.notifications[0]._id;
+    const markRes = await request(app)
+      .post(`/api/admin-notifications/read/${notifId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(markRes.status).toBe(200);
+    expect(markRes.body.data.unreadCount).toBe(0);
   });
 });

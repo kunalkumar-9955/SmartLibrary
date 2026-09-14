@@ -113,6 +113,17 @@ const startServer = async () => {
   }
 };
 
+// Process-level crash prevention guards
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[Server Guard] Unhandled Promise Rejection caught safely:', reason?.stack || reason);
+  // Keep server alive; do NOT exit process for individual request errors
+});
+
+process.on('uncaughtException', (err: Error) => {
+  console.error('[Server Guard] Uncaught Exception caught safely:', err?.stack || err);
+  // Log critical error but keep process alive if non-fatal
+});
+
 startServer();
 
 export default app;
