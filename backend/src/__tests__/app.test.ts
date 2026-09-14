@@ -202,26 +202,52 @@ describe('Smart Personal Library Management System Suite', () => {
     expect(exportRes.headers['content-disposition']).toContain('.xlsx');
   });
 
-  it('should reject second concurrent login for student (max 1 device limit)', async () => {
-    // studentToken was already obtained in beforeEach
-    const secondLoginRes = await request(app)
+  it('should allow student to login from multiple devices simultaneously (no single-device limit)', async () => {
+    // studentToken was already obtained in beforeEach (Device 1)
+    // Device 2: second login must succeed
+    const device2Login = await request(app)
       .post('/api/auth/login')
       .send({ email: 'student@test.com', password: 'Password@123' });
 
-    expect(secondLoginRes.status).toBe(429);
-    expect(secondLoginRes.body.message).toContain('already logged in on another device');
+    expect(device2Login.status).toBe(200);
+    expect(device2Login.body.success).toBe(true);
+    const device2Token = device2Login.body.data.token;
 
-    // After logout, student can log in again
+    // Device 3: third login must also succeed
+    const device3Login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'student@test.com', password: 'Password@123' });
+
+    expect(device3Login.status).toBe(200);
+    expect(device3Login.body.success).toBe(true);
+
+    // All tokens should be independently valid
+    const me1 = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${studentToken}`);
+    expect(me1.status).toBe(200);
+
+    const me2 = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${device2Token}`);
+    expect(me2.status).toBe(200);
+
+    // Logout Device 1 — Device 2 and Device 3 must remain valid
     await request(app)
       .post('/api/auth/logout')
       .set('Authorization', `Bearer ${studentToken}`);
 
-    const thirdLoginRes = await request(app)
+    // Device 2 still works after Device 1 logout
+    const me2After = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${device2Token}`);
+    expect(me2After.status).toBe(200);
+
+    // Login again on Device 1 after logout — must succeed
+    const relogin = await request(app)
       .post('/api/auth/login')
       .send({ email: 'student@test.com', password: 'Password@123' });
-
-    expect(thirdLoginRes.status).toBe(200);
-    expect(thirdLoginRes.body.success).toBe(true);
+    expect(relogin.status).toBe(200);
   });
 
   it('should allow admin up to 4 sessions and reject the 5th attempt', async () => {

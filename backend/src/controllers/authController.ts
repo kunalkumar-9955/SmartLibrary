@@ -93,15 +93,16 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     }
 
     // Check active session limits before issuing new token
-    const now = new Date();
-    const activeSessionsCount = await Session.countDocuments({
-      userId: user._id,
-      isRevoked: false,
-      expiresAt: { $gt: now },
-    });
-
+    // ADMIN: maximum 4 concurrent device sessions.
+    // STUDENT: unlimited concurrent device sessions — no restriction.
     if (user.role === 'ADMIN') {
-      if (activeSessionsCount >= 4) {
+      const now = new Date();
+      const activeAdminSessionCount = await Session.countDocuments({
+        userId: user._id,
+        isRevoked: false,
+        expiresAt: { $gt: now },
+      });
+      if (activeAdminSessionCount >= 4) {
         return sendError(
           res,
           'Maximum 4 active admin sessions reached. Please logout from another device to continue.',
@@ -109,17 +110,8 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
           'MAX_ADMIN_SESSIONS_REACHED'
         );
       }
-    } else {
-      // STUDENT: Strict limit of 1 active device session
-      if (activeSessionsCount >= 1) {
-        return sendError(
-          res,
-          'You are already logged in on another device. Please logout from your previous session before logging in here.',
-          429,
-          'ACTIVE_SESSION_EXISTS'
-        );
-      }
     }
+    // Students may log in from any number of devices simultaneously.
 
     const secret = process.env.JWT_SECRET || 'smart_library_jwt_secret_key_2026';
     const expiresIn = process.env.JWT_EXPIRES_IN || '365d';
