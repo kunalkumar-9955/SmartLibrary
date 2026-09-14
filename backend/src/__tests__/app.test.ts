@@ -12,6 +12,7 @@ import { Attendance } from '../models/Attendance';
 import { Seat } from '../models/Seat';
 import { Session } from '../models/Session';
 import { AdminNotification } from '../models/AdminNotification';
+import { QrSession } from '../models/QrSession';
 
 let mongod: MongoMemoryServer;
 let app: express.Application;
@@ -45,6 +46,7 @@ describe('Smart Personal Library Management System Suite', () => {
     await Seat.deleteMany({});
     await Session.deleteMany({});
     await AdminNotification.deleteMany({});
+    await QrSession.deleteMany({});
 
     // Create Library Settings
     await Library.create({
@@ -119,8 +121,8 @@ describe('Smart Personal Library Management System Suite', () => {
     const validResult = validateDynamicQR(entryQR, 'ENTRY');
     expect(validResult.isValid).toBe(true);
 
-    // Expired QR
-    const expiredQR = generateDynamicQR('ENTRY', -5);
+    // Expired QR — use -20s to ensure it falls outside the 10s grace window in validateDynamicQR
+    const expiredQR = generateDynamicQR('ENTRY', -20);
     const expiredResult = validateDynamicQR(expiredQR, 'ENTRY');
     expect(expiredResult.isValid).toBe(false);
     expect(expiredResult.error).toContain('expired');
@@ -150,7 +152,8 @@ describe('Smart Personal Library Management System Suite', () => {
       .send({ qrPayload: entryQR2 });
 
     expect(dupRes.status).toBe(409);
-    expect(dupRes.body.message).toContain('already marked inside');
+    // Message from attendanceController: 'You are already checked in.'
+    expect(dupRes.body.message).toContain('already checked in');
   });
 
   it('should successfully mark exit attendance, calculate duration, and release seat to AVAILABLE', async () => {
@@ -184,7 +187,8 @@ describe('Smart Personal Library Management System Suite', () => {
       .send({ qrPayload: freshExitQR });
 
     expect(exitAgain.status).toBe(404);
-    expect(exitAgain.body.message).toContain('No active attendance found');
+    // Message from attendanceController: 'No active library session found.'
+    expect(exitAgain.body.message).toContain('No active library session found');
 
   });
 
@@ -282,4 +286,133 @@ describe('Smart Personal Library Management System Suite', () => {
     expect(markRes.status).toBe(200);
     expect(markRes.body.data.unreadCount).toBe(0);
   });
+
+  // ======================================================
+  // QR ROTATION SYSTEM TESTS
+  // ======================================================
+
+  it('should create a new ACTIVE QR session via /api/qr/generate and return version 1', async () => {
+    const genRes = await request(app)
+      .post('/api/qr/generate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrType: 'ENTRY' });
+
+    expect(genRes.status).toBe(200);
+    expect(genRes.body.success).toBe(true);
+    expect(genRes.body.data.qrType).toBe('ENTRY');
+    expect(genRes.body.data.token).toBeDefined();
+    expect(genRes.body.data.version).toBeGreaterThanOrEqual(1);
+    expect(genRes.body.data.ttl).toBeGreaterThan(0);
+
+    // Verify session was stored in DB
+    const dbSession = await QrSession.findOne({ token: genRes.body.data.token });
+    expect(dbSession).toBeTruthy();
+    expect(dbSession?.status).toBe('ACTIVE');
+  });
+
+  it('should rotate QR session after a successful entry scan (new version > old version)', async () => {
+    // 1. Admin generates initial ENTRY QR
+    const genRes = await request(app)
+      .post('/api/qr/generate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrType: 'ENTRY' });
+
+    expect(genRes.status).toBe(200);
+    const firstToken = genRes.body.data.token;
+    const firstVersion = genRes.body.data.version;
+
+    // 2. Student scans → marks entry
+    const entryRes = await request(app)
+      .post('/api/attendance/entry')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ qrPayload: genRes.body.data });
+
+    expect(entryRes.status).toBe(201);
+
+    // Allow background rotation to complete
+    await new Promise((r) => setTimeout(r, 300));
+
+    // 3. Poll active QR — should now be a NEW session
+    const activeRes = await request(app)
+      .get('/api/qr/active?qrType=ENTRY')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(activeRes.status).toBe(200);
+    const newToken = activeRes.body.data.token;
+    const newVersion = activeRes.body.data.version;
+
+    expect(newToken).not.toBe(firstToken);
+    expect(newVersion).toBeGreaterThan(firstVersion);
+
+    // Old session should be in ROTATED status
+    const oldSession = await QrSession.findOne({ token: firstToken });
+    expect(oldSession?.status).toBe('ROTATED');
+    expect(oldSession?.graceExpiresAt).toBeDefined();
+  });
+
+  it('should accept a ROTATED QR within the 10-second grace window', async () => {
+    // 1. Generate ENTRY QR
+    const genRes = await request(app)
+      .post('/api/qr/generate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrType: 'ENTRY' });
+
+    const firstQRPayload = genRes.body.data;
+
+    // 2. Manually rotate the session so it becomes ROTATED with future graceExpiresAt
+    const session = await QrSession.findOne({ token: firstQRPayload.token });
+    expect(session).toBeTruthy();
+    session!.status = 'ROTATED';
+    session!.rotatedAt = new Date();
+    session!.graceExpiresAt = new Date(Date.now() + 8000); // 8 seconds grace remaining
+    await session!.save();
+
+    // 3. Validate via /api/qr/validate — should pass due to grace window
+    const validateRes = await request(app)
+      .post('/api/qr/validate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrPayload: firstQRPayload, expectedType: 'ENTRY' });
+
+    expect(validateRes.status).toBe(200);
+    expect(validateRes.body.data.valid).toBe(true);
+  });
+
+  it('should reject a ROTATED QR after grace window has expired', async () => {
+    // 1. Generate ENTRY QR
+    const genRes = await request(app)
+      .post('/api/qr/generate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrType: 'ENTRY' });
+
+    const firstQRPayload = genRes.body.data;
+
+    // 2. Manually expire the session: ROTATED + past grace window
+    const session = await QrSession.findOne({ token: firstQRPayload.token });
+    expect(session).toBeTruthy();
+    session!.status = 'ROTATED';
+    session!.rotatedAt = new Date(Date.now() - 30000);
+    session!.graceExpiresAt = new Date(Date.now() - 20000); // grace already expired
+    await session!.save();
+
+    // 3. Validate via /api/qr/validate — should fail
+    const validateRes = await request(app)
+      .post('/api/qr/validate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrPayload: firstQRPayload, expectedType: 'ENTRY' });
+
+    expect(validateRes.status).toBe(400);
+    expect(validateRes.body.message).toContain('expired');
+  });
+
+  it('should reject wrong QR type (EXIT QR used for ENTRY)', async () => {
+    const exitQR = generateDynamicQR('EXIT', 60);
+    const entryRes = await request(app)
+      .post('/api/attendance/entry')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ qrPayload: exitQR });
+
+    expect(entryRes.status).toBe(400);
+    expect(entryRes.body.message).toContain('EXIT');
+  });
 });
+

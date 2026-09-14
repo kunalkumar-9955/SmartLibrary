@@ -14,7 +14,9 @@ export const StudentScanPage: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [successResult, setSuccessResult] = useState<any | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number>(3);
+  const [scannerKey, setScannerKey] = useState<number>(0);
 
   const { user, refreshUser } = useAuth();
   const { success, error } = useToast();
@@ -40,6 +42,7 @@ export const StudentScanPage: React.FC = () => {
 
   const handleScanSuccess = async (payload: QRPayload) => {
     setIsLoading(true);
+    setScanError(null);
     try {
       if (payload.qrType === 'ENTRY') {
         const res = await attendanceService.markEntry(payload);
@@ -63,8 +66,11 @@ export const StudentScanPage: React.FC = () => {
         }
       }
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Attendance verification failed.';
+      const msg = err.response?.data?.message || 'Attendance verification failed. Please try again.';
+      setScanError(msg);
       error(msg);
+      // Reset scanner so student can immediately scan again if needed
+      setScannerKey((prev) => prev + 1);
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +101,14 @@ export const StudentScanPage: React.FC = () => {
             Point your camera at the Admin's screen to mark attendance.
           </p>
 
+          {scanError && (
+            <div className="mb-4 p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-2xl text-rose-700 dark:text-rose-300 text-xs font-semibold text-left">
+              {scanError}
+            </div>
+          )}
+
           <StudentQRScanner
+            key={scannerKey}
             expectedType={activeType}
             onScanSuccess={handleScanSuccess}
             isLoading={isLoading}

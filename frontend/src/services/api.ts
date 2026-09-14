@@ -72,6 +72,7 @@ export const studentService = {
 // QR Services
 export const qrService = {
   generateQR: (qrType: 'ENTRY' | 'EXIT') => api.post('/qr/generate', { qrType }),
+  getActiveQR: (qrType: 'ENTRY' | 'EXIT') => api.get('/qr/active', { params: { qrType } }),
   validateQR: (qrPayload: QRPayload) => api.post('/qr/validate', { qrPayload }),
 };
 

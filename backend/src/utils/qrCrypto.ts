@@ -8,25 +8,29 @@ export interface QRPayload {
   token: string;
   expiresAt: number; // epoch ms
   signature: string;
+  version?: number;
 }
 
-// In-memory replay cache: Set of used tokens with TTL cleanup
-const usedTokens = new Set<string>();
+export const createQRSignature = (qrType: string, token: string, expiresAt: number): string => {
+  const raw = `${qrType}:${token}:${expiresAt}`;
+  return crypto.createHmac('sha256', QR_SECRET).update(raw).digest('hex');
+};
 
 export const generateDynamicQR = (
   qrType: 'ENTRY' | 'EXIT',
-  ttlSeconds: number = 45
+  ttlSeconds: number = 60,
+  version: number = 1
 ): QRPayload => {
   const token = uuidv4();
   const expiresAt = Date.now() + ttlSeconds * 1000;
-  const raw = `${qrType}:${token}:${expiresAt}`;
-  const signature = crypto.createHmac('sha256', QR_SECRET).update(raw).digest('hex');
+  const signature = createQRSignature(qrType, token, expiresAt);
 
   return {
     qrType,
     token,
     expiresAt,
     signature,
+    version,
   };
 };
 
@@ -46,34 +50,22 @@ export const validateDynamicQR = (
     };
   }
 
-  // Check expiration
-  if (Date.now() > payload.expiresAt) {
-    return { isValid: false, error: 'QR code has expired. Please scan the new QR.' };
+  // Check expiration (with 10-second grace window for network transmission)
+  if (Date.now() > payload.expiresAt + 10000) {
+    return { isValid: false, error: 'QR code has expired. Please scan the currently displayed QR.' };
   }
 
   // Verify HMAC signature
-  const raw = `${payload.qrType}:${payload.token}:${payload.expiresAt}`;
-  const expectedSig = crypto.createHmac('sha256', QR_SECRET).update(raw).digest('hex');
-
-  if (!crypto.timingSafeEqual(Buffer.from(payload.signature), Buffer.from(expectedSig))) {
+  const expectedSig = createQRSignature(payload.qrType, payload.token, payload.expiresAt);
+  try {
+    if (
+      payload.signature.length !== expectedSig.length ||
+      !crypto.timingSafeEqual(Buffer.from(payload.signature), Buffer.from(expectedSig))
+    ) {
+      return { isValid: false, error: 'Invalid attendance QR.' };
+    }
+  } catch {
     return { isValid: false, error: 'Invalid attendance QR.' };
-  }
-
-  // Check replay protection
-  if (usedTokens.has(payload.token)) {
-    return { isValid: false, error: 'This QR code was already scanned. Please scan the latest QR.' };
-  }
-
-  // Mark token as used
-  usedTokens.add(payload.token);
-
-  // Auto clean up after expiry
-  const cleanupDelay = Math.max(0, payload.expiresAt - Date.now() + 10000);
-  const timer = setTimeout(() => {
-    usedTokens.delete(payload.token);
-  }, cleanupDelay);
-  if (timer && typeof timer.unref === 'function') {
-    timer.unref();
   }
 
   return { isValid: true };

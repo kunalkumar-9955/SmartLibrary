@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { Attendance } from '../models/Attendance';
 import { Seat } from '../models/Seat';
 import { User } from '../models/User';
+import { QrSession } from '../models/QrSession';
+import { rotateQRSession } from './qrController';
 import { validateDynamicQR } from '../utils/qrCrypto';
 import { sendSuccess, sendError } from '../utils/response';
 
@@ -18,10 +20,23 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
       return sendError(res, 'QR Code payload is required', 400);
     }
 
-    // Validate QR structure, signature, expiry, and type
+    // 1. Validate QR structure, signature, expiry, and type
     const qrValidation = validateDynamicQR(qrPayload, 'ENTRY');
     if (!qrValidation.isValid) {
       return sendError(res, qrValidation.error || 'Invalid attendance QR.', 400, 'INVALID_QR');
+    }
+
+    // 2. Validate against QrSession in database (checking ACTIVE status or in-flight grace window)
+    const now = new Date();
+    const qrSession = await QrSession.findOne({ token: qrPayload.token, qrType: 'ENTRY' });
+
+    if (qrSession) {
+      const isCurrentActive = qrSession.status === 'ACTIVE' && qrSession.expiresAt > now;
+      const isWithinGrace = qrSession.status === 'ROTATED' && qrSession.graceExpiresAt && qrSession.graceExpiresAt > now;
+
+      if (!isCurrentActive && !isWithinGrace) {
+        return sendError(res, 'QR code has expired. Please scan the currently displayed QR.', 400, 'QR_EXPIRED');
+      }
     }
 
     const student = await User.findById(studentUserId);
@@ -42,7 +57,7 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
     if (existingActive || student.isCurrentlyInside) {
       return sendError(
         res,
-        'You are already marked inside the library.',
+        'You are already checked in.',
         409,
         'ALREADY_INSIDE'
       );
@@ -92,13 +107,12 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
     if (!assignedSeat) {
       return sendError(
         res,
-        'All 50 seats are currently occupied. Please wait for an available seat.',
+        'All library seats are currently occupied.',
         409,
         'NO_SEATS_AVAILABLE'
       );
     }
 
-    const now = new Date();
     const attendanceDate = now.toISOString().split('T')[0];
 
     try {
@@ -125,6 +139,11 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
         isCurrentlyInside: true,
         currentSeatNumber: assignedSeat.seatNumber,
         lastEntryTime: now,
+      });
+
+      // Trigger automatic QR rotation in the background (non-blocking)
+      rotateQRSession('ENTRY', qrPayload.token).catch((rotErr) => {
+        console.warn('[QR Rotation] Non-blocking entry rotation error:', rotErr);
       });
 
       return sendSuccess(
@@ -181,10 +200,23 @@ export const markExitAttendance = async (req: Request, res: Response, next: Next
       return sendError(res, 'QR Code payload is required', 400);
     }
 
-    // Validate EXIT QR
+    // 1. Validate EXIT QR payload
     const qrValidation = validateDynamicQR(qrPayload, 'EXIT');
     if (!qrValidation.isValid) {
       return sendError(res, qrValidation.error || 'Invalid attendance QR.', 400, 'INVALID_QR');
+    }
+
+    // 2. Validate against QrSession in database (checking ACTIVE status or in-flight grace window)
+    const now = new Date();
+    const qrSession = await QrSession.findOne({ token: qrPayload.token, qrType: 'EXIT' });
+
+    if (qrSession) {
+      const isCurrentActive = qrSession.status === 'ACTIVE' && qrSession.expiresAt > now;
+      const isWithinGrace = qrSession.status === 'ROTATED' && qrSession.graceExpiresAt && qrSession.graceExpiresAt > now;
+
+      if (!isCurrentActive && !isWithinGrace) {
+        return sendError(res, 'QR code has expired. Please scan the currently displayed QR.', 400, 'QR_EXPIRED');
+      }
     }
 
     const student = await User.findById(studentUserId);
@@ -211,7 +243,7 @@ export const markExitAttendance = async (req: Request, res: Response, next: Next
     );
 
     if (!activeSession) {
-      return sendError(res, 'No active attendance found.', 404, 'NO_ACTIVE_ATTENDANCE');
+      return sendError(res, 'No active library session found.', 404, 'NO_ACTIVE_ATTENDANCE');
     }
 
     const entryTime = activeSession.entryTime;
@@ -238,6 +270,11 @@ export const markExitAttendance = async (req: Request, res: Response, next: Next
       isCurrentlyInside: false,
       currentSeatNumber: undefined,
       lastExitTime: exitTime,
+    });
+
+    // Trigger automatic EXIT QR rotation in the background (non-blocking)
+    rotateQRSession('EXIT', qrPayload.token).catch((rotErr) => {
+      console.warn('[QR Rotation] Non-blocking exit rotation error:', rotErr);
     });
 
     return sendSuccess(

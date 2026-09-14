@@ -113,6 +113,7 @@ export interface QRPayload {
   token: string;
   expiresAt: number;
   signature: string;
+  version?: number;
   libraryName?: string;
 }
 

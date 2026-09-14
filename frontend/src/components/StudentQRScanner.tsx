@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import confetti from 'canvas-confetti';
-import { Camera, AlertCircle, RefreshCw, CheckCircle2, SwitchCamera } from 'lucide-react';
+import { Camera, AlertCircle, RefreshCw, CheckCircle2, SwitchCamera, ShieldAlert, KeyRound } from 'lucide-react';
 import { QRPayload } from '../types';
 
 interface StudentQRScannerProps {
@@ -10,11 +10,14 @@ interface StudentQRScannerProps {
   isLoading?: boolean;
 }
 
+type CameraPermissionState = 'IDLE_PROMPT' | 'REQUESTING' | 'GRANTED' | 'DENIED';
+
 export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
   expectedType,
   onScanSuccess,
   isLoading = false,
 }) => {
+  const [permissionState, setPermissionState] = useState<CameraPermissionState>('IDLE_PROMPT');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scannedResult, setScannedResult] = useState<QRPayload | null>(null);
@@ -22,8 +25,10 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
   const [currentCameraIndex, setCurrentCameraIndex] = useState<number>(0);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isProcessingRef = useRef<boolean>(false);
   const qrRegionId = 'html5qr-code-full-region';
 
+  // Stop scanner and release all camera tracks cleanly
   const stopScanner = async () => {
     if (scannerRef.current) {
       try {
@@ -32,8 +37,9 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
         }
         scannerRef.current.clear();
       } catch (e) {
-        console.debug('Failed to cleanly stop scanner', e);
+        console.debug('[Scanner] Clean shutdown notice:', e);
       }
+      scannerRef.current = null;
     }
     setIsScanning(false);
   };
@@ -41,15 +47,23 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
   const startScanner = async (specificCameraId?: string) => {
     try {
       setCameraError(null);
-      setScannedResult(null);
+      setPermissionState('REQUESTING');
+      isProcessingRef.current = false;
 
-      // Stop any existing instance
+      // Ensure any existing camera stream is stopped first
       await stopScanner();
+
+      // Check browser environment for camera capability
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError('Camera access is not supported on this browser or requires a secure HTTPS connection.');
+        setPermissionState('DENIED');
+        return;
+      }
 
       const html5QrCode = new Html5Qrcode(qrRegionId);
       scannerRef.current = html5QrCode;
 
-      // Discover cameras
+      // Discover available camera devices
       let detectedCameras: { id: string; label: string }[] = [];
       try {
         const devices = await Html5Qrcode.getCameras();
@@ -61,16 +75,15 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
           setCameras(detectedCameras);
         }
       } catch (e) {
-        console.debug('Camera enumeration deferred until permission granted');
+        console.debug('[Scanner] Camera discovery deferred until user grants permission');
       }
 
-      // Determine camera target
+      // Camera config: prioritize rear/environment camera for handheld mobile scanning
       let cameraConfig: any = { facingMode: 'environment' };
 
       if (specificCameraId) {
         cameraConfig = specificCameraId;
       } else if (detectedCameras.length > 0) {
-        // Look for rear/environment camera on phones, else fallback to first available
         const backCamIdx = detectedCameras.findIndex(
           (c) =>
             c.label.toLowerCase().includes('back') ||
@@ -104,37 +117,76 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
           cameraConfig,
           scanConfig,
           (decodedText) => handleDecodedText(decodedText),
-          () => {} // frame without QR, ignore
+          () => {} // Frame without QR, ignore
         );
+        setPermissionState('GRANTED');
         setIsScanning(true);
       } catch (primaryErr: any) {
-        console.warn('Primary camera config failed, falling back to front/user webcam:', primaryErr);
-        // Fallback to front camera (laptop webcam, etc.)
+        console.warn('[Scanner] Primary camera config failed, falling back to front/user camera:', primaryErr);
+        // Fallback to front camera or default user media
         await html5QrCode.start(
           { facingMode: 'user' },
           scanConfig,
           (decodedText) => handleDecodedText(decodedText),
           () => {}
         );
+        setPermissionState('GRANTED');
         setIsScanning(true);
       }
     } catch (err: any) {
       console.error('[Scanner] Failed to start camera:', err);
       setIsScanning(false);
       const errMsg = err?.message || String(err);
-      if (errMsg.includes('NotAllowedError') || errMsg.includes('Permission')) {
-        setCameraError('Camera permission was denied. Please allow camera access in your browser settings.');
-      } else if (errMsg.includes('NotFoundError') || errMsg.includes('OverconstrainedError')) {
-        setCameraError('No suitable camera detected on this device.');
+      const errName = err?.name || '';
+
+      if (errName === 'NotAllowedError' || errMsg.includes('Permission') || errMsg.includes('NotAllowedError')) {
+        setCameraError('Camera access is blocked. Please allow camera permissions in your browser to scan the QR.');
+        setPermissionState('DENIED');
+      } else if (errName === 'NotFoundError' || errMsg.includes('NotFoundError')) {
+        setCameraError('No camera was found on this device.');
+        setPermissionState('DENIED');
+      } else if (errName === 'NotReadableError' || errMsg.includes('NotReadableError')) {
+        setCameraError('Camera is currently being used by another application or browser tab.');
+        setPermissionState('DENIED');
+      } else if (errName === 'SecurityError' || errMsg.includes('SecurityError')) {
+        setCameraError('Camera scanning requires a secure HTTPS connection.');
+        setPermissionState('DENIED');
       } else {
-        setCameraError('Unable to start live camera viewfinder. Please verify camera permissions.');
+        setCameraError('Unable to access device camera. Please verify permissions and try again.');
+        setPermissionState('DENIED');
       }
     }
   };
 
+  // Check initial permission status if supported by browser Permissions API
   useEffect(() => {
-    startScanner();
+    let isMounted = true;
+
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions
+        .query({ name: 'camera' as PermissionName })
+        .then((status) => {
+          if (!isMounted) return;
+          if (status.state === 'granted') {
+            startScanner();
+          } else if (status.state === 'denied') {
+            setPermissionState('DENIED');
+            setCameraError('Camera access is blocked. Please allow camera permissions in your browser to scan the QR.');
+          } else {
+            // 'prompt': Show user the Allow Camera Access button
+            setPermissionState('IDLE_PROMPT');
+          }
+        })
+        .catch(() => {
+          // If Permissions API doesn't support camera query, start camera directly
+          if (isMounted) startScanner();
+        });
+    } else {
+      startScanner();
+    }
+
     return () => {
+      isMounted = false;
       stopScanner();
     };
   }, []);
@@ -147,37 +199,75 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
   };
 
   const handleDecodedText = async (text: string) => {
+    // Debounce & Lock: Ensure only one attendance request is fired per scan event
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+
     try {
       const cleanText = text.trim();
       const payload: QRPayload = JSON.parse(cleanText);
 
       if (!payload.qrType || !payload.token || !payload.signature) {
-        setCameraError('Invalid QR code format. Please scan the official Smart Library attendance screen.');
+        setCameraError('Invalid QR code format. Please scan the official Lakshya Smart Library QR screen.');
+        isProcessingRef.current = false;
         return;
       }
 
-      if (payload.expiresAt && payload.expiresAt < Date.now()) {
-        setCameraError('This QR code has expired. Please ask Admin to display the fresh QR.');
+      if (expectedType && payload.qrType !== expectedType) {
+        setCameraError(`Scanned ${payload.qrType} QR code, but this gate requires an ${expectedType} QR code.`);
+        isProcessingRef.current = false;
         return;
       }
 
+      // Stop camera stream immediately upon successful detection
       await stopScanner();
       setScannedResult(payload);
-      confetti({ particleCount: 75, spread: 60, origin: { y: 0.7 } });
+      confetti({ particleCount: 60, spread: 55, origin: { y: 0.7 } });
       onScanSuccess(payload);
     } catch (e) {
       setCameraError('The scanned QR code is not a valid Smart Library Attendance QR.');
+      isProcessingRef.current = false;
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center max-w-md mx-auto p-2 sm:p-4">
+    <div className="flex flex-col items-center justify-center max-w-md mx-auto p-2 sm:p-4 font-sans">
       {/* Viewfinder Container */}
       <div className="relative w-full aspect-square bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-800 flex flex-col items-center justify-center">
         <div id={qrRegionId} className="w-full h-full object-cover" />
 
-        {/* Reticle / Target Box Overlay */}
-        {!scannedResult && !cameraError && (
+        {/* State A: Initial Camera Prompt (Permission Not Yet Requested or Prompt State) */}
+        {permissionState === 'IDLE_PROMPT' && !scannedResult && (
+          <div className="absolute inset-0 bg-slate-950 p-6 flex flex-col items-center justify-center text-center text-white z-20">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mb-4 text-indigo-400 shadow-inner">
+              <Camera className="w-8 h-8" />
+            </div>
+            <h4 className="font-extrabold text-lg mb-1 tracking-tight">Camera Access Required</h4>
+            <p className="text-xs text-slate-300 mb-6 leading-relaxed max-w-xs">
+              Allow camera access to scan the live Lakshya Smart Library attendance QR code.
+            </p>
+            <button
+              type="button"
+              onClick={() => startScanner()}
+              className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition cursor-pointer"
+            >
+              <Camera className="w-4 h-4" />
+              Allow Camera Access
+            </button>
+          </div>
+        )}
+
+        {/* State B: Requesting / Initializing Camera */}
+        {permissionState === 'REQUESTING' && !scannedResult && (
+          <div className="absolute inset-0 bg-slate-950 p-6 flex flex-col items-center justify-center text-center text-white z-20">
+            <RefreshCw className="w-10 h-10 text-indigo-500 animate-spin mb-3" />
+            <p className="text-sm font-bold">Initializing camera viewfinder...</p>
+            <p className="text-xs text-slate-400 mt-1">Please tap "Allow" if your browser prompts for permission.</p>
+          </div>
+        )}
+
+        {/* State C: Reticle / Target Box Overlay when actively scanning */}
+        {permissionState === 'GRANTED' && !scannedResult && !cameraError && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
             <div className="w-56 h-56 border-2 border-indigo-400/80 rounded-2xl relative animate-pulse">
               <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-indigo-500 rounded-tl-lg" />
@@ -188,37 +278,49 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
           </div>
         )}
 
-        {/* Camera Permission / Unavailable Error Notice */}
+        {/* State D: Camera Denied / Blocked Instructions */}
         {cameraError && (
-          <div className="absolute inset-0 bg-slate-950/95 p-6 flex flex-col items-center justify-center text-center text-white z-10">
-            <AlertCircle className="w-12 h-12 text-amber-400 mb-3" />
-            <h4 className="font-bold text-base mb-1">Camera Notice</h4>
-            <p className="text-xs text-slate-300 mb-5 leading-relaxed max-w-xs">{cameraError}</p>
+          <div className="absolute inset-0 bg-slate-950/98 p-6 flex flex-col items-center justify-center text-center text-white z-20 overflow-y-auto">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center mb-3 text-rose-400">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <h4 className="font-extrabold text-base mb-1 text-rose-300">Camera Access Blocked</h4>
+            <p className="text-xs text-slate-300 mb-4 leading-relaxed max-w-xs">{cameraError}</p>
+
+            {/* Helpful step-by-step unblocking guide */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-left mb-5 max-w-xs w-full text-[11px] text-slate-300 space-y-1.5 font-medium">
+              <p className="text-indigo-400 font-bold mb-1">To enable camera:</p>
+              <p>1. Tap the lock/info icon in your browser URL bar.</p>
+              <p>2. Open Permissions / Site Settings.</p>
+              <p>3. Set Camera to "Allow".</p>
+              <p>4. Return here and tap "Try Again".</p>
+            </div>
+
             <button
               type="button"
               onClick={() => startScanner()}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-md shadow-indigo-600/20"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Retry Camera
+              Try Again
             </button>
           </div>
         )}
 
-        {/* Real Scanned Result Animation */}
+        {/* State E: Scanned Result Animation */}
         {scannedResult && (
-          <div className="absolute inset-0 bg-emerald-950/95 p-6 flex flex-col items-center justify-center text-center text-white z-10 animate-fade-in">
+          <div className="absolute inset-0 bg-emerald-950/95 p-6 flex flex-col items-center justify-center text-center text-white z-20 animate-fade-in">
             <CheckCircle2 className="w-16 h-16 text-emerald-400 mb-3 animate-bounce" />
             <h4 className="font-extrabold text-xl text-emerald-200">
-              {scannedResult.qrType} QR Scanned!
+              {scannedResult.qrType} QR Captured!
             </h4>
-            <p className="text-xs text-emerald-300/80 mt-1">Verifying with secure attendance engine...</p>
+            <p className="text-xs text-emerald-300/80 mt-1">Recording attendance with library engine...</p>
           </div>
         )}
       </div>
 
-      {/* Camera Controls bar (Only Flip Camera if multiple cameras exist) */}
-      {cameras.length > 1 && (
+      {/* Camera Controls bar (Flip Camera if device has multiple cameras) */}
+      {cameras.length > 1 && permissionState === 'GRANTED' && !scannedResult && (
         <div className="mt-4 w-full flex items-center justify-center gap-2 px-1">
           <button
             type="button"
@@ -231,8 +333,8 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
         </div>
       )}
 
-      <p className="text-[11px] text-slate-400 text-center mt-3">
-        Align the Admin's live dynamic QR code inside the box to automatically record attendance.
+      <p className="text-[11px] text-slate-400 text-center mt-3 max-w-xs">
+        Point your camera at the live attendance QR displayed on the Admin's screen.
       </p>
     </div>
   );
