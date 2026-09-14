@@ -222,11 +222,19 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
+    let token: string | undefined;
+
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const tokenHash = hashToken(token);
-      await Session.updateOne({ tokenHash }, { $set: { isRevoked: true } });
+      token = authHeader.split(' ')[1];
+    } else if (req.body && req.body.token) {
+      token = req.body.token;
     }
+
+    if (token) {
+      const tokenHash = hashToken(token);
+      await Session.updateMany({ tokenHash }, { $set: { isRevoked: true } });
+    }
+
     return sendSuccess(res, null, 'Logged out successfully');
   } catch (error) {
     next(error);

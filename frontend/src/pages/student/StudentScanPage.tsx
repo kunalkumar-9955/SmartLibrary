@@ -41,6 +41,7 @@ export const StudentScanPage: React.FC = () => {
   }, [successResult, navigate]);
 
   const handleScanSuccess = async (payload: QRPayload) => {
+    if (isLoading) return;
     setIsLoading(true);
     setScanError(null);
     try {

@@ -414,5 +414,289 @@ describe('Smart Personal Library Management System Suite', () => {
     expect(entryRes.status).toBe(400);
     expect(entryRes.body.message).toContain('EXIT');
   });
+
+  // ======================================================
+  // EXACT USER REQUIREMENTS VERIFICATION SUITE
+  // ======================================================
+
+  it('TEST 1 & 3: QR stays completely fixed when nobody scans; polling does NOT rotate QR', async () => {
+    // 1. Generate QR-A
+    const genRes = await request(app)
+      .post('/api/qr/generate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrType: 'ENTRY' });
+
+    expect(genRes.status).toBe(200);
+    const tokenA = genRes.body.data.token;
+    const versionA = genRes.body.data.version;
+
+    // Simulate multiple poll calls across time
+    for (let i = 0; i < 5; i++) {
+      const pollRes = await request(app)
+        .get('/api/qr/active?qrType=ENTRY')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(pollRes.status).toBe(200);
+      expect(pollRes.body.data.token).toBe(tokenA);
+      expect(pollRes.body.data.version).toBe(versionA);
+    }
+  });
+
+  it('TEST 2 & 4: Successful scan rotates QR-A to QR-B, and second scan rotates to QR-C', async () => {
+    // 1. Initial QR-A
+    const genRes = await request(app)
+      .post('/api/qr/generate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrType: 'ENTRY' });
+
+    const qrA = genRes.body.data;
+
+    // Student A scans QR-A
+    const scanARes = await request(app)
+      .post('/api/attendance/entry')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ qrPayload: qrA });
+
+    expect(scanARes.status).toBe(201);
+    expect(scanARes.body.success).toBe(true);
+
+    // Allow rotation to complete
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Admin panel polls -> gets QR-B
+    const pollB = await request(app)
+      .get('/api/qr/active?qrType=ENTRY')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const qrB = pollB.body.data;
+    expect(qrB.token).not.toBe(qrA.token);
+    expect(qrB.version).toBe(qrA.version + 1);
+
+    // Create Student B
+    const studentBUser = await User.create({
+      name: 'Student B',
+      email: 'student_b@test.com',
+      password: 'Password@123',
+      role: 'STUDENT',
+      studentIdNumber: 'ST002',
+      phone: '9876543211',
+      status: 'ACTIVE',
+    });
+
+    const loginB = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'student_b@test.com', password: 'Password@123' });
+    const studentBToken = loginB.body.data.token;
+
+    // Student B scans QR-B
+    const scanBRes = await request(app)
+      .post('/api/attendance/entry')
+      .set('Authorization', `Bearer ${studentBToken}`)
+      .send({ qrPayload: qrB });
+
+    expect(scanBRes.status).toBe(201);
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Admin panel polls -> gets QR-C
+    const pollC = await request(app)
+      .get('/api/qr/active?qrType=ENTRY')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const qrC = pollC.body.data;
+    expect(qrC.token).not.toBe(qrB.token);
+    expect(qrC.version).toBe(qrB.version + 1);
+  });
+
+  it('TEST 5: Failed scan does NOT change or rotate the QR', async () => {
+    // Generate QR-A
+    const genRes = await request(app)
+      .post('/api/qr/generate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrType: 'ENTRY' });
+
+    const qrA = genRes.body.data;
+
+    // First scan marks student inside
+    const firstScan = await request(app)
+      .post('/api/attendance/entry')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ qrPayload: qrA });
+
+    expect(firstScan.status).toBe(201);
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Now active QR is QR-B
+    const activeB = await request(app)
+      .get('/api/qr/active?qrType=ENTRY')
+      .set('Authorization', `Bearer ${adminToken}`);
+    const tokenB = activeB.body.data.token;
+
+    // Student attempts duplicate check-in with QR-B (should fail with ALREADY_INSIDE)
+    const failedScan = await request(app)
+      .post('/api/attendance/entry')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ qrPayload: activeB.body.data });
+
+    expect(failedScan.status).toBe(409);
+    expect(failedScan.body.message).toContain('already checked in');
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Active QR must remain tokenB
+    const activeAfterFail = await request(app)
+      .get('/api/qr/active?qrType=ENTRY')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(activeAfterFail.body.data.token).toBe(tokenB);
+  });
+
+  it('TEST 6: Duplicate camera callbacks on same QR produce only 1 attendance and 1 rotation', async () => {
+    const genRes = await request(app)
+      .post('/api/qr/generate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrType: 'ENTRY' });
+
+    const qrA = genRes.body.data;
+
+    // Simulate 3 rapid concurrent camera callbacks with the same QR token
+    const [res1, res2, res3] = await Promise.all([
+      request(app)
+        .post('/api/attendance/entry')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ qrPayload: qrA }),
+      request(app)
+        .post('/api/attendance/entry')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ qrPayload: qrA }),
+      request(app)
+        .post('/api/attendance/entry')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ qrPayload: qrA }),
+    ]);
+
+    // Exactly one should succeed with 201; the duplicate attempts should be rejected (409)
+    const successCount = [res1, res2, res3].filter((r) => r.status === 201).length;
+    expect(successCount).toBe(1);
+
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Active sessions: exactly ONE new ACTIVE session version
+    const activeQR = await request(app)
+      .get('/api/qr/active?qrType=ENTRY')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(activeQR.body.data.version).toBe(qrA.version + 1);
+  });
+
+  it('TEST 7: Supports 20+ sequential student scans without any 15-scan limit', async () => {
+    const genRes = await request(app)
+      .post('/api/qr/generate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ qrType: 'ENTRY' });
+
+    let currentQR = genRes.body.data;
+
+    // Create and scan 20 students sequentially
+    for (let i = 1; i <= 20; i++) {
+      const email = `student_seq_${i}@test.com`;
+      await User.create({
+        name: `Student Seq ${i}`,
+        email,
+        password: 'Password@123',
+        role: 'STUDENT',
+        studentIdNumber: `ST${100 + i}`,
+        phone: `98765432${i < 10 ? '0' + i : i}`,
+        status: 'ACTIVE',
+      });
+
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ email, password: 'Password@123' });
+
+      const sToken = loginRes.body.data.token;
+
+      const scanRes = await request(app)
+        .post('/api/attendance/entry')
+        .set('Authorization', `Bearer ${sToken}`)
+        .send({ qrPayload: currentQR });
+
+      expect(scanRes.status).toBe(201);
+      expect(scanRes.body.success).toBe(true);
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const pollRes = await request(app)
+        .get('/api/qr/active?qrType=ENTRY')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      currentQR = pollRes.body.data;
+    }
+
+    // Verify 20 attendance records created in DB for 20 students
+    const count = await Attendance.countDocuments({ status: 'ACTIVE' });
+    expect(count).toBe(20);
+  });
+
+  it('TEST 8 & 9: Unlimited student login/logout cycles and 1-active-device enforcement', async () => {
+    // 1. studentToken was created in beforeEach (Device 1 is logged in).
+    // Device 2 tries concurrent login -> BLOCKED (429)
+    const blockedRes = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'student@test.com', password: 'Password@123' });
+    expect(blockedRes.status).toBe(429);
+    expect(blockedRes.body.message).toContain('already logged in on another device');
+
+    // 2. Device 1 logs out -> server session revoked
+    const logoutInitial = await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${studentToken}`);
+    expect(logoutInitial.status).toBe(200);
+
+    // 3. Device 2 can immediately login successfully!
+    const login1 = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'student@test.com', password: 'Password@123' });
+    expect(login1.status).toBe(200);
+    expect(login1.body.success).toBe(true);
+    let currentTok = login1.body.data.token;
+
+    // 4. Repeat Login -> Logout cycle 5 times (Unlimited cycles test)
+    for (let cycle = 1; cycle <= 5; cycle++) {
+      // Logout current
+      const logoutCycle = await request(app)
+        .post('/api/auth/logout')
+        .set('Authorization', `Bearer ${currentTok}`);
+      expect(logoutCycle.status).toBe(200);
+
+      // Login again
+      const loginCycle = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'student@test.com', password: 'Password@123' });
+
+      expect(loginCycle.status).toBe(200);
+      expect(loginCycle.body.success).toBe(true);
+      currentTok = loginCycle.body.data.token;
+    }
+
+    // 5. While logged in, another device is blocked
+    const concurrentBlocked = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'student@test.com', password: 'Password@123' });
+    expect(concurrentBlocked.status).toBe(429);
+
+    // Final logout
+    const finalLogout = await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${currentTok}`);
+    expect(finalLogout.status).toBe(200);
+
+    // Final re-login succeeds
+    const finalLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'student@test.com', password: 'Password@123' });
+    expect(finalLogin.status).toBe(200);
+  });
 });
+
 

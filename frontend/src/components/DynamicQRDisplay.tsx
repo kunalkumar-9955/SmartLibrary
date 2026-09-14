@@ -54,20 +54,18 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({ initialType 
 
         const payload: QRPayload = res.data.data;
 
-        // Detect if QR was rotated (token changed)
+        // Detect if QR was rotated by backend after student attendance
         if (currentTokenRef.current && currentTokenRef.current !== payload.token) {
           setIsRotating(true);
           setTimeout(() => {
             if (isMounted) setIsRotating(false);
           }, 600);
+          setSecondsRemaining(60);
         }
 
         setQrData(payload);
         setError(null);
         setLoading(false);
-
-        const diff = Math.max(0, Math.floor((payload.expiresAt - Date.now()) / 1000));
-        setSecondsRemaining(diff || 60);
       } catch (err: any) {
         if (isMounted && !qrData) {
           setError(err.response?.data?.message || 'Failed to sync live QR');

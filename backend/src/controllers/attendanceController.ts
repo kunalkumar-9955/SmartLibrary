@@ -31,7 +31,7 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
     const qrSession = await QrSession.findOne({ token: qrPayload.token, qrType: 'ENTRY' });
 
     if (qrSession) {
-      const isCurrentActive = qrSession.status === 'ACTIVE' && qrSession.expiresAt > now;
+      const isCurrentActive = qrSession.status === 'ACTIVE';
       const isWithinGrace = qrSession.status === 'ROTATED' && qrSession.graceExpiresAt && qrSession.graceExpiresAt > now;
 
       if (!isCurrentActive && !isWithinGrace) {
@@ -211,7 +211,7 @@ export const markExitAttendance = async (req: Request, res: Response, next: Next
     const qrSession = await QrSession.findOne({ token: qrPayload.token, qrType: 'EXIT' });
 
     if (qrSession) {
-      const isCurrentActive = qrSession.status === 'ACTIVE' && qrSession.expiresAt > now;
+      const isCurrentActive = qrSession.status === 'ACTIVE';
       const isWithinGrace = qrSession.status === 'ROTATED' && qrSession.graceExpiresAt && qrSession.graceExpiresAt > now;
 
       if (!isCurrentActive && !isWithinGrace) {

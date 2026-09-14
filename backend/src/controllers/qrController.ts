@@ -4,57 +4,96 @@ import { QrSession, QRMode, IQrSession } from '../models/QrSession';
 import { Library } from '../models/Library';
 import { sendSuccess, sendError } from '../utils/response';
 
+const GRACE_WINDOW_MS = 10000; // 10 seconds in-flight grace window for rotated QRs
+const DEFAULT_QR_TTL_SECONDS = 86400; // 24 hours validity so active QR never expires while displayed
+
 /**
- * Atomically rotates an active QR session for a given type,
- * transitioning the current session to ROTATED with a 10s grace window
- * and creating a new ACTIVE session.
+ * Helper to create a new ACTIVE QR session in DB
  */
-export const rotateQRSession = async (
+const createNewActiveSession = async (
   qrType: QRMode,
-  scannedToken?: string
+  version: number,
+  ttlSeconds: number = DEFAULT_QR_TTL_SECONDS
 ): Promise<IQrSession> => {
-  const settings = await Library.findOne();
-  const ttlSeconds = settings?.qrExpirySeconds ? Math.max(settings.qrExpirySeconds, 60) : 300; // 5 min fallback
-  const now = new Date();
-  const graceWindowMs = 10000; // 10 seconds concurrency grace
+  const dynamicPayload = generateDynamicQR(qrType, ttlSeconds, version);
 
-  // Find currently active session
-  const currentActive = await QrSession.findOne({ qrType, status: 'ACTIVE' }).sort({ createdAt: -1 });
-
-  let nextVersion = 1;
-
-  if (currentActive) {
-    nextVersion = currentActive.version + 1;
-
-    // Transition current to ROTATED with grace window
-    currentActive.status = 'ROTATED';
-    currentActive.rotatedAt = now;
-    currentActive.graceExpiresAt = new Date(now.getTime() + graceWindowMs);
-    if (scannedToken && currentActive.token === scannedToken) {
-      currentActive.scanCount += 1;
-    }
-    await currentActive.save();
-  }
-
-  // Generate new cryptographic payload
-  const dynamicPayload = generateDynamicQR(qrType, ttlSeconds, nextVersion);
-
-  const newSession = await QrSession.create({
+  return await QrSession.create({
     qrType,
     token: dynamicPayload.token,
-    version: nextVersion,
+    version,
     status: 'ACTIVE',
     expiresAt: new Date(dynamicPayload.expiresAt),
     signature: dynamicPayload.signature,
     scanCount: 0,
   });
+};
 
-  return newSession;
+/**
+ * Atomically rotates an active QR session.
+ * 
+ * CORE RULES:
+ * 1. If scannedToken is provided, ONLY rotate if the session with that token is currently ACTIVE.
+ *    If that token was already rotated (e.g. duplicate camera frames or in-flight scan),
+ *    return the existing ACTIVE session WITHOUT creating another new QR (idempotent).
+ * 2. If no scannedToken is provided (e.g. Admin clicked Regenerate QR), rotate the latest ACTIVE session.
+ * 3. Rotated QRs retain a 10-second grace window (graceExpiresAt) so legitimate in-flight scans succeed.
+ */
+export const rotateQRSession = async (
+  qrType: QRMode,
+  scannedToken?: string
+): Promise<IQrSession> => {
+  const now = new Date();
+
+  if (scannedToken) {
+    // Atomically find and transition the specific ACTIVE session to ROTATED
+    const currentActive = await QrSession.findOneAndUpdate(
+      { qrType, token: scannedToken, status: 'ACTIVE' },
+      {
+        $set: {
+          status: 'ROTATED',
+          rotatedAt: now,
+          graceExpiresAt: new Date(now.getTime() + GRACE_WINDOW_MS),
+        },
+        $inc: { scanCount: 1 },
+      },
+      { new: false }
+    );
+
+    if (!currentActive) {
+      // Scanned token is NOT active (already rotated or invalid).
+      // Idempotency guard: Return the currently active session without rotating again!
+      const existingActive = await QrSession.findOne({ qrType, status: 'ACTIVE' }).sort({ createdAt: -1 });
+      if (existingActive) {
+        return existingActive;
+      }
+      return await createNewActiveSession(qrType, 1);
+    }
+
+    // Successfully rotated this specific token -> generate exactly ONE next version
+    const nextVersion = currentActive.version + 1;
+    return await createNewActiveSession(qrType, nextVersion);
+  }
+
+  // Admin manual generate / regenerate: atomically rotate latest ACTIVE session
+  const currentActive = await QrSession.findOneAndUpdate(
+    { qrType, status: 'ACTIVE' },
+    {
+      $set: {
+        status: 'ROTATED',
+        rotatedAt: now,
+        graceExpiresAt: new Date(now.getTime() + GRACE_WINDOW_MS),
+      },
+    },
+    { sort: { createdAt: -1 }, new: false }
+  );
+
+  const nextVersion = currentActive ? currentActive.version + 1 : 1;
+  return await createNewActiveSession(qrType, nextVersion);
 };
 
 /**
  * Generate (or regenerate) an active QR code session.
- * Called by Admin Panel to start or reset attendance session.
+ * Called by Admin Panel to explicitly start or reset attendance session.
  */
 export const generateQR = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -88,6 +127,10 @@ export const generateQR = async (req: Request, res: Response, next: NextFunction
 /**
  * Get the currently ACTIVE QR session for the Admin display screen.
  * Polled lightly by Admin Panel (every 1.5s) to detect rotations.
+ * 
+ * CRITICAL RULE:
+ * This endpoint NEVER generates or rotates a QR automatically based on timer or polling.
+ * QR-A stays fixed until a student successfully scans and completes attendance.
  */
 export const getActiveQR = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -97,14 +140,13 @@ export const getActiveQR = async (req: Request, res: Response, next: NextFunctio
       return sendError(res, 'Invalid qrType parameter', 400);
     }
 
-    const now = new Date();
+    // Find current active session
     let activeSession: any = await QrSession.findOne({
       qrType,
       status: 'ACTIVE',
-      expiresAt: { $gt: now },
     }).sort({ createdAt: -1 });
 
-    // If no active session or expired by time, automatically create fresh active session
+    // Only create an initial session if none exists in the database at all
     if (!activeSession) {
       activeSession = await rotateQRSession(qrType);
     }
@@ -148,7 +190,7 @@ export const validateQRToken = async (req: Request, res: Response, next: NextFun
     }
 
     const now = new Date();
-    const isCurrentActive = session.status === 'ACTIVE' && session.expiresAt > now;
+    const isCurrentActive = session.status === 'ACTIVE';
     const isWithinGrace = session.status === 'ROTATED' && session.graceExpiresAt && session.graceExpiresAt > now;
 
     if (!isCurrentActive && !isWithinGrace) {
