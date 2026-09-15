@@ -69,11 +69,20 @@ export const studentService = {
   deleteStudent: (id: string) => api.delete(`/students/${id}`),
 };
 
-// QR Services
+// QR Services (Live Dynamic QR)
 export const qrService = {
   generateQR: (qrType: 'ENTRY' | 'EXIT') => api.post('/qr/generate', { qrType }),
   getActiveQR: (qrType: 'ENTRY' | 'EXIT') => api.get('/qr/active', { params: { qrType } }),
   validateQR: (qrPayload: QRPayload) => api.post('/qr/validate', { qrPayload }),
+};
+
+// Daily QR Services (Fixed QR for days when Admin is absent)
+export const dailyQrService = {
+  getTodayQR: () => api.get('/daily-qr/today'),
+  generateQR: (forceRegenerate: boolean = false) =>
+    api.post('/daily-qr/generate', { forceRegenerate }),
+  scanQR: (qrPayload: any, preferredSeatNumber?: string) =>
+    api.post('/daily-qr/scan', { qrPayload, preferredSeatNumber }),
 };
 
 // Attendance Services

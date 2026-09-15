@@ -14,6 +14,7 @@ export interface IAttendance extends Document {
   attendanceDate: string; // YYYY-MM-DD
   entryMethod: 'QR';
   exitMethod?: 'QR' | 'MANUAL';
+  attendanceSource?: 'LIVE_QR' | 'DAILY_QR';
   status: AttendanceStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -32,6 +33,12 @@ const AttendanceSchema = new Schema<IAttendance>(
     attendanceDate: { type: String, required: true, index: true },
     entryMethod: { type: String, default: 'QR' },
     exitMethod: { type: String },
+    attendanceSource: {
+      type: String,
+      enum: ['LIVE_QR', 'DAILY_QR'],
+      default: 'LIVE_QR',
+      index: true,
+    },
     status: {
       type: String,
       enum: ['ACTIVE', 'COMPLETED'],

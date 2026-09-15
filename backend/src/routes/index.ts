@@ -11,6 +11,7 @@ import reportRoutes from './reportRoutes';
 import settingsRoutes from './settingsRoutes';
 import notificationRoutes from './notificationRoutes';
 import adminNotificationRoutes from './adminNotificationRoutes';
+import dailyQrRoutes from './dailyQrRoutes';
 import { apiLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
@@ -23,6 +24,7 @@ router.use('/library-admin', libraryAdminRoutes);
 router.use('/students', studentRoutes);
 router.use('/attendance', attendanceRoutes);
 router.use('/qr', qrRoutes);
+router.use('/daily-qr', dailyQrRoutes);
 router.use('/seats', seatRoutes);
 router.use('/tickets', ticketRoutes);
 router.use('/notices', noticeRoutes);

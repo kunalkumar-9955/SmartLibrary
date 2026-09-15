@@ -117,6 +117,17 @@ export interface QRPayload {
   libraryName?: string;
 }
 
+export interface DailyQRPayload {
+  qrType: 'DAILY';
+  dailyQrId: string;
+  date: string;
+  token: string;
+  expiresAt: number;
+  signature: string;
+}
+
+export type AnyQRPayload = QRPayload | DailyQRPayload;
+
 export interface NotificationItem {
   _id: string;
   title: string;

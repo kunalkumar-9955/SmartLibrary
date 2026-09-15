@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { StudentQRScanner } from '../../components/StudentQRScanner';
-import { attendanceService } from '../../services/api';
+import { attendanceService, dailyQrService } from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { QRPayload } from '../../types';
+import { QRPayload, AnyQRPayload } from '../../types';
 import { CheckCircle2, ArrowLeft, Armchair, Clock, Calendar, User as UserIcon, ArrowRight } from 'lucide-react';
 
 export const StudentScanPage: React.FC = () => {
@@ -40,12 +40,28 @@ export const StudentScanPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [successResult, navigate]);
 
-  const handleScanSuccess = async (payload: QRPayload) => {
+  const handleScanSuccess = async (payload: AnyQRPayload) => {
     if (isLoading) return;
     setIsLoading(true);
     setScanError(null);
     try {
-      if (payload.qrType === 'ENTRY') {
+      if (payload.qrType === 'DAILY') {
+        const res = await dailyQrService.scanQR(payload);
+        if (res.data.success) {
+          const resType = res.data.data?.type || 'ENTRY';
+          setSuccessResult({
+            type: resType,
+            data: res.data.data,
+            isDaily: true,
+          });
+          success(
+            resType === 'ENTRY'
+              ? 'Entry Attendance Marked Successfully (Daily QR)!'
+              : 'Exit Attendance Marked Successfully (Daily QR)!'
+          );
+          await refreshUser();
+        }
+      } else if (payload.qrType === 'ENTRY') {
         const res = await attendanceService.markEntry(payload);
         if (res.data.success) {
           setSuccessResult({
@@ -56,7 +72,7 @@ export const StudentScanPage: React.FC = () => {
           await refreshUser();
         }
       } else {
-        const res = await attendanceService.markExit(payload);
+        const res = await attendanceService.markExit(payload as QRPayload);
         if (res.data.success) {
           setSuccessResult({
             type: 'EXIT',

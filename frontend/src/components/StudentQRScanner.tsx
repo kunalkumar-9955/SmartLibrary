@@ -14,12 +14,12 @@ import {
   AlertTriangle,
   GlobeLock,
 } from 'lucide-react';
-import { QRPayload } from '../types';
+import { QRPayload, AnyQRPayload } from '../types';
 import { CameraInstructionsModal } from './CameraInstructionsModal';
 
 interface StudentQRScannerProps {
   expectedType?: 'ENTRY' | 'EXIT';
-  onScanSuccess: (payload: QRPayload) => void;
+  onScanSuccess: (payload: AnyQRPayload) => void;
   isLoading?: boolean;
 }
 
@@ -432,7 +432,7 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
 
     try {
       const cleanText = text.trim();
-      const payload: QRPayload = JSON.parse(cleanText);
+      const payload: any = JSON.parse(cleanText);
 
       if (!payload.qrType || !payload.token || !payload.signature) {
         setStatusNotice('Invalid QR code format. Please scan the official Lakshya Smart Library QR screen.');
@@ -440,6 +440,16 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
         return;
       }
 
+      // If Daily Attendance QR is scanned:
+      if (payload.qrType === 'DAILY') {
+        await stopScanner();
+        setScannedResult(payload);
+        confetti({ particleCount: 65, spread: 60, origin: { y: 0.7 } });
+        onScanSuccess(payload as AnyQRPayload);
+        return;
+      }
+
+      // Live QR logic: verify expected gate type
       if (expectedType && payload.qrType !== expectedType) {
         setStatusNotice(`Scanned ${payload.qrType} QR code, but this gate requires an ${expectedType} QR code.`);
         isProcessingRef.current = false;
@@ -450,7 +460,7 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
       await stopScanner();
       setScannedResult(payload);
       confetti({ particleCount: 65, spread: 60, origin: { y: 0.7 } });
-      onScanSuccess(payload);
+      onScanSuccess(payload as AnyQRPayload);
     } catch (e) {
       setStatusNotice('The scanned QR code is not a valid Smart Library Attendance QR.');
       isProcessingRef.current = false;
