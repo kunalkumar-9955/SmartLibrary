@@ -76,8 +76,8 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
       </div>
 
       {/* 50 Seats Grid: Clean Responsive Grid */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-3">
+      <div className="bg-white dark:bg-slate-900 p-3 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-10 gap-2 sm:gap-3">
           {sortedSeats.map((seat) => {
             const isSelected = selectedSeatId === seat._id;
             const isClickable = isAdminView || seat.status === 'AVAILABLE';

@@ -26,11 +26,10 @@ export const getLibraryAdminDashboard = async (req: Request, res: Response, next
       User.countDocuments({ role: 'STUDENT' }),
     ]);
 
-    // Live currently inside students (first 10 for quick glance)
+    // Live currently inside students (all active sessions)
     const activeSessions = await Attendance.find({ status: 'ACTIVE' })
       .populate('studentId', 'name email phone studentIdNumber avatar')
-      .sort({ entryTime: -1 })
-      .limit(10);
+      .sort({ entryTime: -1 });
 
     const formattedActive = activeSessions.map((session: any) => {
       const entryTimeMs = new Date(session.entryTime).getTime();

@@ -168,12 +168,12 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       {/* CURRENTLY INSIDE Section */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div>
             <h3 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-              CURRENTLY INSIDE ({liveOccupancy.length})
+              CURRENTLY INSIDE ({metrics.currentlyInside ?? liveOccupancy.length})
             </h3>
             <p className="text-xs text-slate-500">Live list of students seated in the library</p>
           </div>
@@ -191,60 +191,104 @@ export const AdminDashboard: React.FC = () => {
             <p className="text-xs font-medium">No students are currently inside the library.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                <tr>
-                  <th className="px-4 py-3 rounded-l-lg">Student</th>
-                  <th className="px-4 py-3">Student ID</th>
-                  <th className="px-4 py-3 text-center">Seat</th>
-                  <th className="px-4 py-3">Entry Time</th>
-                  <th className="px-4 py-3">Duration</th>
-                  <th className="px-4 py-3 text-right rounded-r-lg">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {liveOccupancy.map((s: any) => {
-                  const entryTimeFormatted = new Date(s.entryTime).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3 rounded-l-lg">Student</th>
+                    <th className="px-4 py-3">Student ID</th>
+                    <th className="px-4 py-3 text-center">Seat</th>
+                    <th className="px-4 py-3">Entry Time</th>
+                    <th className="px-4 py-3">Duration</th>
+                    <th className="px-4 py-3 text-right rounded-r-lg">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {liveOccupancy.map((s: any) => {
+                    const entryTimeFormatted = new Date(s.entryTime).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
 
-                  return (
-                    <tr key={s._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-                      <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
-                        {s.studentName}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-slate-500">
-                        {s.studentIdNumber || 'ST001'}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg border border-indigo-200 dark:border-indigo-800">
-                          Seat {s.seatNumber}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 font-mono">
-                        {entryTimeFormatted}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-emerald-600">
-                        {s.durationString}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => handleForceCheckout(s._id, s.studentName)}
-                          title="Force check-out"
-                          className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-semibold transition border border-rose-200 dark:border-rose-900 inline-flex items-center gap-1"
-                        >
-                          <LogOut className="w-3 h-3" />
-                          Check-out
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    return (
+                      <tr key={s._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                        <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
+                          {s.studentName}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-slate-500">
+                          {s.studentIdNumber || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg border border-indigo-200 dark:border-indigo-800">
+                            Seat {s.seatNumber}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300 font-mono">
+                          {entryTimeFormatted}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-emerald-600">
+                          {s.durationString}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => handleForceCheckout(s._id, s.studentName)}
+                            title="Force check-out"
+                            className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-semibold transition border border-rose-200 dark:border-rose-900 inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <LogOut className="w-3 h-3" />
+                            Check-out
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Cards */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+              {liveOccupancy.map((s: any) => {
+                const entryTimeFormatted = new Date(s.entryTime).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+
+                return (
+                  <div key={s._id} className="py-3 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-xs text-slate-900 dark:text-white">{s.studentName}</p>
+                        <p className="font-mono text-[11px] text-slate-500">{s.studentIdNumber || 'N/A'}</p>
+                      </div>
+                      <span className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-lg border border-indigo-200 dark:border-indigo-800">
+                        Seat {s.seatNumber}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] bg-slate-50 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                      <div>
+                        <span className="text-slate-400 block text-[9px] uppercase">Entry</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-200">{entryTimeFormatted}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[9px] uppercase">Duration</span>
+                        <span className="font-mono font-bold text-emerald-600">{s.durationString}</span>
+                      </div>
+                      <button
+                        onClick={() => handleForceCheckout(s._id, s.studentName)}
+                        className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-semibold transition border border-rose-200 dark:border-rose-900 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <LogOut className="w-3 h-3" /> Check-out
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

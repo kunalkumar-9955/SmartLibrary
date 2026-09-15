@@ -107,20 +107,20 @@ export const StudentScanPage: React.FC = () => {
       const msg = err.response?.data?.message || 'Attendance verification failed. Please try again.';
       setScanError(msg);
 
-      if (errCode === 'ENTRY_REQUIRED_FIRST') {
+      if (errCode === 'ENTRY_REQUIRED_FIRST' || errCode === 'NO_ACTIVE_ATTENDANCE') {
         setErrorModal({
           isOpen: true,
           title: 'Entry Required First',
           message:
-            "You don't have an active library attendance. Please scan the Daily QR using the Entry Scanner first.",
+            "You don't have an active attendance. Please use the Entry Scanner to check in.",
           suggestedAction: 'SWITCH_TO_ENTRY',
         });
-      } else if (errCode === 'ALREADY_CHECKED_IN') {
+      } else if (errCode === 'ALREADY_CHECKED_IN' || errCode === 'ALREADY_INSIDE') {
         setErrorModal({
           isOpen: true,
           title: 'Already Checked In',
           message:
-            'You are already inside the library. Please scan the Daily QR using the Exit Scanner to check out.',
+            'You are already inside the library. Please use the Exit Scanner to check out.',
           suggestedAction: 'SWITCH_TO_EXIT',
         });
       } else {

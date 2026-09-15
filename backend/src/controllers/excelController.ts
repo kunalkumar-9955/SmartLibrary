@@ -13,15 +13,15 @@ export const exportAttendanceExcel = async (req: Request, res: Response, next: N
     let filenameDateStr = '';
     const todayStr = new Date().toISOString().split('T')[0];
 
-    if (date) {
-      query.attendanceDate = date;
-      filenameDateStr = date as string;
+    if (date && String(date).trim() !== '') {
+      query.attendanceDate = String(date).trim();
+      filenameDateStr = String(date).trim();
     } else if (startDate && endDate) {
-      query.attendanceDate = { $gte: startDate, $lte: endDate };
+      query.attendanceDate = { $gte: String(startDate).trim(), $lte: String(endDate).trim() };
       filenameDateStr = `${startDate}_to_${endDate}`;
     } else {
-      query.attendanceDate = todayStr;
-      filenameDateStr = todayStr;
+      // MODE 2: Blank date means FULL EXPORT of all attendance records currently stored in MongoDB
+      filenameDateStr = `FULL_ALL_RECORDS_${todayStr}`;
     }
 
     if (studentId) {
@@ -34,7 +34,7 @@ export const exportAttendanceExcel = async (req: Request, res: Response, next: N
       .sort({ entryTime: -1 });
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Smart Library System';
+    workbook.creator = 'Lakshya Smart Library System';
     workbook.created = new Date();
 
     const worksheet = workbook.addWorksheet('Attendance Logs');
@@ -45,10 +45,11 @@ export const exportAttendanceExcel = async (req: Request, res: Response, next: N
       { header: 'Student ID', key: 'studentId', width: 14 },
       { header: 'Student Name', key: 'name', width: 22 },
       { header: 'Mobile', key: 'phone', width: 16 },
-      { header: 'Seat', key: 'seat', width: 10 },
+      { header: 'Seat', key: 'seat', width: 12 },
       { header: 'Entry Time', key: 'entryTime', width: 14 },
       { header: 'Exit Time', key: 'exitTime', width: 14 },
       { header: 'Duration', key: 'duration', width: 14 },
+      { header: 'Source', key: 'source', width: 14 },
     ];
 
     // Style the header row
@@ -74,6 +75,8 @@ export const exportAttendanceExcel = async (req: Request, res: Response, next: N
         ? `${Math.floor(r.durationMinutes / 60)}h ${r.durationMinutes % 60}m`
         : '--';
 
+      const sourceStr = r.attendanceSource || (r.entryMethod === 'QR' ? 'LIVE_QR' : 'MANUAL');
+
       const row = worksheet.addRow({
         date: r.attendanceDate,
         studentId: student?.studentIdNumber || r.studentIdNumber || 'N/A',
@@ -83,6 +86,7 @@ export const exportAttendanceExcel = async (req: Request, res: Response, next: N
         entryTime: entryTimeStr,
         exitTime: exitTimeStr,
         duration: durationStr,
+        source: sourceStr,
       });
 
       row.alignment = { vertical: 'middle', horizontal: 'center' };

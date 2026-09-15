@@ -5,6 +5,7 @@ import { Seat } from '../models/Seat';
 import { Ticket } from '../models/Ticket';
 import { Notice } from '../models/Notice';
 import { Attendance } from '../models/Attendance';
+import { reconcileActiveAttendanceAndSeats } from '../services/reconciliationService';
 
 /**
  * Bootstrap production system safely at startup:
@@ -191,6 +192,9 @@ export const bootstrapSystem = async (): Promise<void> => {
       await Seat.insertMany(seatDocs);
       console.log('[Bootstrap] Initialized exactly 50 library seats (01 to 50).');
     }
+
+    // --- 5. Safely Reconcile Active Attendance & Fixed Seats ---
+    await reconcileActiveAttendanceAndSeats();
   } catch (error: any) {
     console.error('[Bootstrap Error] Failed to initialize system:', error.message);
   }

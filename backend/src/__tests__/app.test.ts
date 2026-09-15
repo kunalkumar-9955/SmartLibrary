@@ -162,15 +162,16 @@ describe('Smart Personal Library Management System Suite', () => {
     const entryRes = await request(app)
       .post('/api/attendance/entry')
       .set('Authorization', `Bearer ${studentToken}`)
-      .send({ qrPayload: entryQR, preferredSeatNumber: '05' });
+      .send({ qrPayload: entryQR });
 
     expect(entryRes.status).toBe(201);
     expect(entryRes.body.success).toBe(true);
-    expect(entryRes.body.data.seatNumber).toBe('05');
+    // Student ST001 derives fixed Seat 01
+    expect(entryRes.body.data.seatNumber).toBe('01');
 
-    // Seat 05 should now be OCCUPIED
-    const seat05 = await Seat.findOne({ seatNumber: '05' });
-    expect(seat05?.status).toBe('OCCUPIED');
+    // Seat 01 should now be OCCUPIED
+    const seat01 = await Seat.findOne({ seatNumber: '01' });
+    expect(seat01?.status).toBe('OCCUPIED');
 
     // Rule 1: Attempt duplicate entry while inside
     const entryQR2 = generateDynamicQR('ENTRY', 45);
@@ -180,8 +181,8 @@ describe('Smart Personal Library Management System Suite', () => {
       .send({ qrPayload: entryQR2 });
 
     expect(dupRes.status).toBe(409);
-    // Message from attendanceController: 'You are already checked in.'
-    expect(dupRes.body.message).toContain('already checked in');
+    // Message from attendanceController: 'You are already inside the library. Please use the Exit Scanner to check out.'
+    expect(dupRes.body.message.toLowerCase()).toContain('already inside');
   });
 
   it('should successfully mark exit attendance, calculate duration, and release seat to AVAILABLE', async () => {
@@ -190,7 +191,7 @@ describe('Smart Personal Library Management System Suite', () => {
     await request(app)
       .post('/api/attendance/entry')
       .set('Authorization', `Bearer ${studentToken}`)
-      .send({ qrPayload: entryQR, preferredSeatNumber: '10' });
+      .send({ qrPayload: entryQR });
 
     // 2. Exit
     const exitQR = generateDynamicQR('EXIT', 45);
@@ -203,9 +204,9 @@ describe('Smart Personal Library Management System Suite', () => {
     expect(exitRes.body.success).toBe(true);
     expect(exitRes.body.data.durationMinutes).toBeGreaterThanOrEqual(1);
 
-    // Seat 10 should be AVAILABLE again
-    const seat10 = await Seat.findOne({ seatNumber: '10' });
-    expect(seat10?.status).toBe('AVAILABLE');
+    // Fixed Seat 01 should be AVAILABLE again
+    const seat01 = await Seat.findOne({ seatNumber: '01' });
+    expect(seat01?.status).toBe('AVAILABLE');
 
     // Rule 2: Cannot mark exit without active entry (generate new fresh QR so replay doesn't trigger first)
     const freshExitQR = generateDynamicQR('EXIT', 45);
@@ -608,7 +609,7 @@ describe('Smart Personal Library Management System Suite', () => {
       .send({ qrPayload: activeB.body.data });
 
     expect(failedScan.status).toBe(409);
-    expect(failedScan.body.message).toContain('already checked in');
+    expect(failedScan.body.message.toLowerCase()).toContain('already checked in');
 
     await new Promise((r) => setTimeout(r, 200));
 
@@ -903,6 +904,8 @@ describe('Smart Personal Library Management System Suite', () => {
         email: 'studentB@test.com',
         password: 'Password@123',
         role: 'STUDENT',
+        studentIdNumber: 'LSL-02',
+        phone: '9876543202',
         status: 'ACTIVE',
       });
       const bLogin = await request(app)
@@ -957,6 +960,138 @@ describe('Smart Personal Library Management System Suite', () => {
 
       expect(expiredRes.status).toBe(400);
       expect(expiredRes.body.message).toContain('not valid for today');
+    });
+  });
+
+  describe('Fixed Seat Rule & Reconciliation Suite', () => {
+    it('should deterministically assign fixed seat derived from Student ID (e.g. LSL-22 -> Seat 22)', async () => {
+      // Create student with ID LSL-22
+      const user22 = await User.create({
+        name: 'MD IRFAN',
+        email: 'irfan@test.com',
+        password: 'Password@123',
+        role: 'STUDENT',
+        studentIdNumber: 'LSL-22',
+        phone: '9876543222',
+        status: 'ACTIVE',
+      });
+
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'irfan@test.com', password: 'Password@123' });
+      const token22 = loginRes.body.data.token;
+
+      const entryQR = generateDynamicQR('ENTRY', 45);
+      const entryRes = await request(app)
+        .post('/api/attendance/entry')
+        .set('Authorization', `Bearer ${token22}`)
+        .send({ qrPayload: entryQR, preferredSeatNumber: '02' }); // Frontend preferredSeat 02 MUST be ignored
+
+      expect(entryRes.status).toBe(201);
+      expect(entryRes.body.data.seatNumber).toBe('22');
+
+      const seat22 = await Seat.findOne({ seatNumber: '22' });
+      expect(seat22?.status).toBe('OCCUPIED');
+      expect(seat22?.currentStudentName).toBe('MD IRFAN');
+
+      // Seat 02 must remain AVAILABLE
+      const seat02 = await Seat.findOne({ seatNumber: '02' });
+      expect(seat02?.status).toBe('AVAILABLE');
+    });
+
+    it('should safely reconcile duplicate active attendances and mismatched seats without deleting history', async () => {
+      const { reconcileActiveAttendanceAndSeats } = await import('../services/reconciliationService');
+
+      // Setup a student with LSL-25 allocated wrong Seat 01
+      const student25 = await User.create({
+        name: 'Nitesh Prajapati',
+        email: 'nitesh@test.com',
+        password: 'Password@123',
+        role: 'STUDENT',
+        studentIdNumber: 'LSL-25',
+        phone: '9876543225',
+        status: 'ACTIVE',
+        isCurrentlyInside: true,
+        currentSeatNumber: '01',
+      });
+
+      const seat01 = await Seat.findOneAndUpdate(
+        { seatNumber: '01' },
+        { status: 'OCCUPIED', currentStudentId: student25._id, currentStudentName: student25.name }
+      );
+
+      // Create attendance session with wrong Seat 01
+      const wrongAtt = await Attendance.create({
+        studentId: student25._id,
+        studentName: student25.name,
+        studentIdNumber: 'LSL-25',
+        seatNumber: '01',
+        seatId: seat01?._id,
+        entryTime: new Date(Date.now() - 1800000),
+        attendanceDate: '2026-09-15',
+        entryMethod: 'QR',
+        status: 'ACTIVE',
+      });
+
+      // Temporarily drop partial unique index to simulate legacy database with duplicate active records
+      try {
+        await Attendance.collection.dropIndex('studentId_1');
+      } catch (e) {}
+
+      // Create simulated legacy duplicate active attendance
+      const dupAtt = await Attendance.create({
+        studentId: student25._id,
+        studentName: student25.name,
+        studentIdNumber: 'LSL-25',
+        seatNumber: '02',
+        entryTime: new Date(Date.now() - 3600000),
+        attendanceDate: '2026-09-15',
+        entryMethod: 'QR',
+        status: 'ACTIVE',
+      });
+
+      // Run reconciliation (reconciles seats, completes duplicates, and syncs indexes)
+      const report = await reconcileActiveAttendanceAndSeats();
+
+      expect(report.duplicateSessionsClosed).toBeGreaterThanOrEqual(1);
+      expect(report.seatsReconciledToFixed).toBeGreaterThanOrEqual(1);
+
+      // Duplicate session must be marked COMPLETED, NOT deleted!
+      const checkDup = await Attendance.findById(dupAtt._id);
+      expect(checkDup?.status).toBe('COMPLETED');
+      expect(checkDup?.exitMethod).toBe('MANUAL');
+
+      // Primary session should be reconciled to Seat 25
+      const checkPrimary = await Attendance.findById(wrongAtt._id);
+      expect(checkPrimary?.status).toBe('ACTIVE');
+      expect(checkPrimary?.seatNumber).toBe('25');
+
+      // Seat 25 must be OCCUPIED by Nitesh, and Seat 01 must be AVAILABLE
+      const s25 = await Seat.findOne({ seatNumber: '25' });
+      expect(s25?.status).toBe('OCCUPIED');
+      expect(s25?.currentStudentName).toBe('Nitesh Prajapati');
+
+      const s01 = await Seat.findOne({ seatNumber: '01' });
+      expect(s01?.status).toBe('AVAILABLE');
+    });
+
+    it('should export all stored records when date is blank (Mode 2) and export single date when specified (Mode 1)', async () => {
+      // Export with blank date (Mode 2 - FULL EXPORT)
+      const fullRes = await request(app)
+        .get('/api/attendance/export')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(fullRes.status).toBe(200);
+      expect(fullRes.header['content-type']).toContain('spreadsheetml');
+      expect(fullRes.header['content-disposition']).toContain('FULL_ALL_RECORDS');
+
+      // Export with specific date (Mode 1)
+      const dateRes = await request(app)
+        .get('/api/attendance/export?date=2026-09-15')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(dateRes.status).toBe(200);
+      expect(dateRes.header['content-disposition']).toContain('2026-09-15');
     });
   });
 });

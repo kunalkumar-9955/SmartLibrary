@@ -71,6 +71,30 @@ export const AdminAttendancePage: React.FC = () => {
     }
   };
 
+  const handleExportAll = async () => {
+    try {
+      setExporting(true);
+      const res = await attendanceService.exportAttendanceExcel({});
+      const todayStr = new Date().toISOString().split('T')[0];
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Library_Attendance_FULL_ALL_RECORDS_${todayStr}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      success('Full Attendance database records exported successfully!');
+    } catch (err) {
+      error('Failed to export full database records.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleExportCustomRange = async () => {
     if (!startDate || !endDate) {
       error('Please select both start date and end date.');
@@ -114,20 +138,29 @@ export const AdminAttendancePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleExportAll}
+            disabled={exporting}
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition disabled:opacity-50 cursor-pointer"
+            title="Export all historical records currently stored in database"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            {exporting ? 'Exporting...' : 'Export All (Full DB)'}
+          </button>
           <button
             onClick={handleExportToday}
             disabled={exporting}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition disabled:opacity-50 cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
             {exporting ? 'Generating...' : "Export Today's Excel"}
           </button>
           <button
             onClick={() => setShowExportModal(true)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow transition cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow transition cursor-pointer"
           >
-            Custom Range Export
+            Custom Range
           </button>
         </div>
       </div>
@@ -135,7 +168,9 @@ export const AdminAttendancePage: React.FC = () => {
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row items-center gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <Search className="w-4 h-4 text-slate-400" />
+          </div>
           <input
             type="text"
             value={search}
@@ -144,13 +179,15 @@ export const AdminAttendancePage: React.FC = () => {
               setPage(1);
             }}
             placeholder="Search by student name, ID, or seat number..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative">
-            <Calendar className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+          <div className="relative w-full sm:w-auto">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            </div>
             <input
               type="date"
               value={dateFilter}
@@ -158,7 +195,7 @@ export const AdminAttendancePage: React.FC = () => {
                 setDateFilter(e.target.value);
                 setPage(1);
               }}
-              className="pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none"
+              className="w-full sm:w-auto pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:outline-none"
             />
           </div>
           {dateFilter && (
@@ -167,7 +204,7 @@ export const AdminAttendancePage: React.FC = () => {
                 setDateFilter('');
                 setPage(1);
               }}
-              className="text-xs text-rose-500 font-bold hover:underline px-2"
+              className="text-xs text-rose-500 font-bold hover:underline px-2 cursor-pointer whitespace-nowrap"
             >
               Clear
             </button>
@@ -182,67 +219,131 @@ export const AdminAttendancePage: React.FC = () => {
         ) : records.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-400">No attendance records found matching filters.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/80 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 dark:border-slate-800">
-                <tr>
-                  <th className="px-5 py-3.5">Date</th>
-                  <th className="px-5 py-3.5">Student ID</th>
-                  <th className="px-5 py-3.5">Student Name</th>
-                  <th className="px-5 py-3.5 text-center">Seat</th>
-                  <th className="px-5 py-3.5">Entry Time</th>
-                  <th className="px-5 py-3.5">Exit Time</th>
-                  <th className="px-5 py-3.5">Duration</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {records.map((att: any) => {
-                  const student = att.studentId;
-                  const entryTimeStr = new Date(att.entryTime).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
-                  const exitTimeStr = att.exitTime ? (
-                    new Date(att.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  ) : (
-                    <span className="text-emerald-500 font-bold">Currently Inside</span>
-                  );
+          <>
+            {/* Desktop View Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/80 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                  <tr>
+                    <th className="px-5 py-3.5">Date</th>
+                    <th className="px-5 py-3.5">Student ID</th>
+                    <th className="px-5 py-3.5">Student Name</th>
+                    <th className="px-5 py-3.5 text-center">Seat</th>
+                    <th className="px-5 py-3.5">Entry Time</th>
+                    <th className="px-5 py-3.5">Exit Time</th>
+                    <th className="px-5 py-3.5">Duration</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {records.map((att: any) => {
+                    const student = att.studentId;
+                    const entryTimeStr = new Date(att.entryTime).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+                    const exitTimeStr = att.exitTime ? (
+                      new Date(att.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    ) : (
+                      <span className="text-emerald-500 font-bold">Currently Inside</span>
+                    );
 
-                  const durationStr = att.durationMinutes
-                    ? `${Math.floor(att.durationMinutes / 60)}h ${att.durationMinutes % 60}m`
-                    : '--';
+                    const durationStr = att.durationMinutes
+                      ? `${Math.floor(att.durationMinutes / 60)}h ${att.durationMinutes % 60}m`
+                      : '--';
 
-                  return (
-                    <tr key={att._id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
-                      <td className="px-5 py-4 font-mono text-slate-600 dark:text-slate-300">
-                        {att.attendanceDate || new Date(att.entryTime).toLocaleDateString()}
-                      </td>
-                      <td className="px-5 py-4 font-mono font-bold text-slate-700 dark:text-slate-200">
-                        {student?.studentIdNumber || att.studentIdNumber || 'ST001'}
-                      </td>
-                      <td className="px-5 py-4 font-bold text-slate-900 dark:text-white">
-                        {student?.name || att.studentName}
-                      </td>
-                      <td className="px-5 py-4 text-center">
-                        <span className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg border border-indigo-200 dark:border-indigo-800">
-                          {att.seatNumber ? `Seat ${att.seatNumber}` : 'General'}
+                    return (
+                      <tr key={att._id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
+                        <td className="px-5 py-4 font-mono text-slate-600 dark:text-slate-300">
+                          {att.attendanceDate || new Date(att.entryTime).toLocaleDateString()}
+                        </td>
+                        <td className="px-5 py-4 font-mono font-bold text-slate-700 dark:text-slate-200">
+                          {student?.studentIdNumber || att.studentIdNumber || 'ST001'}
+                        </td>
+                        <td className="px-5 py-4 font-bold text-slate-900 dark:text-white">
+                          {student?.name || att.studentName}
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          <span className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg border border-indigo-200 dark:border-indigo-800">
+                            {att.seatNumber ? `Seat ${att.seatNumber}` : 'General'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 font-mono text-slate-700 dark:text-slate-200">
+                          {entryTimeStr}
+                        </td>
+                        <td className="px-5 py-4 font-mono text-slate-700 dark:text-slate-200">
+                          {exitTimeStr}
+                        </td>
+                        <td className="px-5 py-4 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                          {durationStr}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Cards */}
+            <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+              {records.map((att: any) => {
+                const student = att.studentId;
+                const entryTimeStr = new Date(att.entryTime).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+                const exitTimeStr = att.exitTime ? (
+                  new Date(att.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                ) : (
+                  <span className="text-emerald-500 font-bold">Currently Inside</span>
+                );
+
+                const durationStr = att.durationMinutes
+                  ? `${Math.floor(att.durationMinutes / 60)}h ${att.durationMinutes % 60}m`
+                  : '--';
+
+                return (
+                  <div key={att._id} className="p-4 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-sm text-slate-900 dark:text-white">
+                          {student?.name || att.studentName}
+                        </p>
+                        <p className="font-mono text-xs text-slate-500">
+                          {student?.studentIdNumber || att.studentIdNumber || 'N/A'}
+                        </p>
+                      </div>
+                      <span className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-lg border border-indigo-200 dark:border-indigo-800">
+                        {att.seatNumber ? `Seat ${att.seatNumber}` : 'General'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Date</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-200">
+                          {att.attendanceDate || new Date(att.entryTime).toLocaleDateString()}
                         </span>
-                      </td>
-                      <td className="px-5 py-4 font-mono text-slate-700 dark:text-slate-200">
-                        {entryTimeStr}
-                      </td>
-                      <td className="px-5 py-4 font-mono text-slate-700 dark:text-slate-200">
-                        {exitTimeStr}
-                      </td>
-                      <td className="px-5 py-4 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                        {durationStr}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Duration</span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {durationStr}
+                        </span>
+                      </div>
+                      <div className="pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Entry Time</span>
+                        <span className="font-mono text-slate-600 dark:text-slate-300">{entryTimeStr}</span>
+                      </div>
+                      <div className="pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Exit Time</span>
+                        <span className="font-mono text-slate-600 dark:text-slate-300">{exitTimeStr}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
 
         {/* Pagination Bar */}

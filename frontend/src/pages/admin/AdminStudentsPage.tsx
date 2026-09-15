@@ -265,7 +265,9 @@ export const AdminStudentsPage: React.FC = () => {
       {/* Filters Bar */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <Search className="w-4 h-4 text-slate-400" />
+          </div>
           <input
             type="text"
             placeholder="Search by name, student ID, email, or phone..."
@@ -289,7 +291,7 @@ export const AdminStudentsPage: React.FC = () => {
 
       {/* Students Table */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <tr>
@@ -438,6 +440,102 @@ export const AdminStudentsPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Stacked Card View */}
+        {!loading && students.length > 0 && (
+          <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {students.map((s: User) => (
+              <div key={s._id || s.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 font-bold flex items-center justify-center text-xs shrink-0">
+                      {s.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm text-slate-900 dark:text-white">{s.name}</p>
+                      <p className="text-[11px] text-slate-500">{s.email}</p>
+                      {s.phone && <p className="text-[10px] text-slate-400">{s.phone}</p>}
+                    </div>
+                  </div>
+                  <span className="font-mono text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 shrink-0">
+                    {s.studentIdNumber || 'N/A'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Library State</span>
+                    {s.isCurrentlyInside ? (
+                      <span className="font-bold text-emerald-600">INSIDE (Seat {s.currentSeatNumber || 'Assigned'})</span>
+                    ) : (
+                      <span className="text-slate-500">
+                        OUTSIDE {(s as any).assignedSeatNumber ? `(#${(s as any).assignedSeatNumber})` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold block text-right">Account</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        s.status === 'ACTIVE'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                          : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                      }`}
+                    >
+                      {s.status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions Bar */}
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    onClick={() => handleViewOpen(s)}
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> View
+                  </button>
+                  <button
+                    onClick={() => handleEditOpen(s)}
+                    className="px-2.5 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" /> Edit
+                  </button>
+                  <button
+                    onClick={() => handleResetPasswordOpen(s)}
+                    className="px-2.5 py-1.5 rounded-xl border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-50 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" /> Key
+                  </button>
+                  {s.status === 'ACTIVE' ? (
+                    <button
+                      onClick={() => handleToggleStatus(s, 'BLOCKED')}
+                      className="p-1.5 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-600 hover:bg-rose-50 text-xs cursor-pointer"
+                      title="Block Student"
+                    >
+                      <Ban className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleToggleStatus(s, 'ACTIVE')}
+                      className="p-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800 text-emerald-600 hover:bg-emerald-50 text-xs cursor-pointer"
+                      title="Activate Student"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDeleteOpen(s)}
+                    className="p-1.5 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-600 hover:bg-rose-50 text-xs cursor-pointer"
+                    title="Delete Student"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Pagination */}
         {totalPages > 1 && (

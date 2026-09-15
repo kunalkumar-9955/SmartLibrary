@@ -6,6 +6,7 @@ import { Seat } from '../models/Seat';
 import { Session } from '../models/Session';
 import { sendSuccess, sendError } from '../utils/response';
 import { sendStudentWelcomeEmail } from '../services/emailService';
+import { deriveFixedSeatNumber } from '../utils/seatHelper';
 
 export const getStudents = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -89,6 +90,9 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
       } else {
         return sendError(res, 'Allotted Seat Number must be between 01 and 50', 400);
       }
+    } else {
+      // Auto derive from Student ID (e.g. LSL-22 -> 22)
+      cleanSeat = deriveFixedSeatNumber({ studentIdNumber: cleanStudentId }) || '';
     }
 
     // 1. Save student to MongoDB first — bcrypt hash is handled by UserSchema pre('save') hook. Raw password is NEVER stored.

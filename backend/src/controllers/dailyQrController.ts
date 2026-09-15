@@ -5,6 +5,7 @@ import { Seat } from '../models/Seat';
 import { User } from '../models/User';
 import { generateDailyQRPayload, validateDailyQRPayload } from '../utils/dailyQrCrypto';
 import { sendSuccess, sendError } from '../utils/response';
+import { deriveFixedSeatNumber } from '../utils/seatHelper';
 
 // Helper: Get today's authoritative server date in YYYY-MM-DD
 export const getServerDateString = (d: Date = new Date()): string => {
@@ -226,7 +227,7 @@ export const scanDailyQR = async (req: Request, res: Response, next: NextFunctio
     // =========================================================================
     if (mode === 'ENTRY') {
       // CASE B: Student ALREADY has active attendance -> REJECT
-      if (existingActive) {
+      if (existingActive || student.isCurrentlyInside) {
         return sendError(
           res,
           'You are already inside the library. Please scan the Daily QR using the Exit Scanner to check out.',
@@ -235,50 +236,45 @@ export const scanDailyQR = async (req: Request, res: Response, next: NextFunctio
         );
       }
 
-      // NO ACTIVE ATTENDANCE -> ALLOCATE SEAT ATOMICALLY
-      const requestedSeat = preferredSeatNumber || student.assignedSeatNumber;
-      let assignedSeat: import('../models/Seat').ISeat | null = null;
-
-      if (requestedSeat) {
-        const formattedNum = requestedSeat.toString().padStart(2, '0');
-        assignedSeat = await Seat.findOneAndUpdate(
-          { seatNumber: formattedNum, status: 'AVAILABLE' },
-          {
-            $set: {
-              status: 'OCCUPIED',
-              currentStudentId: student._id,
-              currentStudentName: student.name,
-            },
-          },
-          { new: true }
-        );
-
-        if (!assignedSeat && preferredSeatNumber) {
-          return sendError(res, 'Seat is no longer available.', 409, 'SEAT_UNAVAILABLE');
-        }
-      }
-
-      if (!assignedSeat) {
-        // Atomically occupy lowest numbered available seat from 01 to 50
-        assignedSeat = await Seat.findOneAndUpdate(
-          { status: 'AVAILABLE' },
-          {
-            $set: {
-              status: 'OCCUPIED',
-              currentStudentId: student._id,
-              currentStudentName: student.name,
-            },
-          },
-          { sort: { seatNumber: 1 }, new: true }
-        );
-      }
-
-      if (!assignedSeat) {
+      // Rule 3: Fixed Seat Rule - Derive fixed seat deterministically from Student ID
+      const fixedSeatNumber = deriveFixedSeatNumber(student);
+      if (!fixedSeatNumber) {
         return sendError(
           res,
-          'All library seats are currently occupied.',
+          'No valid fixed seat (Seat 01 to 50) is associated with your Student ID. Please contact library admin.',
+          400,
+          'NO_FIXED_SEAT'
+        );
+      }
+
+      // Atomically occupy ONLY the student's fixed seat
+      const assignedSeat = await Seat.findOneAndUpdate(
+        { seatNumber: fixedSeatNumber, status: 'AVAILABLE' },
+        {
+          $set: {
+            status: 'OCCUPIED',
+            currentStudentId: student._id,
+            currentStudentName: student.name,
+          },
+        },
+        { new: true }
+      );
+
+      if (!assignedSeat) {
+        const targetSeat = await Seat.findOne({ seatNumber: fixedSeatNumber });
+        if (targetSeat?.status === 'MAINTENANCE') {
+          return sendError(
+            res,
+            `Your assigned Seat ${fixedSeatNumber} is currently undergoing maintenance. Please contact library admin.`,
+            409,
+            'SEAT_MAINTENANCE'
+          );
+        }
+        return sendError(
+          res,
+          `Your assigned Seat ${fixedSeatNumber} is currently marked as occupied. Please contact library admin if this is unexpected.`,
           409,
-          'NO_SEATS_AVAILABLE'
+          'SEAT_UNAVAILABLE'
         );
       }
 

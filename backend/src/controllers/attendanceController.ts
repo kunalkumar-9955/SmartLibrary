@@ -6,11 +6,12 @@ import { QrSession } from '../models/QrSession';
 import { rotateQRSession } from './qrController';
 import { validateDynamicQR } from '../utils/qrCrypto';
 import { sendSuccess, sendError } from '../utils/response';
+import { deriveFixedSeatNumber } from '../utils/seatHelper';
 
 export const markEntryAttendance = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const studentUserId = req.user?.id;
-    const { qrPayload, preferredSeatNumber } = req.body;
+    const { qrPayload } = req.body;
 
     if (!studentUserId) {
       return sendError(res, 'Unauthorized student request', 401);
@@ -57,59 +58,51 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
     if (existingActive || student.isCurrentlyInside) {
       return sendError(
         res,
-        'You are already checked in.',
+        'Already Checked In: You are already inside the library. Please use the Exit Scanner to check out.',
         409,
         'ALREADY_INSIDE'
       );
     }
 
-    // Atomic Concurrency-Safe Seat Allocation
-    const requestedSeat = preferredSeatNumber || student.assignedSeatNumber;
-    let assignedSeat: import('../models/Seat').ISeat | null = null;
-
-    if (requestedSeat) {
-      const formattedNum = requestedSeat.toString().padStart(2, '0');
-      // Atomically allocate the specific requested seat if available
-      assignedSeat = await Seat.findOneAndUpdate(
-        { seatNumber: formattedNum, status: 'AVAILABLE' },
-        {
-          $set: {
-            status: 'OCCUPIED',
-            currentStudentId: student._id,
-            currentStudentName: student.name,
-          },
-        },
-        { new: true }
-      );
-
-      if (!assignedSeat && preferredSeatNumber) {
-        // If student explicitly requested a seat that is already occupied by someone else:
-        return sendError(res, 'Seat is no longer available.', 409, 'SEAT_UNAVAILABLE');
-      }
-    }
-
-    // If no specific seat or preferred seat was unavailable for general assignment:
-    if (!assignedSeat) {
-      // Atomically lock the lowest numbered available seat from 01 to 50
-      assignedSeat = await Seat.findOneAndUpdate(
-        { status: 'AVAILABLE' },
-        {
-          $set: {
-            status: 'OCCUPIED',
-            currentStudentId: student._id,
-            currentStudentName: student.name,
-          },
-        },
-        { sort: { seatNumber: 1 }, new: true }
-      );
-    }
-
-    if (!assignedSeat) {
+    // Rule 3: Fixed Seat Rule - Derive fixed seat deterministically from Student ID
+    const fixedSeatNumber = deriveFixedSeatNumber(student);
+    if (!fixedSeatNumber) {
       return sendError(
         res,
-        'All library seats are currently occupied.',
+        'No valid fixed seat (Seat 01 to 50) is associated with your Student ID. Please contact library admin.',
+        400,
+        'NO_FIXED_SEAT'
+      );
+    }
+
+    // Atomically allocate ONLY the student's fixed seat
+    const assignedSeat = await Seat.findOneAndUpdate(
+      { seatNumber: fixedSeatNumber, status: 'AVAILABLE' },
+      {
+        $set: {
+          status: 'OCCUPIED',
+          currentStudentId: student._id,
+          currentStudentName: student.name,
+        },
+      },
+      { new: true }
+    );
+
+    if (!assignedSeat) {
+      const targetSeat = await Seat.findOne({ seatNumber: fixedSeatNumber });
+      if (targetSeat?.status === 'MAINTENANCE') {
+        return sendError(
+          res,
+          `Your assigned Seat ${fixedSeatNumber} is currently undergoing maintenance. Please contact library admin.`,
+          409,
+          'SEAT_MAINTENANCE'
+        );
+      }
+      return sendError(
+        res,
+        `Your assigned Seat ${fixedSeatNumber} is currently marked as occupied. Please contact library admin if this is unexpected.`,
         409,
-        'NO_SEATS_AVAILABLE'
+        'SEAT_UNAVAILABLE'
       );
     }
 
@@ -126,6 +119,7 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
         entryTime: now,
         attendanceDate,
         entryMethod: 'QR',
+        attendanceSource: 'LIVE_QR',
         status: 'ACTIVE',
       });
 

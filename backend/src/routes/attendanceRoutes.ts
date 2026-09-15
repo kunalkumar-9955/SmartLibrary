@@ -26,6 +26,15 @@ router.get('/currently-inside', requireRole('ADMIN'), getCurrentlyInside);
 router.get('/export', requireRole('ADMIN'), exportAttendanceExcel);
 router.get('/', requireRole('ADMIN'), getAllAttendance);
 router.post('/force-checkout/:id', requireRole('ADMIN'), forceCheckout);
+router.post('/reconcile', requireRole('ADMIN'), async (req, res, next) => {
+  try {
+    const { reconcileActiveAttendanceAndSeats } = await import('../services/reconciliationService');
+    const report = await reconcileActiveAttendanceAndSeats();
+    res.json({ success: true, data: report, message: 'Reconciliation completed successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;
 
