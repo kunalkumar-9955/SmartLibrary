@@ -14,6 +14,8 @@ import { Session } from '../models/Session';
 import { AdminNotification } from '../models/AdminNotification';
 import { QrSession } from '../models/QrSession';
 import { DailyQrSession } from '../models/DailyQrSession';
+import { Ticket } from '../models/Ticket';
+import { StudentNotification } from '../models/StudentNotification';
 
 let mongod: MongoMemoryServer;
 let app: express.Application;
@@ -47,6 +49,8 @@ describe('Smart Personal Library Management System Suite', () => {
     await Seat.deleteMany({});
     await Session.deleteMany({});
     await AdminNotification.deleteMany({});
+    await StudentNotification.deleteMany({});
+    await Ticket.deleteMany({});
     await QrSession.deleteMany({});
     await DailyQrSession.deleteMany({});
 
@@ -94,12 +98,15 @@ describe('Smart Personal Library Management System Suite', () => {
     const adminLogin = await request(app)
       .post('/api/auth/login')
       .send({ email: 'admin@test.com', password: 'Password@123' });
-    adminToken = adminLogin.body.data.token;
+    if (!adminLogin.body?.data?.token) {
+      console.error('[beforeEach Failure] adminLogin status:', adminLogin.status, 'body:', adminLogin.body);
+    }
+    adminToken = adminLogin.body?.data?.token;
 
     const studentLogin = await request(app)
       .post('/api/auth/login')
       .send({ email: 'student@test.com', password: 'Password@123' });
-    studentToken = studentLogin.body.data.token;
+    studentToken = studentLogin.body?.data?.token;
   }, 30000);
 
   it('should authenticate Admin and Student with valid roles', async () => {
@@ -1092,6 +1099,224 @@ describe('Smart Personal Library Management System Suite', () => {
 
       expect(dateRes.status).toBe(200);
       expect(dateRes.header['content-disposition']).toContain('2026-09-15');
+    });
+  });
+
+  describe('Single Source of Truth & Complaint Notifications Suite', () => {
+    it('should derive isCurrentlyInside and currentSeatNumber from active Attendance in getStudents', async () => {
+      // 1. Create student
+      const studentA = await User.create({
+        name: 'MD Irfan',
+        email: 'irfan.test@lakshyalibrary.com',
+        password: 'password123',
+        phone: '9876543210',
+        studentIdNumber: 'LSL-02',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        isCurrentlyInside: false,
+      });
+
+      // Initially no active attendance
+      const listRes1 = await request(app)
+        .get('/api/students?search=Irfan')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(listRes1.status).toBe(200);
+      const studentData1 = listRes1.body.data.students.find((s: any) => s.email === studentA.email);
+      expect(studentData1.isCurrentlyInside).toBe(false);
+      expect(studentData1.currentSeatNumber).toBeFalsy();
+
+      // Create an active attendance for Seat 02
+      const activeAtt = await Attendance.create({
+        studentId: studentA._id,
+        studentName: studentA.name,
+        studentIdNumber: studentA.studentIdNumber,
+        seatNumber: '02',
+        entryTime: new Date(),
+        attendanceDate: '2026-09-15',
+        status: 'ACTIVE',
+      });
+
+      // Now query getStudents -> must dynamically reflect INSIDE and Seat 02
+      const listRes2 = await request(app)
+        .get('/api/students?search=Irfan')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(listRes2.status).toBe(200);
+      const studentData2 = listRes2.body.data.students.find((s: any) => s.email === studentA.email);
+      expect(studentData2.isCurrentlyInside).toBe(true);
+      expect(studentData2.currentSeatNumber).toBe('02');
+
+      // Complete attendance -> must dynamically reflect OUTSIDE and no seat
+      await Attendance.findByIdAndUpdate(activeAtt._id, {
+        status: 'COMPLETED',
+        exitTime: new Date(),
+      });
+
+      const listRes3 = await request(app)
+        .get('/api/students?search=Irfan')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(listRes3.status).toBe(200);
+      const studentData3 = listRes3.body.data.students.find((s: any) => s.email === studentA.email);
+      expect(studentData3.isCurrentlyInside).toBe(false);
+      expect(studentData3.currentSeatNumber).toBeFalsy();
+
+      // Clean up studentA and attendance created in this test
+      await User.deleteMany({ email: 'irfan.test@lakshyalibrary.com' });
+      await Attendance.deleteMany({ studentId: studentA._id });
+    });
+
+    it('should send private notification and message history when admin replies to complaint', async () => {
+      // Create student A & student B
+      const studentA = await User.create({
+        name: 'Student A',
+        email: 'studentA@test.com',
+        password: 'Password@123',
+        phone: '9876543211',
+        studentIdNumber: 'LSL-03',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+      });
+
+      const studentB = await User.create({
+        name: 'Student B',
+        email: 'studentB@test.com',
+        password: 'Password@123',
+        phone: '9876543212',
+        studentIdNumber: 'LSL-04',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+      });
+
+      const loginResA = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'studentA@test.com', password: 'Password@123' });
+      const tokenA = loginResA.body.data.token;
+
+      const loginResB = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'studentB@test.com', password: 'Password@123' });
+      const tokenB = loginResB.body.data.token;
+
+      // Student A creates complaint
+      const createRes = await request(app)
+        .post('/api/tickets')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({
+          category: 'Water',
+          title: 'Water problem',
+          description: 'Water dispenser is empty.',
+          seatNumber: '03',
+        });
+
+      expect(createRes.status).toBe(201);
+      const ticketId = createRes.body.data._id;
+
+      // Admin replies to Student A's complaint
+      const replyRes = await request(app)
+        .post(`/api/tickets/${ticketId}/comments`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          comment: 'Water supply will be fixed within 30 minutes.',
+        });
+
+      expect(replyRes.status).toBe(200);
+
+      // Student A checks notifications -> MUST receive reply notification
+      const notifResA = await request(app)
+        .get('/api/notifications/my')
+        .set('Authorization', `Bearer ${tokenA}`);
+
+      expect(notifResA.status).toBe(200);
+      const notifsA = notifResA.body.data.notifications;
+      const foundA = notifsA.find((n: any) => n.title === 'Complaint Update');
+      expect(foundA).toBeTruthy();
+      expect(foundA.message).toContain('Admin has replied to your complaint');
+
+      // Student B checks notifications -> MUST NOT receive Student A's notification
+      const notifResB = await request(app)
+        .get('/api/notifications/my')
+        .set('Authorization', `Bearer ${tokenB}`);
+
+      expect(notifResB.status).toBe(200);
+      const notifsB = notifResB.body.data.notifications;
+      const foundB = notifsB.find((n: any) => n.title === 'Complaint Update');
+      expect(foundB).toBeFalsy();
+
+      // Student B tries to view Student A's ticket -> MUST be forbidden (403)
+      const accessResB = await request(app)
+        .get(`/api/tickets/${ticketId}`)
+        .set('Authorization', `Bearer ${tokenB}`);
+
+      expect(accessResB.status).toBe(403);
+    });
+
+    it('should notify student on status change to RESOLVED and protect against duplicate notifications', async () => {
+      const studentC = await User.create({
+        name: 'Student C',
+        email: 'studentC@test.com',
+        password: 'Password@123',
+        phone: '9876543213',
+        studentIdNumber: 'LSL-05',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+      });
+
+      const loginResC = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'studentC@test.com', password: 'Password@123' });
+      const tokenC = loginResC.body.data.token;
+
+      const createRes = await request(app)
+        .post('/api/tickets')
+        .set('Authorization', `Bearer ${tokenC}`)
+        .send({
+          category: 'Wi-Fi',
+          title: 'Wi-Fi disconnection',
+          description: 'Network is unreachable.',
+        });
+
+      const ticketId = createRes.body.data._id;
+
+      // Admin updates status to RESOLVED
+      const updateRes = await request(app)
+        .patch(`/api/tickets/${ticketId}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          status: 'RESOLVED',
+          resolutionNote: 'Router rebooted and back online',
+        });
+
+      expect(updateRes.status).toBe(200);
+
+      // Student C checks notifications
+      const notifRes1 = await request(app)
+        .get('/api/notifications/my')
+        .set('Authorization', `Bearer ${tokenC}`);
+
+      const resolvedNotifs1 = notifRes1.body.data.notifications.filter(
+        (n: any) => n.title === 'Complaint Resolved'
+      );
+      expect(resolvedNotifs1.length).toBe(1);
+
+      // Sending same status again should NOT generate a duplicate notification (Duplicate Protection)
+      await request(app)
+        .patch(`/api/tickets/${ticketId}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          status: 'RESOLVED',
+          resolutionNote: 'Router rebooted and back online',
+        });
+
+      const notifRes2 = await request(app)
+        .get('/api/notifications/my')
+        .set('Authorization', `Bearer ${tokenC}`);
+
+      const resolvedNotifs2 = notifRes2.body.data.notifications.filter(
+        (n: any) => n.title === 'Complaint Resolved'
+      );
+      expect(resolvedNotifs2.length).toBe(1); // Still exactly 1!
     });
   });
 });

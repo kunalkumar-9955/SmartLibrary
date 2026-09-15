@@ -6,6 +6,7 @@ import { sendSuccess, sendError } from '../utils/response';
 
 import crypto from 'crypto';
 import { Session } from '../models/Session';
+import { Attendance } from '../models/Attendance';
 
 export const hashToken = (token: string): string => {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -232,6 +233,30 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
       return sendError(res, 'User not found', 404);
     }
 
+    let isInside = user.isCurrentlyInside;
+    let currentSeat = user.currentSeatNumber;
+
+    if (user.role === 'STUDENT') {
+      const activeAttendance = await Attendance.findOne({
+        studentId: user._id,
+        status: 'ACTIVE',
+      });
+      isInside = !!activeAttendance;
+      currentSeat = activeAttendance ? activeAttendance.seatNumber : undefined;
+
+      // Self-healing database sync if drifted
+      if (
+        Boolean(user.isCurrentlyInside) !== isInside ||
+        (user.currentSeatNumber || undefined) !== currentSeat
+      ) {
+        User.findByIdAndUpdate(user._id, {
+          $set: { isCurrentlyInside: isInside, currentSeatNumber: currentSeat },
+        }).catch((err) =>
+          console.warn(`[getMe Sync] Failed to sync student ${user.name}:`, err?.message)
+        );
+      }
+    }
+
     return sendSuccess(res, {
       id: user._id,
       _id: user._id,
@@ -242,8 +267,8 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
       phone: user.phone,
       course: user.course,
       status: user.status,
-      isCurrentlyInside: user.isCurrentlyInside,
-      currentSeatNumber: user.currentSeatNumber,
+      isCurrentlyInside: isInside,
+      currentSeatNumber: currentSeat,
       assignedSeatNumber: user.assignedSeatNumber,
       lastEntryTime: user.lastEntryTime,
       lastExitTime: user.lastExitTime,

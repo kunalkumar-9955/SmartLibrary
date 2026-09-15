@@ -201,15 +201,25 @@ export const reconcileActiveAttendanceAndSeats = async (): Promise<Reconciliatio
       }
     }
 
-    // 6. Synchronize User.isCurrentlyInside flags with single source of truth
+    // 6. Synchronize User.isCurrentlyInside flags and currentSeatNumber with single source of truth
     const activeStudentIds = validActiveSessions.map((s) =>
       (s.studentId as any)?._id?.toString() || s.studentId?.toString()
     );
 
-    await User.updateMany(
-      { role: 'STUDENT', _id: { $in: activeStudentIds } },
-      { $set: { isCurrentlyInside: true } }
-    );
+    // Synchronize each active student's seatNumber from their active session
+    for (const session of validActiveSessions) {
+      const sId = (session.studentId as any)?._id || session.studentId;
+      if (sId) {
+        await User.findByIdAndUpdate(sId, {
+          $set: {
+            isCurrentlyInside: true,
+            currentSeatNumber: session.seatNumber,
+          },
+        });
+      }
+    }
+
+    // Reset all other students to outside with no seat
     await User.updateMany(
       { role: 'STUDENT', _id: { $nin: activeStudentIds } },
       { $set: { isCurrentlyInside: false, currentSeatNumber: undefined } }

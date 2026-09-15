@@ -34,8 +34,49 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
       .skip((page - 1) * limit)
       .limit(limit);
 
+    // Single Source of Truth: Derive isCurrentlyInside & currentSeatNumber from active Attendance
+    const studentIds = students.map((s) => s._id);
+    const activeAttendances = await Attendance.find({
+      studentId: { $in: studentIds },
+      status: 'ACTIVE',
+    });
+
+    const activeMap = new Map<string, any>();
+    activeAttendances.forEach((att) => {
+      activeMap.set(att.studentId.toString(), att);
+    });
+
+    const sanitizedStudents = students.map((studentDoc) => {
+      const sObj = studentDoc.toObject ? studentDoc.toObject() : { ...studentDoc };
+      const activeRecord = activeMap.get(studentDoc._id.toString());
+
+      const realIsInside = !!activeRecord;
+      const realSeatNumber = activeRecord ? activeRecord.seatNumber : undefined;
+
+      // Check if User document had drifted from active attendance
+      const drifted =
+        Boolean(studentDoc.isCurrentlyInside) !== realIsInside ||
+        (studentDoc.currentSeatNumber || undefined) !== realSeatNumber;
+
+      if (drifted) {
+        // Self-healing: Asynchronously sync User document to prevent database rot
+        User.findByIdAndUpdate(studentDoc._id, {
+          $set: {
+            isCurrentlyInside: realIsInside,
+            currentSeatNumber: realSeatNumber,
+          },
+        }).catch((err) =>
+          console.warn(`[Student Sync] Background sync error for ${studentDoc.name}:`, err?.message)
+        );
+      }
+
+      sObj.isCurrentlyInside = realIsInside;
+      sObj.currentSeatNumber = realSeatNumber;
+      return sObj;
+    });
+
     return sendSuccess(res, {
-      students,
+      students: sanitizedStudents,
       pagination: {
         total,
         page,

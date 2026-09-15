@@ -75,13 +75,16 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
         )}
       </div>
 
-      {/* 50 Seats Grid: Clean Responsive Grid */}
-      <div className="bg-white dark:bg-slate-900 p-3 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      {/* 50 Seats Grid: Clean Responsive Grid with Proper Stacking Context */}
+      <div className="bg-white dark:bg-slate-900 p-3 sm:p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-10 gap-2 sm:gap-3">
           {sortedSeats.map((seat) => {
             const isSelected = selectedSeatId === seat._id;
             const isClickable = isAdminView || seat.status === 'AVAILABLE';
             const occupantName = seat.currentStudentName || seat.currentStudentId?.name;
+            const seatNum = parseInt(seat.seatNumber, 10) || 1;
+            // Seats 1 to 10 on the first row can display below if near top; others display above
+            const isTopRow = seatNum <= 10;
 
             return (
               <button
@@ -95,7 +98,7 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                     onSelectSeat(seat);
                   }
                 }}
-                className={`relative group p-3 rounded-xl border flex flex-col items-center justify-between transition-all duration-150 ${getStatusColor(
+                className={`relative group p-3 rounded-xl border flex flex-col items-center justify-between transition-all duration-150 group-hover:z-50 ${getStatusColor(
                   seat.status,
                   isSelected
                 )} ${isClickable ? 'cursor-pointer hover:scale-105 shadow-sm' : 'cursor-default opacity-85'}`}
@@ -114,8 +117,29 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                 </span>
 
                 {occupantName && (
-                  <div className="absolute inset-x-0 -bottom-9 hidden group-hover:block z-30 bg-slate-900 text-white text-[11px] py-1 px-2 rounded-lg shadow-xl whitespace-nowrap text-center">
-                    {occupantName}
+                  <div
+                    className={`absolute hidden group-hover:flex flex-col items-center z-[100] pointer-events-none left-1/2 -translate-x-1/2 ${
+                      isTopRow ? 'top-full mt-2' : 'bottom-full mb-2'
+                    }`}
+                  >
+                    {!isTopRow && (
+                      <div className="bg-slate-900 text-white text-[11px] font-semibold py-1.5 px-3 rounded-lg shadow-2xl border border-slate-700/80 whitespace-nowrap text-center">
+                        <div className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Occupant</div>
+                        <div className="text-white font-black">{occupantName}</div>
+                      </div>
+                    )}
+                    {/* Tooltip Arrow */}
+                    <div
+                      className={`w-2 h-2 bg-slate-900 rotate-45 border-slate-700/80 ${
+                        isTopRow ? '-mb-1 border-t border-l order-first' : '-mt-1 border-b border-r'
+                      }`}
+                    />
+                    {isTopRow && (
+                      <div className="bg-slate-900 text-white text-[11px] font-semibold py-1.5 px-3 rounded-lg shadow-2xl border border-slate-700/80 whitespace-nowrap text-center">
+                        <div className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Occupant</div>
+                        <div className="text-white font-black">{occupantName}</div>
+                      </div>
+                    )}
                   </div>
                 )}
               </button>

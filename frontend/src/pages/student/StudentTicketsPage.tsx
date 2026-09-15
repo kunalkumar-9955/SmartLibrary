@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { ticketService } from '../../services/api';
 import { Ticket, TicketCategory } from '../../types';
 import { Badge } from '../../components/Badge';
@@ -40,6 +41,7 @@ export const StudentTicketsPage: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [commentText, setCommentText] = useState('');
 
+  const location = useLocation();
   const { success, error } = useToast();
 
   const fetchTickets = async () => {
@@ -47,7 +49,21 @@ export const StudentTicketsPage: React.FC = () => {
       setLoading(true);
       const res = await ticketService.getTickets();
       if (res.data.success) {
-        setTickets(res.data.data.tickets || []);
+        const fetchedTickets: Ticket[] = res.data.data.tickets || [];
+        setTickets(fetchedTickets);
+
+        // If navigated with ticketId in state, open it directly
+        const targetTicketId = (location.state as any)?.ticketId;
+        if (targetTicketId) {
+          const match = fetchedTickets.find((t) => t._id === targetTicketId);
+          if (match) {
+            setSelectedTicket(match);
+          } else {
+            ticketService.getTicketById(targetTicketId).then((r) => {
+              if (r.data.success) setSelectedTicket(r.data.data);
+            }).catch(() => {});
+          }
+        }
       }
     } catch (err) {
       console.error(err);
@@ -58,7 +74,7 @@ export const StudentTicketsPage: React.FC = () => {
 
   useEffect(() => {
     fetchTickets();
-  }, []);
+  }, [location.state]);
 
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();

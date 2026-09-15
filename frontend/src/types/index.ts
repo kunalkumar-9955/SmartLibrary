@@ -133,6 +133,8 @@ export interface NotificationItem {
   title: string;
   message: string;
   description?: string;
+  type?: 'COMPLAINT_REPLY' | 'COMPLAINT_STATUS' | 'SYSTEM' | 'NOTICE';
+  relatedTicketId?: string;
   createdAt: string;
   updatedAt?: string;
   isRead: boolean;

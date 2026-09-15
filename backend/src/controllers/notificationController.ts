@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { PushSubscription } from '../models/PushSubscription';
 import { Notice } from '../models/Notice';
 import { NotificationRead } from '../models/NotificationRead';
+import { StudentNotification } from '../models/StudentNotification';
 import { sendSuccess, sendError } from '../utils/response';
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BLuxYmNTqtp7DHf0UvMonl7kF5XPNmsp7RQvGlajvf27d7r3SBIsGoZewQl7wE6uP0yz__toPvKjAxLjnb_AGPk';
@@ -67,27 +68,54 @@ export const getMyNotifications = async (req: Request, res: Response, next: Next
     }
 
     const studentObjectId = new mongoose.Types.ObjectId(studentId);
+
+    // 1. Fetch public library notices
     const notices = await Notice.find().sort({ createdAt: -1 }).limit(100);
     const readDocs = await NotificationRead.find({ studentId: studentObjectId });
     const readNoticeIds = new Set(readDocs.map((r) => r.noticeId.toString()));
 
-    const notifications = notices.map((n) => {
+    const noticeItems = notices.map((n) => {
       const isRead = readNoticeIds.has(n._id.toString());
       return {
-        _id: n._id,
+        _id: n._id.toString(),
         title: n.title,
         message: n.description,
         description: n.description,
+        type: 'NOTICE' as const,
         createdAt: n.createdAt,
         updatedAt: n.updatedAt,
         isRead,
       };
     });
 
-    const unreadCount = notifications.filter((n) => !n.isRead).length;
+    // 2. Fetch private student notifications (Complaint updates, replies, etc.)
+    const privateNotifications = await StudentNotification.find({
+      studentId: studentObjectId,
+    })
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    const privateItems = privateNotifications.map((p) => ({
+      _id: p._id.toString(),
+      title: p.title,
+      message: p.message,
+      description: p.message,
+      type: p.type,
+      relatedTicketId: p.relatedTicketId ? p.relatedTicketId.toString() : undefined,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      isRead: p.isRead,
+    }));
+
+    // 3. Merge & sort by createdAt descending
+    const allNotifications = [...noticeItems, ...privateItems].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    const unreadCount = allNotifications.filter((n) => !n.isRead).length;
 
     return sendSuccess(res, {
-      notifications,
+      notifications: allNotifications,
       unreadCount,
     });
   } catch (error) {
@@ -108,10 +136,22 @@ export const markNotificationRead = async (req: Request, res: Response, next: Ne
       return sendError(res, 'Notification ID is required', 400);
     }
 
-    const noticeIdStr = Array.isArray(id) ? id[0] : (id as string);
+    const notifIdStr = Array.isArray(id) ? id[0] : (id as string);
     const studentObjectId = new mongoose.Types.ObjectId(studentId);
-    const noticeObjectId = new mongoose.Types.ObjectId(noticeIdStr);
 
+    // 1. Try marking private StudentNotification first
+    const privateUpdated = await StudentNotification.findOneAndUpdate(
+      { _id: notifIdStr, studentId: studentObjectId },
+      { $set: { isRead: true, readAt: new Date() } },
+      { new: true }
+    );
+
+    if (privateUpdated) {
+      return sendSuccess(res, null, 'Notification marked as read');
+    }
+
+    // 2. Fall back to marking public Notice as read in NotificationRead
+    const noticeObjectId = new mongoose.Types.ObjectId(notifIdStr);
     await NotificationRead.findOneAndUpdate(
       { studentId: studentObjectId, noticeId: noticeObjectId },
       { studentId: studentObjectId, noticeId: noticeObjectId, readAt: new Date() },
@@ -132,6 +172,14 @@ export const markAllNotificationsRead = async (req: Request, res: Response, next
     }
 
     const studentObjectId = new mongoose.Types.ObjectId(studentId);
+
+    // 1. Mark all private StudentNotification items as read
+    await StudentNotification.updateMany(
+      { studentId: studentObjectId, isRead: false },
+      { $set: { isRead: true, readAt: new Date() } }
+    );
+
+    // 2. Mark all public Notice items as read
     const notices = await Notice.find().select('_id');
     const bulkOps: any[] = notices.map((n) => ({
       updateOne: {

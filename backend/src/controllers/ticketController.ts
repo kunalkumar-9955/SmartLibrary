@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { Ticket, TicketStatus, TicketCategory } from '../models/Ticket';
 import { User } from '../models/User';
 import { AdminNotification } from '../models/AdminNotification';
+import { StudentNotification } from '../models/StudentNotification';
 import { sendPushToUser } from '../services/pushService';
 import { sendSuccess, sendError } from '../utils/response';
 
@@ -163,42 +164,109 @@ export const updateTicketStatus = async (req: Request, res: Response, next: Next
       return sendError(res, 'Ticket not found', 404);
     }
 
-    if (status) {
+    const previousStatus = ticket.status;
+    const hasStatusChanged = status && status !== previousStatus;
+    const hasNewComment = Boolean(adminComment && adminComment.trim());
+
+    if (hasStatusChanged) {
       ticket.status = status as TicketStatus;
       if (status === 'RESOLVED' || status === 'CLOSED') {
         ticket.resolvedAt = new Date();
       }
     }
 
-    if (resolutionNote) {
-      ticket.resolutionNote = resolutionNote;
+    if (resolutionNote !== undefined) {
+      ticket.resolutionNote = resolutionNote.trim();
     }
 
-    if (adminComment) {
+    if (hasNewComment) {
       ticket.comments.push({
         userName: req.user?.name || 'Admin',
         userRole: req.user?.role || 'ADMIN',
-        comment: adminComment,
+        comment: adminComment.trim(),
         createdAt: new Date(),
       });
     }
 
     await ticket.save();
 
-    // Push notification to student regarding ticket status update (non-blocking)
-    try {
-      if (status || resolutionNote || adminComment) {
+    // 1. Notify student if status actually changed (Duplicate Protection)
+    if (hasStatusChanged) {
+      let notifTitle = 'Complaint Update';
+      let notifMessage = `Your complaint '${ticket.title}' is now ${ticket.status}.`;
+
+      if (ticket.status === 'IN_PROGRESS') {
+        notifTitle = 'Complaint Update';
+        notifMessage = 'Your complaint is now being worked on.';
+      } else if (ticket.status === 'RESOLVED') {
+        notifTitle = 'Complaint Resolved';
+        notifMessage = ticket.resolutionNote
+          ? `Your complaint '${ticket.title}' has been resolved: ${ticket.resolutionNote}`
+          : `Your complaint '${ticket.title}' has been resolved.`;
+      } else if (ticket.status === 'CLOSED') {
+        notifTitle = 'Complaint Update';
+        notifMessage = `Your complaint '${ticket.title}' has been closed.`;
+      }
+
+      // Save in-app private notification for complaint owner only
+      try {
+        await StudentNotification.create({
+          studentId: ticket.studentId,
+          type: 'COMPLAINT_STATUS',
+          title: notifTitle,
+          message: notifMessage,
+          relatedTicketId: ticket._id,
+          isRead: false,
+        });
+      } catch (notifErr) {
+        console.warn('[Student Notification] Error saving status notification:', notifErr);
+      }
+
+      // Web Push notification to student (non-blocking, push failure will NOT rollback DB)
+      try {
         sendPushToUser(ticket.studentId.toString(), {
-          title: `Complaint #${ticket.ticketNumber}: ${ticket.status}`,
-          body: resolutionNote || adminComment || `Your complaint status has been updated to ${ticket.status}.`,
+          title: notifTitle,
+          body: notifMessage,
           url: '/student/tickets',
           data: { ticketId: ticket._id.toString() },
         }).catch((err) => {
           console.warn('[Push Notification] Push to student skipped:', err?.message || err);
         });
+      } catch (pushErr) {
+        console.warn('[Push Notification] Non-blocking push error:', pushErr);
       }
-    } catch (pushErr) {
-      console.warn('[Push Notification] Non-blocking push error:', pushErr);
+    }
+
+    // 2. If an admin response comment was added during status update, notify student about the reply
+    if (hasNewComment && !hasStatusChanged) {
+      const replyTitle = 'Complaint Update';
+      const replyMessage = `Admin has replied to your complaint: ${ticket.title}.`;
+
+      try {
+        await StudentNotification.create({
+          studentId: ticket.studentId,
+          type: 'COMPLAINT_REPLY',
+          title: replyTitle,
+          message: replyMessage,
+          relatedTicketId: ticket._id,
+          isRead: false,
+        });
+      } catch (replyErr) {
+        console.warn('[Student Notification] Error saving admin comment notification:', replyErr);
+      }
+
+      try {
+        sendPushToUser(ticket.studentId.toString(), {
+          title: replyTitle,
+          body: adminComment.trim().slice(0, 120),
+          url: '/student/tickets',
+          data: { ticketId: ticket._id.toString() },
+        }).catch((err) => {
+          console.warn('[Push Notification] Push reply skipped:', err?.message || err);
+        });
+      } catch (pushErr) {
+        console.warn('[Push Notification] Non-blocking push error:', pushErr);
+      }
     }
 
     return sendSuccess(res, ticket, 'Ticket updated successfully');
@@ -227,7 +295,7 @@ export const addTicketComment = async (req: Request, res: Response, next: NextFu
     }
 
     const newComment = {
-      userName: req.user?.name || 'User',
+      userName: req.user?.name || (req.user?.role === 'ADMIN' ? 'Admin' : 'Student'),
       userRole: req.user?.role || 'USER',
       comment: comment.trim(),
       createdAt: new Date(),
@@ -240,18 +308,30 @@ export const addTicketComment = async (req: Request, res: Response, next: NextFu
       { new: true }
     );
 
-    // Non-blocking push notification
+    // Private Notifications & Push
     try {
       if (req.user?.role === 'ADMIN') {
-        // Admin commented -> notify student
+        // Admin replied -> Notify ONLY the student who owns this ticket
+        const replyTitle = 'Complaint Update';
+        const replyMessage = `Admin has replied to your complaint: ${ticket.title}.`;
+
+        await StudentNotification.create({
+          studentId: ticket.studentId,
+          type: 'COMPLAINT_REPLY',
+          title: replyTitle,
+          message: replyMessage,
+          relatedTicketId: ticket._id,
+          isRead: false,
+        });
+
         sendPushToUser(ticket.studentId.toString(), {
-          title: `Update on Ticket #${ticket.ticketNumber}`,
+          title: replyTitle,
           body: `Admin: ${comment.trim().slice(0, 100)}`,
           url: '/student/tickets',
           data: { ticketId: ticket._id.toString() },
-        }).catch((err) => console.warn('Push error:', err));
+        }).catch((err) => console.warn('[Push Notification] Admin reply push skipped:', err?.message || err));
       } else {
-        // Student commented -> notify admin
+        // Student commented -> Notify admins
         const admins = await User.find({ role: 'ADMIN', status: 'ACTIVE' }).select('_id');
         for (const admin of admins) {
           sendPushToUser(admin._id.toString(), {
@@ -259,11 +339,11 @@ export const addTicketComment = async (req: Request, res: Response, next: NextFu
             body: `${req.user?.name || 'Student'}: ${comment.trim().slice(0, 100)}`,
             url: '/admin/tickets',
             data: { ticketId: ticket._id.toString() },
-          }).catch((err) => console.warn('Push error:', err));
+          }).catch((err) => console.warn('[Push Notification] Student reply push skipped:', err?.message || err));
         }
       }
     } catch (notifErr) {
-      console.warn('Comment notification error:', notifErr);
+      console.warn('[Comment Notification Error]:', notifErr);
     }
 
     return sendSuccess(res, updated?.comments || [], 'Comment added');

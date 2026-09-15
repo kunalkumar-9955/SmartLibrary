@@ -10,6 +10,7 @@ export const authLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
   handler: (req, res) => {
     return sendError(
       res,
