@@ -444,7 +444,6 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
       if (payload.qrType === 'DAILY') {
         await stopScanner();
         setScannedResult(payload);
-        confetti({ particleCount: 65, spread: 60, origin: { y: 0.7 } });
         onScanSuccess(payload as AnyQRPayload);
         return;
       }

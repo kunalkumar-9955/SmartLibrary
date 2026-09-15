@@ -160,7 +160,7 @@ export const generateDailyQR = async (req: Request, res: Response, next: NextFun
 export const scanDailyQR = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const studentUserId = req.user?.id;
-    const { qrPayload, preferredSeatNumber } = req.body;
+    const { qrPayload, preferredSeatNumber, mode } = req.body;
 
     if (!studentUserId) {
       return sendError(res, 'Unauthorized student request', 401);
@@ -170,16 +170,26 @@ export const scanDailyQR = async (req: Request, res: Response, next: NextFunctio
       return sendError(res, 'Daily QR Code payload is required', 400);
     }
 
+    // 1. Validate requested scanner mode
+    if (!mode || (mode !== 'ENTRY' && mode !== 'EXIT')) {
+      return sendError(
+        res,
+        'Scanner mode is required and must be either ENTRY or EXIT.',
+        400,
+        'INVALID_SCANNER_MODE'
+      );
+    }
+
     const now = new Date();
     const todayStr = getServerDateString(now);
 
-    // 1. Cryptographic and expiration validation
+    // 2. Cryptographic and expiration validation
     const qrValidation = validateDailyQRPayload(qrPayload, todayStr);
     if (!qrValidation.isValid) {
       return sendError(res, qrValidation.error || 'Invalid Daily QR.', 400, 'INVALID_DAILY_QR');
     }
 
-    // 2. Validate against DailyQrSession record in database
+    // 3. Validate against DailyQrSession record in database
     const dailySession = await DailyQrSession.findOne({
       token: qrPayload.token,
       status: 'ACTIVE',
@@ -190,7 +200,7 @@ export const scanDailyQR = async (req: Request, res: Response, next: NextFunctio
       return sendError(res, 'Daily QR code is no longer active or has been revoked.', 400, 'DAILY_QR_INACTIVE');
     }
 
-    // 3. Verify student status
+    // 4. Verify student status
     const student = await User.findById(studentUserId);
     if (!student) {
       return sendError(res, 'Student account not found', 404);
@@ -205,16 +215,27 @@ export const scanDailyQR = async (req: Request, res: Response, next: NextFunctio
       );
     }
 
-    // 4. Determine student's current attendance state independently
+    // 5. Query student's current active attendance state
     const existingActive = await Attendance.findOne({
       studentId: student._id,
       status: 'ACTIVE',
     });
 
-    if (!existingActive) {
-      // -------------------------------------------------------------
-      // STATE: NO ACTIVE ATTENDANCE -> MARK ENTRY
-      // -------------------------------------------------------------
+    // =========================================================================
+    // SCENARIO 1: MODE === 'ENTRY'
+    // =========================================================================
+    if (mode === 'ENTRY') {
+      // CASE B: Student ALREADY has active attendance -> REJECT
+      if (existingActive) {
+        return sendError(
+          res,
+          'You are already inside the library. Please scan the Daily QR using the Exit Scanner to check out.',
+          400,
+          'ALREADY_CHECKED_IN'
+        );
+      }
+
+      // NO ACTIVE ATTENDANCE -> ALLOCATE SEAT ATOMICALLY
       const requestedSeat = preferredSeatNumber || student.assignedSeatNumber;
       let assignedSeat: import('../models/Seat').ISeat | null = null;
 
@@ -320,17 +341,29 @@ export const scanDailyQR = async (req: Request, res: Response, next: NextFunctio
         if (createErr.code === 11000) {
           return sendError(
             res,
-            'You are already marked inside the library.',
-            409,
-            'ALREADY_INSIDE'
+            'You are already inside the library. Please scan the Daily QR using the Exit Scanner to check out.',
+            400,
+            'ALREADY_CHECKED_IN'
           );
         }
         throw createErr;
       }
-    } else {
-      // -------------------------------------------------------------
-      // STATE: ACTIVE ATTENDANCE EXISTS -> MARK EXIT
-      // -------------------------------------------------------------
+    }
+
+    // =========================================================================
+    // SCENARIO 2: MODE === 'EXIT'
+    // =========================================================================
+    if (mode === 'EXIT') {
+      // CASE A: Student has NO active attendance -> REJECT
+      if (!existingActive) {
+        return sendError(
+          res,
+          "You don't have an active library attendance. Please scan the Daily QR using the Entry Scanner first.",
+          400,
+          'ENTRY_REQUIRED_FIRST'
+        );
+      }
+
       // Prevent rapid duplicate scan callback from toggling Entry to Exit within 3 seconds
       if (now.getTime() - existingActive.entryTime.getTime() < 3000) {
         return sendError(
@@ -357,7 +390,12 @@ export const scanDailyQR = async (req: Request, res: Response, next: NextFunctio
       );
 
       if (!activeSession) {
-        return sendError(res, 'No active library session found.', 404, 'NO_ACTIVE_ATTENDANCE');
+        return sendError(
+          res,
+          "You don't have an active library attendance. Please scan the Daily QR using the Entry Scanner first.",
+          400,
+          'ENTRY_REQUIRED_FIRST'
+        );
       }
 
       const entryTime = activeSession.entryTime;

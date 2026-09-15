@@ -810,14 +810,94 @@ describe('Smart Personal Library Management System Suite', () => {
       expect(todayRes.body.data.qrPayload.token).toBe(initialToken);
     });
 
-    it('TEST 3 to 6: Multi-student Entry and Exit with same unchanging Daily QR (independent state)', async () => {
-      // 1. Generate Daily QR
+    it('TEST 1 & 3: Student has no active attendance: Entry succeeds, Exit fails with ENTRY_REQUIRED_FIRST', async () => {
+      // Generate Daily QR
       const genRes = await request(app)
         .post('/api/daily-qr/generate')
         .set('Authorization', `Bearer ${adminToken}`);
       const dailyPayload = genRes.body.data.qrPayload;
 
-      // 2. Create Student B
+      // TEST 3: Student has NO active attendance -> Scans with Exit Scanner -> Must reject with ENTRY_REQUIRED_FIRST
+      const exitWrongRes = await request(app)
+        .post('/api/daily-qr/scan')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ qrPayload: dailyPayload, mode: 'EXIT' });
+
+      expect(exitWrongRes.status).toBe(400);
+      expect(exitWrongRes.body.code).toBe('ENTRY_REQUIRED_FIRST');
+      expect(exitWrongRes.body.message).toContain("You don't have an active library attendance");
+
+      // Verify no attendance or seat was allocated
+      const noActive = await Attendance.findOne({ studentId: studentUserId, status: 'ACTIVE' });
+      expect(noActive).toBeNull();
+
+      // TEST 1: Student scans with Entry Scanner -> ENTRY succeeds
+      const entryRes = await request(app)
+        .post('/api/daily-qr/scan')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ qrPayload: dailyPayload, mode: 'ENTRY' });
+
+      expect(entryRes.status).toBe(201);
+      expect(entryRes.body.data.type).toBe('ENTRY');
+      expect(entryRes.body.data.seatNumber).toBe('01');
+    });
+
+    it('TEST 2 & 4 & 6: Student has active attendance: Entry fails with ALREADY_CHECKED_IN, Exit succeeds', async () => {
+      const genRes = await request(app)
+        .post('/api/daily-qr/generate')
+        .set('Authorization', `Bearer ${adminToken}`);
+      const dailyPayload = genRes.body.data.qrPayload;
+
+      // First check in via Entry Scanner
+      await request(app)
+        .post('/api/daily-qr/scan')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ qrPayload: dailyPayload, mode: 'ENTRY' });
+
+      // TEST 4 & 6: Student ALREADY has active attendance -> Scans with Entry Scanner again -> Must reject with ALREADY_CHECKED_IN
+      const entryWrongRes = await request(app)
+        .post('/api/daily-qr/scan')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ qrPayload: dailyPayload, mode: 'ENTRY' });
+
+      expect(entryWrongRes.status).toBe(400);
+      expect(entryWrongRes.body.code).toBe('ALREADY_CHECKED_IN');
+      expect(entryWrongRes.body.message).toContain('You are already inside the library');
+
+      // Verify NO duplicate active attendance exists
+      const activeCount = await Attendance.countDocuments({ studentId: studentUserId, status: 'ACTIVE' });
+      expect(activeCount).toBe(1);
+
+      // Delay 3.1s to clear debounce window
+      await new Promise((r) => setTimeout(r, 3100));
+
+      // TEST 2: Student scans with Exit Scanner -> EXIT succeeds
+      const exitRes = await request(app)
+        .post('/api/daily-qr/scan')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ qrPayload: dailyPayload, mode: 'EXIT' });
+
+      expect(exitRes.status).toBe(200);
+      expect(exitRes.body.data.type).toBe('EXIT');
+      expect(exitRes.body.data.seatNumber).toBe('01');
+
+      // TEST 7: Student A exits -> Scans Exit again -> Must reject because there is no active attendance
+      const exitAgainRes = await request(app)
+        .post('/api/daily-qr/scan')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ qrPayload: dailyPayload, mode: 'EXIT' });
+
+      expect(exitAgainRes.status).toBe(400);
+      expect(exitAgainRes.body.code).toBe('ENTRY_REQUIRED_FIRST');
+    });
+
+    it('TEST 5: Multi-student independent Entry with same unchanging Daily QR', async () => {
+      const genRes = await request(app)
+        .post('/api/daily-qr/generate')
+        .set('Authorization', `Bearer ${adminToken}`);
+      const dailyPayload = genRes.body.data.qrPayload;
+
+      // Student B
       const studentB = await User.create({
         name: 'Student B',
         email: 'studentB@test.com',
@@ -830,83 +910,50 @@ describe('Smart Personal Library Management System Suite', () => {
         .send({ email: 'studentB@test.com', password: 'Password@123' });
       const studentBToken = bLogin.body.data.token;
 
-      // 3. Student A scans first time -> ENTRY SUCCESS (allocates seat 01)
+      // Student A enters (mode: 'ENTRY')
       const aEntry = await request(app)
         .post('/api/daily-qr/scan')
         .set('Authorization', `Bearer ${studentToken}`)
-        .send({ qrPayload: dailyPayload });
+        .send({ qrPayload: dailyPayload, mode: 'ENTRY' });
 
       expect(aEntry.status).toBe(201);
-      expect(aEntry.body.data.type).toBe('ENTRY');
       expect(aEntry.body.data.seatNumber).toBe('01');
 
-      // 4. Student B scans SAME Daily QR -> ENTRY SUCCESS (allocates seat 02, independent state)
+      // Student B enters with exact same Daily QR (mode: 'ENTRY')
       const bEntry = await request(app)
         .post('/api/daily-qr/scan')
         .set('Authorization', `Bearer ${studentBToken}`)
-        .send({ qrPayload: dailyPayload });
+        .send({ qrPayload: dailyPayload, mode: 'ENTRY' });
 
       expect(bEntry.status).toBe(201);
-      expect(bEntry.body.data.type).toBe('ENTRY');
       expect(bEntry.body.data.seatNumber).toBe('02');
 
-      // 5. Student A scans SAME Daily QR again -> EXIT SUCCESS (releases seat 01, Student B remains inside!)
-      // Add slight delay to avoid rapid debounce
-      await new Promise((r) => setTimeout(r, 3100));
-
-      const aExit = await request(app)
-        .post('/api/daily-qr/scan')
-        .set('Authorization', `Bearer ${studentToken}`)
-        .send({ qrPayload: dailyPayload });
-
-      expect(aExit.status).toBe(200);
-      expect(aExit.body.data.type).toBe('EXIT');
-      expect(aExit.body.data.seatNumber).toBe('01');
-
-      // Verify Student B is STILL active inside seat 02
-      const bAttendance = await Attendance.findOne({ studentId: studentB._id, status: 'ACTIVE' });
-      expect(bAttendance).toBeDefined();
-      expect(bAttendance?.seatNumber).toBe('02');
-
-      // 6. Student A scans third time -> ENTRY SUCCESS again (cycle repeats)
-      const aReEntry = await request(app)
-        .post('/api/daily-qr/scan')
-        .set('Authorization', `Bearer ${studentToken}`)
-        .send({ qrPayload: dailyPayload });
-
-      expect(aReEntry.status).toBe(201);
-      expect(aReEntry.body.data.type).toBe('ENTRY');
-      // Seat 01 was released so A gets seat 01 again
-      expect(aReEntry.body.data.seatNumber).toBe('01');
+      // Both are active inside
+      const activeTotal = await Attendance.countDocuments({ status: 'ACTIVE' });
+      expect(activeTotal).toBe(2);
     });
 
-    it('TEST 9 & 10: Reject rapid duplicate scan and reject expired/invalid date Daily QR', async () => {
+    it('TEST 10: Reject invalid scanner mode and expired/invalid date Daily QR', async () => {
       const genRes = await request(app)
         .post('/api/daily-qr/generate')
         .set('Authorization', `Bearer ${adminToken}`);
       const dailyPayload = genRes.body.data.qrPayload;
 
-      // Student enters
-      await request(app)
+      // Invalid mode
+      const invalidModeRes = await request(app)
         .post('/api/daily-qr/scan')
         .set('Authorization', `Bearer ${studentToken}`)
-        .send({ qrPayload: dailyPayload });
+        .send({ qrPayload: dailyPayload, mode: 'UNKNOWN' });
 
-      // Immediate second scan within 3 seconds -> Rapid debounce rejection (prevents accidental instant exit)
-      const rapidRes = await request(app)
-        .post('/api/daily-qr/scan')
-        .set('Authorization', `Bearer ${studentToken}`)
-        .send({ qrPayload: dailyPayload });
-
-      expect(rapidRes.status).toBe(429);
-      expect(rapidRes.body.message).toContain('Please wait');
+      expect(invalidModeRes.status).toBe(400);
+      expect(invalidModeRes.body.code).toBe('INVALID_SCANNER_MODE');
 
       // Expired date test: QR for yesterday (2020-01-01)
       const fakePastQR = { ...dailyPayload, date: '2020-01-01' };
       const expiredRes = await request(app)
         .post('/api/daily-qr/scan')
         .set('Authorization', `Bearer ${studentToken}`)
-        .send({ qrPayload: fakePastQR });
+        .send({ qrPayload: fakePastQR, mode: 'ENTRY' });
 
       expect(expiredRes.status).toBe(400);
       expect(expiredRes.body.message).toContain('not valid for today');

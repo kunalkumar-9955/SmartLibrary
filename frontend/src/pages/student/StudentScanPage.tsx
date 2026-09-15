@@ -1,20 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import confetti from 'canvas-confetti';
 import { StudentQRScanner } from '../../components/StudentQRScanner';
+import { Modal } from '../../components/Modal';
 import { attendanceService, dailyQrService } from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { QRPayload, AnyQRPayload } from '../../types';
-import { CheckCircle2, ArrowLeft, Armchair, Clock, Calendar, User as UserIcon, ArrowRight } from 'lucide-react';
+import {
+  CheckCircle2,
+  ArrowLeft,
+  Armchair,
+  Clock,
+  Calendar,
+  User as UserIcon,
+  ArrowRight,
+  AlertTriangle,
+} from 'lucide-react';
+
+interface ErrorModalState {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  suggestedAction?: 'SWITCH_TO_ENTRY' | 'SWITCH_TO_EXIT';
+}
 
 export const StudentScanPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const initialType = (searchParams.get('type') as 'ENTRY' | 'EXIT') || 'ENTRY';
-  const [activeType] = useState<'ENTRY' | 'EXIT'>(initialType);
+  const activeType = (searchParams.get('type') as 'ENTRY' | 'EXIT') || 'ENTRY';
 
   const [isLoading, setIsLoading] = useState(false);
   const [successResult, setSuccessResult] = useState<any | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [errorModal, setErrorModal] = useState<ErrorModalState | null>(null);
   const [countdown, setCountdown] = useState<number>(3);
   const [scannerKey, setScannerKey] = useState<number>(0);
 
@@ -46,9 +64,11 @@ export const StudentScanPage: React.FC = () => {
     setScanError(null);
     try {
       if (payload.qrType === 'DAILY') {
-        const res = await dailyQrService.scanQR(payload);
+        // Send requested scanner mode ('ENTRY' or 'EXIT')
+        const res = await dailyQrService.scanQR(payload, activeType);
         if (res.data.success) {
-          const resType = res.data.data?.type || 'ENTRY';
+          confetti({ particleCount: 65, spread: 60, origin: { y: 0.7 } });
+          const resType = res.data.data?.type || activeType;
           setSuccessResult({
             type: resType,
             data: res.data.data,
@@ -83,9 +103,29 @@ export const StudentScanPage: React.FC = () => {
         }
       }
     } catch (err: any) {
+      const errCode = err.response?.data?.code;
       const msg = err.response?.data?.message || 'Attendance verification failed. Please try again.';
       setScanError(msg);
-      error(msg);
+
+      if (errCode === 'ENTRY_REQUIRED_FIRST') {
+        setErrorModal({
+          isOpen: true,
+          title: 'Entry Required First',
+          message:
+            "You don't have an active library attendance. Please scan the Daily QR using the Entry Scanner first.",
+          suggestedAction: 'SWITCH_TO_ENTRY',
+        });
+      } else if (errCode === 'ALREADY_CHECKED_IN') {
+        setErrorModal({
+          isOpen: true,
+          title: 'Already Checked In',
+          message:
+            'You are already inside the library. Please scan the Daily QR using the Exit Scanner to check out.',
+          suggestedAction: 'SWITCH_TO_EXIT',
+        });
+      } else {
+        error(msg);
+      }
       // Reset scanner so student can immediately scan again if needed
       setScannerKey((prev) => prev + 1);
     } finally {
@@ -105,17 +145,17 @@ export const StudentScanPage: React.FC = () => {
           Cancel
         </button>
         <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-          Smart Library QR Gate
+          Smart Library QR Gate • {activeType}
         </span>
       </div>
 
       {!successResult ? (
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-xl text-center">
-          <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-1">
-            Scan Attendance QR
+          <h2 className="text-2xl font-black text-slate-900 dark:white mb-1">
+            Scan {activeType === 'ENTRY' ? 'Entry' : 'Exit'} QR
           </h2>
           <p className="text-xs text-slate-500 mb-4">
-            Point your camera at the Admin's screen to mark attendance.
+            Point your camera at the attendance QR code to mark {activeType.toLowerCase()}.
           </p>
 
           {scanError && (
@@ -125,7 +165,7 @@ export const StudentScanPage: React.FC = () => {
           )}
 
           <StudentQRScanner
-            key={scannerKey}
+            key={`${activeType}-${scannerKey}`}
             expectedType={activeType}
             onScanSuccess={handleScanSuccess}
             isLoading={isLoading}
@@ -234,6 +274,72 @@ export const StudentScanPage: React.FC = () => {
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
+      )}
+
+      {/* Clear, Professional Error Modal for Wrong Scanner Mode */}
+      {errorModal && (
+        <Modal
+          isOpen={errorModal.isOpen}
+          onClose={() => {
+            setErrorModal(null);
+            setScannerKey((k) => k + 1);
+          }}
+          title={errorModal.title}
+          maxWidth="sm"
+        >
+          <div className="p-6 text-center space-y-4">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <div className="space-y-1.5">
+              <h4 className="text-base font-bold text-slate-900 dark:text-white">
+                {errorModal.title}
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                {errorModal.message}
+              </p>
+            </div>
+            <div className="pt-2 flex flex-col gap-2">
+              {errorModal.suggestedAction === 'SWITCH_TO_ENTRY' && (
+                <button
+                  onClick={() => {
+                    setErrorModal(null);
+                    setScanError(null);
+                    navigate('/student/scan?type=ENTRY');
+                    setScannerKey((k) => k + 1);
+                  }}
+                  className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-600/20"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  Switch to Entry Scanner
+                </button>
+              )}
+              {errorModal.suggestedAction === 'SWITCH_TO_EXIT' && (
+                <button
+                  onClick={() => {
+                    setErrorModal(null);
+                    setScanError(null);
+                    navigate('/student/scan?type=EXIT');
+                    setScannerKey((k) => k + 1);
+                  }}
+                  className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-slate-900/20"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  Switch to Exit Scanner
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setErrorModal(null);
+                  setScannerKey((k) => k + 1);
+                }}
+                className="w-full py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

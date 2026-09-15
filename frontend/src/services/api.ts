@@ -81,8 +81,8 @@ export const dailyQrService = {
   getTodayQR: () => api.get('/daily-qr/today'),
   generateQR: (forceRegenerate: boolean = false) =>
     api.post('/daily-qr/generate', { forceRegenerate }),
-  scanQR: (qrPayload: any, preferredSeatNumber?: string) =>
-    api.post('/daily-qr/scan', { qrPayload, preferredSeatNumber }),
+  scanQR: (qrPayload: any, mode: 'ENTRY' | 'EXIT', preferredSeatNumber?: string) =>
+    api.post('/daily-qr/scan', { qrPayload, mode, preferredSeatNumber }),
 };
 
 // Attendance Services
