@@ -41,11 +41,21 @@ api.interceptors.response.use(
   }
 );
 
+let inFlightMePromise: Promise<any> | null = null;
+
 // Auth Services
 export const authService = {
   login: (credentials: { email: string; password: string }) =>
     api.post('/auth/login', credentials),
-  getMe: () => api.get('/auth/me'),
+  getMe: () => {
+    if (inFlightMePromise) {
+      return inFlightMePromise;
+    }
+    inFlightMePromise = api.get('/auth/me').finally(() => {
+      inFlightMePromise = null;
+    });
+    return inFlightMePromise;
+  },
   logout: () => api.post('/auth/logout'),
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
     api.put('/auth/change-password', data),

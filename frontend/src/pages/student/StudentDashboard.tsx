@@ -36,8 +36,8 @@ export const StudentDashboard: React.FC = () => {
   const fetchData = async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
-      await refreshUser();
-      const [noticesRes, attRes, ticketsRes, notifRes] = await Promise.all([
+      const [, noticesRes, attRes, ticketsRes, notifRes] = await Promise.all([
+        refreshUser().catch(() => null),
         noticeService.getNotices().catch(() => ({ data: { success: false, data: [] } })),
         attendanceService.getMyHistory({ limit: 5 }).catch(() => ({ data: { success: false, data: { records: [] } } })),
         ticketService.getTickets({ limit: 3 }).catch(() => ({ data: { success: false, data: { tickets: [] } } })),
@@ -335,7 +335,18 @@ export const StudentDashboard: React.FC = () => {
       </div>
 
       {/* Recent Attendance Glance */}
-      {recentAttendance.length > 0 && (
+      {loading && recentAttendance.length === 0 ? (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3 animate-pulse">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+            <div className="h-3 w-32 bg-slate-200 dark:bg-slate-700 rounded" />
+            <div className="h-3 w-16 bg-slate-200 dark:bg-slate-700 rounded" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-12 bg-slate-50 dark:bg-slate-800/60 rounded-xl" />
+            <div className="h-12 bg-slate-50 dark:bg-slate-800/60 rounded-xl" />
+          </div>
+        </div>
+      ) : recentAttendance.length > 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
             <h4 className="font-bold text-xs text-slate-900 dark:text-white">Recent Attendance Logs</h4>
@@ -370,7 +381,7 @@ export const StudentDashboard: React.FC = () => {
             ))}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

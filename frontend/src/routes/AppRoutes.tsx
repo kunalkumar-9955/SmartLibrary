@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
 
@@ -36,47 +36,65 @@ const ProtectedRoute: React.FC<{
   children: React.ReactNode;
 }> = ({ allowedRoles, children }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
+  // 1. Instant App Shell: If authenticated locally, render immediately without blocking
+  if (isAuthenticated && user) {
+    if (!allowedRoles.includes(user.role)) {
+      if (user.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
+      return <Navigate to="/student/dashboard" replace />;
+    }
+    // Track safe last-visited route for automatic session restoration
+    if (!location.pathname.includes('/login')) {
+      localStorage.setItem('smart_library_last_route', location.pathname);
+    }
+    return <>{children}</>;
+  }
+
+  // 2. Non-blocking fallback: only if a token exists without user profile is minimal loader shown
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans">
-        <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-semibold tracking-wide text-slate-300">Checking your session...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white font-sans transition-opacity">
+        <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">Loading session...</p>
       </div>
     );
   }
 
-  if (!isAuthenticated || !user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!allowedRoles.includes(user.role)) {
-    if (user.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
-    return <Navigate to="/student/dashboard" replace />;
-  }
-
-  return <>{children}</>;
+  // 3. Not authenticated -> redirect to login immediately with zero delay
+  return <Navigate to="/login" replace />;
 };
 
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans">
-        <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-semibold tracking-wide text-slate-300">Checking your session...</p>
-      </div>
-    );
-  }
-
+  // 1. Instant Redirect: If already authenticated, redirect to role dashboard or last route immediately
   if (isAuthenticated && user) {
+    const lastRoute = localStorage.getItem('smart_library_last_route');
+    if (
+      lastRoute &&
+      ((user.role === 'ADMIN' && lastRoute.startsWith('/admin')) ||
+        (user.role === 'STUDENT' && lastRoute.startsWith('/student')))
+    ) {
+      return <Navigate to={lastRoute} replace />;
+    }
     if (user.role === 'ADMIN') {
       return <Navigate to="/admin/dashboard" replace />;
     }
     return <Navigate to="/student/dashboard" replace />;
   }
 
+  // 2. Token-resolving edge case
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white font-sans transition-opacity">
+        <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">Loading...</p>
+      </div>
+    );
+  }
+
+  // 3. Unauthenticated visitor -> render landing/login page instantly
   return <>{children}</>;
 };
 

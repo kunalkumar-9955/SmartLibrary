@@ -24,32 +24,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(() =>
     localStorage.getItem('smart_library_token')
   );
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Non-blocking initialization: if user and token are locally available, render immediately without blocking
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    const savedToken = localStorage.getItem('smart_library_token');
+    const savedUser = localStorage.getItem('smart_library_user');
+    // Only block if a token exists but user profile is missing and must be fetched
+    return Boolean(savedToken && !savedUser);
+  });
 
   useEffect(() => {
+    let isMounted = true;
     const initAuth = async () => {
       const savedToken = localStorage.getItem('smart_library_token');
       if (savedToken) {
         try {
           const res = await authService.getMe();
-          if (res.data?.success) {
+          if (isMounted && res.data?.success) {
             const userData = res.data.data.user || res.data.data;
             setUser(userData);
             localStorage.setItem('smart_library_user', JSON.stringify(userData));
           }
         } catch (error: any) {
-          // Only clear session if token is truly rejected by the backend (401 Unauthorized / 403 Forbidden)
+          // Clear session if token is rejected by backend (401 Unauthorized / 403 Forbidden)
           if (error?.response && (error.response.status === 401 || error.response.status === 403)) {
             console.warn('[AuthContext] Session expired or invalid on backend');
-            await logout();
+            if (isMounted) {
+              await logout();
+            }
           } else {
             console.warn('[AuthContext] Backend unreachable during init, keeping existing offline session');
           }
         }
       }
-      setIsLoading(false);
+      if (isMounted) {
+        setIsLoading(false);
+      }
     };
     initAuth();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async (credentials: { email: string; password: string }): Promise<User> => {
@@ -80,20 +94,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(null);
       localStorage.removeItem('smart_library_token');
       localStorage.removeItem('smart_library_user');
+      localStorage.removeItem('smart_library_last_route');
     }
   };
 
   const refreshUser = async () => {
-    if (!token) return;
+    const activeToken = token || localStorage.getItem('smart_library_token');
+    if (!activeToken) return;
     try {
       const res = await authService.getMe();
-      if (res.data.success) {
+      if (res.data?.success) {
         const userData = res.data.data.user || res.data.data;
         setUser(userData);
         localStorage.setItem('smart_library_user', JSON.stringify(userData));
       }
-    } catch (err) {
-      console.error('Failed to refresh user', err);
+    } catch (err: any) {
+      if (err?.response && (err.response.status === 401 || err.response.status === 403)) {
+        await logout();
+      }
     }
   };
 
