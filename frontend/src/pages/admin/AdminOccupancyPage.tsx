@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { attendanceService } from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { Search, LogOut, Armchair, RefreshCw } from 'lucide-react';
+import { formatISTTime } from '../../utils/timeHelper';
 
 export const AdminOccupancyPage: React.FC = () => {
   const [occupants, setOccupants] = useState<any[]>([]);
@@ -125,7 +126,7 @@ export const AdminOccupancyPage: React.FC = () => {
                       </td>
 
                       <td className="px-6 py-4 font-mono text-slate-700 dark:text-slate-200">
-                        {new Date(o.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatISTTime(o.entryTime)}
                       </td>
 
                       <td className="px-6 py-4 font-mono font-bold text-emerald-600">
@@ -164,7 +165,7 @@ export const AdminOccupancyPage: React.FC = () => {
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">Entry Time</span>
                       <span className="font-mono text-slate-700 dark:text-slate-200">
-                        {new Date(o.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatISTTime(o.entryTime)}
                       </span>
                     </div>
                     <div>

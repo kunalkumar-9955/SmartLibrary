@@ -94,6 +94,11 @@ export const attendanceService = {
   getAllAttendance: (params?: any) => api.get('/attendance', { params }),
   getCurrentlyInside: (params?: any) => api.get('/attendance/currently-inside', { params }),
   forceCheckout: (attendanceId: string) => api.post(`/attendance/force-checkout/${attendanceId}`),
+  exportAttendancePDF: (params?: { date?: string; startDate?: string; endDate?: string; studentId?: string }) =>
+    api.get('/attendance/export', {
+      params,
+      responseType: 'blob',
+    }),
   exportAttendanceExcel: (params?: { date?: string; startDate?: string; endDate?: string; studentId?: string }) =>
     api.get('/attendance/export', {
       params,

@@ -6,10 +6,11 @@ import { User } from '../models/User';
 import { generateDailyQRPayload, validateDailyQRPayload } from '../utils/dailyQrCrypto';
 import { sendSuccess, sendError } from '../utils/response';
 import { deriveFixedSeatNumber } from '../utils/seatHelper';
+import { getISTDateString } from '../utils/timeHelper';
 
-// Helper: Get today's authoritative server date in YYYY-MM-DD
+// Helper: Get today's authoritative server date in YYYY-MM-DD (Asia/Kolkata timezone)
 export const getServerDateString = (d: Date = new Date()): string => {
-  return d.toISOString().split('T')[0];
+  return getISTDateString(d);
 };
 
 // Helper: Get end-of-day timestamp for a given date (23:59:59.999)

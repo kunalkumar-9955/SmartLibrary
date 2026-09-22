@@ -212,13 +212,18 @@ export const updateStudent = async (req: Request, res: Response, next: NextFunct
     const { id } = req.params;
     const { name, phone, course, studentIdNumber, assignedSeatNumber } = req.body;
 
+    const existingStudent = await User.findById(id);
+    if (!existingStudent || existingStudent.role !== 'STUDENT') {
+      return sendError(res, 'Student not found', 404);
+    }
+
     if (studentIdNumber) {
       const cleanStudentId = studentIdNumber.trim();
-      const existingStudentId = await User.findOne({
+      const duplicateStudentId = await User.findOne({
         _id: { $ne: id },
         studentIdNumber: cleanStudentId,
       });
-      if (existingStudentId) {
+      if (duplicateStudentId) {
         return sendError(res, 'A student with this Student ID already exists', 409);
       }
     }
@@ -238,22 +243,101 @@ export const updateStudent = async (req: Request, res: Response, next: NextFunct
     }
 
     const updateFields: any = {
-      name: name?.trim(),
-      phone: phone?.trim(),
-      course: course?.trim(),
-      ...(studentIdNumber ? { studentIdNumber: studentIdNumber.trim() } : {}),
+      ...(name !== undefined ? { name: name.trim() } : {}),
+      ...(phone !== undefined ? { phone: phone.trim() } : {}),
+      ...(course !== undefined ? { course: course.trim() } : {}),
+      ...(studentIdNumber !== undefined ? { studentIdNumber: studentIdNumber.trim() } : {}),
       ...(cleanSeat !== undefined ? { assignedSeatNumber: cleanSeat } : {}),
     };
+
+    // Check if student is currently inside library with an active attendance session
+    const activeSession = await Attendance.findOne({
+      studentId: existingStudent._id,
+      status: 'ACTIVE',
+    });
+
+    if (activeSession) {
+      const studentDisplayName = name ? name.trim() : existingStudent.name;
+
+      // Scenario: Admin changed assigned seat while student is currently inside
+      if (cleanSeat !== undefined && cleanSeat !== '' && cleanSeat !== activeSession.seatNumber) {
+        // Validate new target seat
+        const targetSeat = await Seat.findOne({ seatNumber: cleanSeat });
+        if (!targetSeat) {
+          return sendError(res, `Seat ${cleanSeat} does not exist in library`, 404);
+        }
+        if (targetSeat.status === 'MAINTENANCE') {
+          return sendError(res, `Seat ${cleanSeat} is currently under maintenance`, 409, 'SEAT_MAINTENANCE');
+        }
+        if (
+          targetSeat.status === 'OCCUPIED' &&
+          targetSeat.currentStudentId &&
+          String(targetSeat.currentStudentId) !== String(existingStudent._id)
+        ) {
+          return sendError(
+            res,
+            `Seat ${cleanSeat} is currently occupied by ${targetSeat.currentStudentName || 'another student'}`,
+            409,
+            'SEAT_OCCUPIED'
+          );
+        }
+
+        // Release old physical seat
+        if (activeSession.seatId) {
+          await Seat.findByIdAndUpdate(activeSession.seatId, {
+            status: 'AVAILABLE',
+            currentStudentId: null,
+            currentStudentName: '',
+            currentAttendanceId: null,
+          });
+        }
+
+        // Atomically claim new target seat
+        targetSeat.status = 'OCCUPIED';
+        targetSeat.currentStudentId = existingStudent._id as any;
+        targetSeat.currentStudentName = studentDisplayName;
+        targetSeat.currentAttendanceId = activeSession._id as any;
+        await targetSeat.save();
+
+        // Update active session to reflect new seat and student name
+        activeSession.seatNumber = cleanSeat;
+        activeSession.seatId = targetSeat._id as any;
+        if (name) activeSession.studentName = studentDisplayName;
+        if (studentIdNumber) activeSession.studentIdNumber = studentIdNumber.trim();
+        await activeSession.save();
+
+        updateFields.currentSeatNumber = cleanSeat;
+      } else {
+        // Seat was not changed, but check if name or studentIdNumber changed
+        let sessionNeedsSave = false;
+        if (name && activeSession.studentName !== studentDisplayName) {
+          activeSession.studentName = studentDisplayName;
+          sessionNeedsSave = true;
+          if (activeSession.seatId) {
+            await Seat.findByIdAndUpdate(activeSession.seatId, {
+              currentStudentName: studentDisplayName,
+            });
+          }
+        }
+        if (studentIdNumber && activeSession.studentIdNumber !== studentIdNumber.trim()) {
+          activeSession.studentIdNumber = studentIdNumber.trim();
+          sessionNeedsSave = true;
+        }
+        if (sessionNeedsSave) {
+          await activeSession.save();
+        }
+      }
+    } else {
+      // Student is NOT currently inside: ensure isCurrentlyInside is false and currentSeatNumber is clear
+      updateFields.isCurrentlyInside = false;
+      updateFields.currentSeatNumber = null;
+    }
 
     const student = await User.findByIdAndUpdate(
       id,
       updateFields,
       { new: true }
     ).select('-password');
-
-    if (!student) {
-      return sendError(res, 'Student not found', 404);
-    }
 
     return sendSuccess(res, student, 'Student updated successfully');
   } catch (error) {

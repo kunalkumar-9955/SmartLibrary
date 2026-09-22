@@ -16,6 +16,7 @@ import { QrSession } from '../models/QrSession';
 import { DailyQrSession } from '../models/DailyQrSession';
 import { Ticket } from '../models/Ticket';
 import { StudentNotification } from '../models/StudentNotification';
+import { getISTDateString, formatISTTime, calculateDurationString } from '../utils/timeHelper';
 
 let mongod: MongoMemoryServer;
 let app: express.Application;
@@ -228,14 +229,16 @@ describe('Smart Personal Library Management System Suite', () => {
 
   });
 
-  it('should export genuine Excel workbook (.xlsx)', async () => {
+  it('should export attendance report as PDF document (.pdf)', async () => {
     const exportRes = await request(app)
       .get('/api/attendance/export')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(exportRes.status).toBe(200);
-    expect(exportRes.headers['content-type']).toContain('spreadsheetml');
-    expect(exportRes.headers['content-disposition']).toContain('.xlsx');
+    expect(exportRes.headers['content-type']).toContain('application/pdf');
+    expect(exportRes.headers['content-disposition']).toContain('.pdf');
+    // PDF Magic Bytes: begins with %PDF-
+    expect(exportRes.body.slice(0, 5).toString()).toBe('%PDF-');
   });
 
   it('should allow student to login from multiple devices simultaneously (no single-device limit)', async () => {
@@ -1083,22 +1086,25 @@ describe('Smart Personal Library Management System Suite', () => {
     });
 
     it('should export all stored records when date is blank (Mode 2) and export single date when specified (Mode 1)', async () => {
-      // Export with blank date (Mode 2 - FULL EXPORT)
+      // Export with blank date (Mode 2 - FULL EXPORT as PDF)
       const fullRes = await request(app)
         .get('/api/attendance/export')
         .set('Authorization', `Bearer ${adminToken}`);
 
       expect(fullRes.status).toBe(200);
-      expect(fullRes.header['content-type']).toContain('spreadsheetml');
-      expect(fullRes.header['content-disposition']).toContain('FULL_ALL_RECORDS');
+      expect(fullRes.header['content-type']).toContain('application/pdf');
+      expect(fullRes.header['content-disposition']).toContain('ALL');
+      expect(fullRes.header['content-disposition']).toContain('.pdf');
 
-      // Export with specific date (Mode 1)
+      // Export with specific date (Mode 1 as PDF)
       const dateRes = await request(app)
         .get('/api/attendance/export?date=2026-09-15')
         .set('Authorization', `Bearer ${adminToken}`);
 
       expect(dateRes.status).toBe(200);
+      expect(dateRes.header['content-type']).toContain('application/pdf');
       expect(dateRes.header['content-disposition']).toContain('2026-09-15');
+      expect(dateRes.header['content-disposition']).toContain('.pdf');
     });
   });
 
@@ -1319,6 +1325,140 @@ describe('Smart Personal Library Management System Suite', () => {
       expect(resolvedNotifs2.length).toBe(1); // Still exactly 1!
     });
   });
+
+  describe('Timezone Consistency & PDF Export Suite', () => {
+    it('should correctly format UTC timestamps to Asia/Kolkata (IST) times', () => {
+      // 06:23 UTC is 11:53 AM IST
+      const entryUtc = new Date('2026-09-21T06:23:00.000Z');
+      expect(formatISTTime(entryUtc)).toBe('11:53 AM');
+
+      // 13:03 UTC is 06:33 PM IST
+      const exitUtc = new Date('2026-09-21T13:03:00.000Z');
+      expect(formatISTTime(exitUtc)).toBe('06:33 PM');
+
+      // Duration: 13:03 - 06:23 = 400 min = 6h 40m
+      const duration = calculateDurationString(entryUtc, exitUtc);
+      expect(duration).toBe('6h 40m');
+
+      // Late night scan: 20:30 UTC on Sep 21 is 02:00 AM IST on Sep 22
+      const midnightUtc = new Date('2026-09-21T20:30:00.000Z');
+      expect(getISTDateString(midnightUtc)).toBe('2026-09-22');
+    });
+
+    it('should generate a valid A4 landscape PDF with all required columns and headers', async () => {
+      const res = await request(app)
+        .get('/api/attendance/export')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.header['content-type']).toBe('application/pdf');
+      expect(res.header['content-disposition']).toMatch(/^attachment; filename="Lakshya-Smart-Library-Attendance-Report-.*\.pdf"$/);
+      // Valid PDF buffer starts with %PDF-
+      expect(res.body).toBeInstanceOf(Buffer);
+      expect(res.body.slice(0, 5).toString()).toBe('%PDF-');
+    });
+  });
+
+  describe('Admin to Student Real-Time Synchronization Suite', () => {
+    it('should atomically synchronize seat when Admin changes student assigned seat while inside', async () => {
+      // 1. Create a student with LSL-22
+      const studentSync = await User.create({
+        name: 'Sync Student',
+        email: 'sync.student@test.com',
+        password: 'Password@123',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        studentIdNumber: 'LSL-22',
+        assignedSeatNumber: '22',
+      });
+
+      // Login to get studentToken
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'sync.student@test.com', password: 'Password@123' });
+      const studentToken = loginRes.body.data.token;
+
+      // 2. Mark entry attendance for Seat 22
+      const seat22 = await Seat.findOneAndUpdate(
+        { seatNumber: '22' },
+        { status: 'AVAILABLE', currentStudentId: null }
+      );
+      const seat35 = await Seat.findOneAndUpdate(
+        { seatNumber: '35' },
+        { status: 'AVAILABLE', currentStudentId: null }
+      );
+
+      const activeAtt = await Attendance.create({
+        studentId: studentSync._id,
+        studentName: studentSync.name,
+        studentIdNumber: 'LSL-22',
+        seatNumber: '22',
+        seatId: seat22?._id,
+        entryTime: new Date(),
+        attendanceDate: getISTDateString(),
+        status: 'ACTIVE',
+      });
+
+      await Seat.findByIdAndUpdate(seat22?._id, {
+        status: 'OCCUPIED',
+        currentStudentId: studentSync._id,
+        currentStudentName: studentSync.name,
+        currentAttendanceId: activeAtt._id,
+      });
+
+      await User.findByIdAndUpdate(studentSync._id, {
+        isCurrentlyInside: true,
+        currentSeatNumber: '22',
+      });
+
+      // Student verifies current seat via /api/auth/me -> Seat 22
+      const meRes1 = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${studentToken}`);
+      expect(meRes1.body.data.isCurrentlyInside).toBe(true);
+      expect(meRes1.body.data.currentSeatNumber).toBe('22');
+
+      // 3. Admin updates student's seat: 22 -> 35
+      const updateRes = await request(app)
+        .put(`/api/students/${studentSync._id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          assignedSeatNumber: '35',
+        });
+
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.data.assignedSeatNumber).toBe('35');
+      expect(updateRes.body.data.currentSeatNumber).toBe('35');
+
+      // 4. Verify Seat 22 was released to AVAILABLE
+      const checkSeat22 = await Seat.findOne({ seatNumber: '22' });
+      expect(checkSeat22?.status).toBe('AVAILABLE');
+      expect(checkSeat22?.currentStudentId).toBeNull();
+
+      // 5. Verify Seat 35 is now OCCUPIED by studentSync
+      const checkSeat35 = await Seat.findOne({ seatNumber: '35' });
+      expect(checkSeat35?.status).toBe('OCCUPIED');
+      expect(String(checkSeat35?.currentStudentId)).toBe(String(studentSync._id));
+
+      // 6. Verify active Attendance session now has seatNumber = 35
+      const checkAtt = await Attendance.findById(activeAtt._id);
+      expect(checkAtt?.seatNumber).toBe('35');
+
+      // 7. Student calls /api/auth/me -> MUST immediately reflect Seat 35 without logout!
+      const meRes2 = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${studentToken}`);
+      expect(meRes2.body.data.isCurrentlyInside).toBe(true);
+      expect(meRes2.body.data.currentSeatNumber).toBe('35');
+      expect(meRes2.body.data.assignedSeatNumber).toBe('35');
+
+      // Clean up
+      await User.deleteMany({ email: 'sync.student@test.com' });
+      await Attendance.deleteMany({ studentId: studentSync._id });
+      await Seat.findOneAndUpdate({ seatNumber: '35' }, { status: 'AVAILABLE', currentStudentId: null });
+    });
+  });
 });
+
 
 

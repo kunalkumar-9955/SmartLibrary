@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
+import { formatISTTime } from '../../utils/timeHelper';
 
 export const AdminDashboard: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -207,10 +208,7 @@ export const AdminDashboard: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {liveOccupancy.map((s: any) => {
-                    const entryTimeFormatted = new Date(s.entryTime).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    });
+                    const entryTimeFormatted = formatISTTime(s.entryTime);
 
                     return (
                       <tr key={s._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
@@ -251,10 +249,7 @@ export const AdminDashboard: React.FC = () => {
             {/* Mobile Stacked Cards */}
             <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
               {liveOccupancy.map((s: any) => {
-                const entryTimeFormatted = new Date(s.entryTime).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
+                const entryTimeFormatted = formatISTTime(s.entryTime);
 
                 return (
                   <div key={s._id} className="py-3 space-y-2.5">
@@ -364,12 +359,9 @@ export const AdminDashboard: React.FC = () => {
           ) : (
             <div className="space-y-2.5">
               {recentAttendance.slice(0, 5).map((att: any) => {
-                const entryStr = new Date(att.entryTime).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
+                const entryStr = formatISTTime(att.entryTime);
                 const exitStr = att.exitTime
-                  ? new Date(att.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  ? formatISTTime(att.exitTime)
                   : 'Active';
 
                 return (

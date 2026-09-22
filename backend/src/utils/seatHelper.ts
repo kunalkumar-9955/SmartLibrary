@@ -13,7 +13,17 @@ export const deriveFixedSeatNumber = (student: {
   studentIdNumber?: string;
   assignedSeatNumber?: string;
 }): string | null => {
-  // 1. Primary rule: extract trailing digits from studentIdNumber
+  // 1. Explicit admin-assigned seat number takes highest precedence
+  if (student.assignedSeatNumber && typeof student.assignedSeatNumber === 'string') {
+    const trimmed = student.assignedSeatNumber.trim();
+    const num = parseInt(trimmed, 10);
+    if (!isNaN(num) && num > 0) {
+      const seatVal = num <= 50 ? num : ((num - 1) % 50) + 1;
+      return seatVal < 10 ? `0${seatVal}` : `${seatVal}`;
+    }
+  }
+
+  // 2. Fallback: derive deterministically from trailing digits of studentIdNumber
   if (student.studentIdNumber && typeof student.studentIdNumber === 'string') {
     const trimmed = student.studentIdNumber.trim();
     const match = trimmed.match(/(\d+)$/);
@@ -23,16 +33,6 @@ export const deriveFixedSeatNumber = (student: {
         const seatVal = num <= 50 ? num : ((num - 1) % 50) + 1;
         return seatVal < 10 ? `0${seatVal}` : `${seatVal}`;
       }
-    }
-  }
-
-  // 2. Secondary fallback: check explicitly assigned seat number
-  if (student.assignedSeatNumber && typeof student.assignedSeatNumber === 'string') {
-    const trimmed = student.assignedSeatNumber.trim();
-    const num = parseInt(trimmed, 10);
-    if (!isNaN(num) && num > 0) {
-      const seatVal = num <= 50 ? num : ((num - 1) % 50) + 1;
-      return seatVal < 10 ? `0${seatVal}` : `${seatVal}`;
     }
   }
 

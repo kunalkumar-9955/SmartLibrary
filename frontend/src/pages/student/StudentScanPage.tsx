@@ -17,6 +17,7 @@ import {
   ArrowRight,
   AlertTriangle,
 } from 'lucide-react';
+import { formatISTTime } from '../../utils/timeHelper';
 
 interface ErrorModalState {
   isOpen: boolean;
@@ -210,10 +211,7 @@ export const StudentScanPage: React.FC = () => {
                   <Clock className="w-3.5 h-3.5" /> Entry Time
                 </span>
                 <span className="font-bold text-slate-900 dark:text-white font-mono">
-                  {new Date(successResult.data.entryTime).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formatISTTime(successResult.data.entryTime)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
@@ -232,10 +230,7 @@ export const StudentScanPage: React.FC = () => {
                   <Clock className="w-3.5 h-3.5" /> Entry Time
                 </span>
                 <span className="font-medium text-slate-900 dark:text-white font-mono">
-                  {new Date(successResult.data.entryTime).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formatISTTime(successResult.data.entryTime)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
@@ -243,10 +238,7 @@ export const StudentScanPage: React.FC = () => {
                   <Clock className="w-3.5 h-3.5" /> Exit Time
                 </span>
                 <span className="font-bold text-slate-900 dark:text-white font-mono">
-                  {new Date(successResult.data.exitTime).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formatISTTime(successResult.data.exitTime)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-200 dark:border-slate-700">

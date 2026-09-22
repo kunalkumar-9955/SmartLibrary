@@ -7,7 +7,7 @@ import {
   getCurrentlyInside,
   forceCheckout,
 } from '../controllers/attendanceController';
-import { exportAttendanceExcel } from '../controllers/excelController';
+import { exportAttendancePDF } from '../controllers/pdfController';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../middleware/role';
 import { attendanceLimiter } from '../middleware/rateLimiter';
@@ -23,7 +23,7 @@ router.get('/my', requireRole('STUDENT'), getMyAttendanceHistory);
 
 // Admin actions
 router.get('/currently-inside', requireRole('ADMIN'), getCurrentlyInside);
-router.get('/export', requireRole('ADMIN'), exportAttendanceExcel);
+router.get('/export', requireRole('ADMIN'), exportAttendancePDF);
 router.get('/', requireRole('ADMIN'), getAllAttendance);
 router.post('/force-checkout/:id', requireRole('ADMIN'), forceCheckout);
 router.post('/reconcile', requireRole('ADMIN'), async (req, res, next) => {

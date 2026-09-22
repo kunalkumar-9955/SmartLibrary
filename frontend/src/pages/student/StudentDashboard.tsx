@@ -17,6 +17,7 @@ import {
   Bell,
   X,
 } from 'lucide-react';
+import { formatISTTime, formatElapsedDuration } from '../../utils/timeHelper';
 
 export const StudentDashboard: React.FC = () => {
   const { user, refreshUser } = useAuth();
@@ -32,9 +33,9 @@ export const StudentDashboard: React.FC = () => {
   const isInside = user?.isCurrentlyInside;
   const currentSeat = user?.currentSeatNumber;
 
-  const loadData = async () => {
+  const fetchData = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       await refreshUser();
       const [noticesRes, attRes, ticketsRes, notifRes] = await Promise.all([
         noticeService.getNotices().catch(() => ({ data: { success: false, data: [] } })),
@@ -43,9 +44,9 @@ export const StudentDashboard: React.FC = () => {
         notificationService.getMyNotifications().catch(() => ({ data: { success: false, data: { notifications: [], unreadCount: 0 } } })),
       ]);
 
-      if (noticesRes.data.success) setNotices(noticesRes.data.data || []);
-      if (attRes.data.success) setRecentAttendance(attRes.data.data.records || []);
-      if (ticketsRes.data.success) setRecentTickets(ticketsRes.data.data.tickets || []);
+      if (noticesRes.data?.success) setNotices(noticesRes.data.data || []);
+      if (attRes.data?.success) setRecentAttendance(attRes.data.data.records || []);
+      if (ticketsRes.data?.success) setRecentTickets(ticketsRes.data.data.tickets || []);
 
       if (notifRes.data?.success) {
         const notifList: NotificationItem[] = notifRes.data.data?.notifications || [];
@@ -53,7 +54,7 @@ export const StudentDashboard: React.FC = () => {
         setUnreadCount(count);
 
         const unreadItems = notifList.filter((n) => !n.isRead);
-        if (unreadItems.length > 0) {
+        if (unreadItems.length > 0 && !isSilent) {
           setLatestUnreadNotice(unreadItems[0]);
           setShowUnreadToast(true);
         }
@@ -61,12 +62,32 @@ export const StudentDashboard: React.FC = () => {
     } catch (err: any) {
       console.error('Error loading student dashboard:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    fetchData(false);
+
+    // Dynamic Server Sync: 10-second background polling keeps seat and attendance updated with any admin changes
+    const interval = setInterval(() => {
+      fetchData(true);
+    }, 10000);
+
+    // Immediate refetch when student returns to or focuses the window
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData(true);
+      }
+    };
+    window.addEventListener('focus', onFocusOrVisible);
+    document.addEventListener('visibilitychange', onFocusOrVisible);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocusOrVisible);
+      document.removeEventListener('visibilitychange', onFocusOrVisible);
+    };
   }, []);
 
   // 5-second auto-dismiss for unread notification popup toast
@@ -79,19 +100,12 @@ export const StudentDashboard: React.FC = () => {
     }
   }, [showUnreadToast]);
 
-  // Calculate elapsed duration if currently inside
+  // Calculate elapsed duration if currently inside using Asia/Kolkata timestamps
   let durationStr = '--';
   let entryTimeFormatted = '--';
   if (isInside && user?.lastEntryTime) {
-    const entryMs = new Date(user.lastEntryTime).getTime();
-    const elapsedMinutes = Math.max(1, Math.floor((Date.now() - entryMs) / 60000));
-    const hours = Math.floor(elapsedMinutes / 60);
-    const mins = elapsedMinutes % 60;
-    durationStr = `${hours}h ${mins < 10 ? '0' : ''}${mins}m`;
-    entryTimeFormatted = new Date(user.lastEntryTime).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    durationStr = formatElapsedDuration(user.lastEntryTime);
+    entryTimeFormatted = formatISTTime(user.lastEntryTime);
   }
 
   return (
@@ -346,7 +360,7 @@ export const StudentDashboard: React.FC = () => {
                 </div>
                 <div className="text-right font-mono">
                   <span className="text-slate-600 dark:text-slate-300 block text-[11px]">
-                    {new Date(att.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatISTTime(att.entryTime)}
                   </span>
                   <span className="text-[10px] font-bold text-emerald-600">
                     {att.durationMinutes ? `${att.durationMinutes}m` : 'In Progress'}

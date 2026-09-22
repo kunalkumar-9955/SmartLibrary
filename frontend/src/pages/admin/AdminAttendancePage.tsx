@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { attendanceService } from '../../services/api';
 import { Attendance } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
-import { FileSpreadsheet, Search, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, Search, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatISTTime, getISTDateString, formatISTDateDisplay } from '../../utils/timeHelper';
 
 export const AdminAttendancePage: React.FC = () => {
   const [records, setRecords] = useState<Attendance[]>([]);
@@ -49,23 +50,23 @@ export const AdminAttendancePage: React.FC = () => {
   const handleExportToday = async () => {
     try {
       setExporting(true);
-      const todayStr = new Date().toISOString().split('T')[0];
-      const res = await attendanceService.exportAttendanceExcel({ date: todayStr });
+      const todayStr = getISTDateString();
+      const res = await attendanceService.exportAttendancePDF({ date: todayStr });
       
       const blob = new Blob([res.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        type: 'application/pdf',
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Library_Attendance_${todayStr}.xlsx`);
+      link.setAttribute('download', `Lakshya-Smart-Library-Attendance-Report-${todayStr}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      success("Today's Attendance Excel report exported successfully!");
+      success("Today's Attendance PDF report downloaded successfully!");
     } catch (err) {
-      error('Failed to export Excel report.');
+      error('Failed to export PDF report.');
     } finally {
       setExporting(false);
     }
@@ -74,22 +75,22 @@ export const AdminAttendancePage: React.FC = () => {
   const handleExportAll = async () => {
     try {
       setExporting(true);
-      const res = await attendanceService.exportAttendanceExcel({});
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getISTDateString();
+      const res = await attendanceService.exportAttendancePDF({});
       const blob = new Blob([res.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        type: 'application/pdf',
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Library_Attendance_FULL_ALL_RECORDS_${todayStr}.xlsx`);
+      link.setAttribute('download', `Lakshya-Smart-Library-Attendance-Report-ALL-${todayStr}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      success('Full Attendance database records exported successfully!');
+      success('Complete Attendance PDF report downloaded successfully!');
     } catch (err) {
-      error('Failed to export full database records.');
+      error('Failed to export full database PDF report.');
     } finally {
       setExporting(false);
     }
@@ -103,23 +104,23 @@ export const AdminAttendancePage: React.FC = () => {
 
     try {
       setExporting(true);
-      const res = await attendanceService.exportAttendanceExcel({ startDate, endDate });
+      const res = await attendanceService.exportAttendancePDF({ startDate, endDate });
       
       const blob = new Blob([res.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        type: 'application/pdf',
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Library_Attendance_${startDate}_to_${endDate}.xlsx`);
+      link.setAttribute('download', `Lakshya-Smart-Library-Attendance-Report-${startDate}-to-${endDate}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
       setShowExportModal(false);
-      success('Attendance Excel report downloaded successfully!');
+      success('Attendance PDF report downloaded successfully!');
     } catch (err) {
-      error('Failed to export Excel report.');
+      error('Failed to export PDF report.');
     } finally {
       setExporting(false);
     }
@@ -143,18 +144,19 @@ export const AdminAttendancePage: React.FC = () => {
             onClick={handleExportAll}
             disabled={exporting}
             className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition disabled:opacity-50 cursor-pointer"
-            title="Export all historical records currently stored in database"
+            title="Export all historical records currently stored in database as PDF"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            {exporting ? 'Exporting...' : 'Export All (Full DB)'}
+            <FileText className="w-4 h-4" />
+            {exporting ? 'Exporting...' : 'Export All (PDF)'}
           </button>
           <button
             onClick={handleExportToday}
             disabled={exporting}
             className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition disabled:opacity-50 cursor-pointer"
+            title="Download today's attendance report as PDF"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            {exporting ? 'Generating...' : "Export Today's Excel"}
+            <FileText className="w-4 h-4" />
+            {exporting ? 'Generating...' : "Download Today's PDF"}
           </button>
           <button
             onClick={() => setShowExportModal(true)}
@@ -237,12 +239,9 @@ export const AdminAttendancePage: React.FC = () => {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {records.map((att: any) => {
                     const student = att.studentId;
-                    const entryTimeStr = new Date(att.entryTime).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    });
+                    const entryTimeStr = formatISTTime(att.entryTime);
                     const exitTimeStr = att.exitTime ? (
-                      new Date(att.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      formatISTTime(att.exitTime)
                     ) : (
                       <span className="text-emerald-500 font-bold">Currently Inside</span>
                     );
@@ -287,12 +286,9 @@ export const AdminAttendancePage: React.FC = () => {
             <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
               {records.map((att: any) => {
                 const student = att.studentId;
-                const entryTimeStr = new Date(att.entryTime).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
+                const entryTimeStr = formatISTTime(att.entryTime);
                 const exitTimeStr = att.exitTime ? (
-                  new Date(att.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  formatISTTime(att.exitTime)
                 ) : (
                   <span className="text-emerald-500 font-bold">Currently Inside</span>
                 );
@@ -378,8 +374,8 @@ export const AdminAttendancePage: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-                Export Attendance to Excel (.xlsx)
+                <FileText className="w-5 h-5 text-emerald-600" />
+                Export Attendance to PDF (.pdf)
               </h3>
               <button
                 onClick={() => setShowExportModal(false)}
@@ -432,8 +428,8 @@ export const AdminAttendancePage: React.FC = () => {
                 onClick={handleExportCustomRange}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow transition flex items-center gap-2"
               >
-                <FileSpreadsheet className="w-4 h-4" />
-                {exporting ? 'Exporting...' : 'Download .xlsx'}
+                <FileText className="w-4 h-4" />
+                {exporting ? 'Exporting...' : 'Download PDF'}
               </button>
             </div>
           </div>

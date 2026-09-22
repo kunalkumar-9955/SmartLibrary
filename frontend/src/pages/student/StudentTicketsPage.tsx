@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Send,
 } from 'lucide-react';
+import { formatISTTime } from '../../utils/timeHelper';
 
 const TICKET_CATEGORIES: TicketCategory[] = [
   'Wi-Fi',
@@ -377,7 +378,7 @@ export const StudentTicketsPage: React.FC = () => {
                           {c.userName} ({c.userRole})
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatISTTime(c.createdAt)}
                         </span>
                       </div>
                       <p className="text-slate-600 dark:text-slate-300">{c.comment}</p>

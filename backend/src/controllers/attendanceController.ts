@@ -7,6 +7,7 @@ import { rotateQRSession } from './qrController';
 import { validateDynamicQR } from '../utils/qrCrypto';
 import { sendSuccess, sendError } from '../utils/response';
 import { deriveFixedSeatNumber } from '../utils/seatHelper';
+import { getISTDateString, formatISTDateDisplay } from '../utils/timeHelper';
 
 export const markEntryAttendance = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -106,7 +107,7 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
       );
     }
 
-    const attendanceDate = now.toISOString().split('T')[0];
+    const attendanceDate = getISTDateString(now);
 
     try {
       // Create attendance record
@@ -145,12 +146,7 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
         {
           attendanceId: attendance._id,
           studentName: student.name,
-          date: now.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-          }),
+          date: formatISTDateDisplay(now, true),
           entryTime: now,
           seatNumber: assignedSeat.seatNumber,
         },

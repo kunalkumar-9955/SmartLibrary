@@ -3,6 +3,7 @@ import { attendanceService } from '../../services/api';
 import { Attendance } from '../../types';
 import { Badge } from '../../components/Badge';
 import { Calendar, Clock, Armchair, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatISTTime, formatISTDateDisplay } from '../../utils/timeHelper';
 
 export const StudentAttendancePage: React.FC = () => {
   const [records, setRecords] = useState<Attendance[]>([]);
@@ -94,7 +95,7 @@ export const StudentAttendancePage: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-extrabold text-sm text-slate-900 dark:text-white">
-                          {entryDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
+                          {formatISTDateDisplay(att.entryTime, true)}
                         </span>
                         <Badge
                           variant={att.status === 'COMPLETED' ? 'success' : 'info'}
@@ -107,12 +108,12 @@ export const StudentAttendancePage: React.FC = () => {
                       <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-emerald-500" />
-                          Entry: {entryDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          Entry: {formatISTTime(att.entryTime)}
                         </span>
-                        {exitDate ? (
+                        {att.exitTime ? (
                           <span className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5 text-rose-500" />
-                            Exit: {exitDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            Exit: {formatISTTime(att.exitTime)}
                           </span>
                         ) : (
                           <span className="text-indigo-600 font-semibold animate-pulse">
