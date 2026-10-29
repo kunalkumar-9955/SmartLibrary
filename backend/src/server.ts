@@ -136,7 +136,9 @@ const startServer = async () => {
       try {
         console.log('[Scheduler] Running automatic membership expiry & grace period scan...');
         const stats = await runAutomaticExpiryChecks();
-        console.log(`[Scheduler] Expiry scan finished. Expiries: ${stats.expired}, Reminders: ${stats.remindersSent}, Grace Ended: ${stats.gracePeriodEnded}`);
+        console.log(
+          `[Scheduler] Expiry scan finished. Expiries: ${stats.membershipsExpired}, Reminders: ${stats.remindersSent}, Grace Periods Started: ${stats.gracePeriodsStarted}`
+        );
       } catch (jobErr: any) {
         console.error('[Scheduler] Automatic expiry check failed non-fatally:', jobErr.message);
       }
