@@ -17,6 +17,10 @@ export interface IUser extends Document {
   isCurrentlyInside: boolean;
   currentSeatNumber?: string;
   assignedSeatNumber?: string;
+  membershipStatus?: 'ACTIVE' | 'EXPIRED' | 'INACTIVE';
+  membershipPlan?: string;
+  membershipExpiresAt?: Date;
+  lastPaymentId?: mongoose.Types.ObjectId;
   lastEntryTime?: Date;
   lastExitTime?: Date;
   createdAt: Date;
@@ -49,6 +53,15 @@ const UserSchema = new Schema<IUser>(
     isCurrentlyInside: { type: Boolean, default: false, index: true },
     currentSeatNumber: { type: String },
     assignedSeatNumber: { type: String, trim: true },
+    membershipStatus: {
+      type: String,
+      enum: ['ACTIVE', 'EXPIRED', 'INACTIVE'],
+      default: 'INACTIVE',
+      index: true,
+    },
+    membershipPlan: { type: String, trim: true },
+    membershipExpiresAt: { type: Date },
+    lastPaymentId: { type: Schema.Types.ObjectId, ref: 'Payment' },
     lastEntryTime: { type: Date },
     lastExitTime: { type: Date },
   },

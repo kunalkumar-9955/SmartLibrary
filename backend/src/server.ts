@@ -54,12 +54,22 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '10mb' }));
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static uploads directory
+// Static uploads and QR directories
 const uploadDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
 app.use('/uploads', express.static(uploadDir));
+
+const qrDir = path.join(process.cwd(), 'qr');
+app.use('/qr', express.static(qrDir));
 
 // Health Checks (Both /health and /api/health for Render/Vercel compatibility)
 const sendHealthCheck = async (req: express.Request, res: express.Response) => {

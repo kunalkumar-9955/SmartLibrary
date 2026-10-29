@@ -173,3 +173,18 @@ export const adminNotificationService = {
   markAsRead: (id: string) => api.post(`/admin-notifications/read/${id}`),
   markAllAsRead: () => api.post('/admin-notifications/read-all'),
 };
+
+// Payment & Subscription Services (YouPI-PG Gateway & Direct UPI)
+export const paymentService = {
+  getPlans: () => api.get('/payments/plans'),
+  getMyPayments: () => api.get('/payments/my-payments'),
+  createOrder: (data: { planId: string; idempotencyKey?: string }) =>
+    api.post('/payments/create-order', data),
+  submitUtr: (data: { orderId: string; utr: string; notes?: string }) =>
+    api.post('/payments/submit-utr', data),
+  getOrderStatus: (orderId: string) => api.get(`/payments/status/${orderId}`),
+  getAdminPayments: (params?: { status?: string; search?: string; page?: number; limit?: number }) =>
+    api.get('/payments/admin/all', { params }),
+  verifyPaymentAdmin: (orderId: string, data: { action: 'APPROVE' | 'REJECT'; notes?: string }) =>
+    api.post(`/payments/admin/verify/${orderId}`, data),
+};

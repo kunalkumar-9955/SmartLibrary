@@ -42,3 +42,12 @@ All protected routes require an `Authorization: Bearer <jwt_token>` header.
 | `GET` | `/api/reports/attendance` | Daily attendance trends & peak hours | `LIBRARY_ADMIN` |
 | `GET` | `/api/reports/tickets` | Complaints breakdown by category | `LIBRARY_ADMIN` |
 | `GET` | `/api/reports/export/attendance` | Download CSV attendance report | `LIBRARY_ADMIN` |
+| `GET` | `/api/payments/plans` | List available membership passes | Public |
+| `GET` | `/api/payments/qr-image` | Serve PhonePe UPI QR image | Public |
+| `POST`| `/api/payments/webhook` | Authoritative YouPI-PG HMAC webhook | Public |
+| `GET` | `/api/payments/my-payments` | Get student active pass & payment history| `STUDENT` |
+| `POST`| `/api/payments/create-order`| Create payment order for membership pass | `STUDENT` |
+| `POST`| `/api/payments/submit-utr` | Submit UPI reference/UTR after paying | `STUDENT` |
+| `GET` | `/api/payments/status/:orderId` | Check transaction verification status | Authenticated |
+| `GET` | `/api/payments/admin/all` | List all payment transactions & stats | `ADMIN` |
+| `POST`| `/api/payments/admin/verify/:orderId` | Verify & approve/reject pending payment | `ADMIN` |

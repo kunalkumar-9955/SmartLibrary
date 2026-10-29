@@ -13,6 +13,7 @@ import {
   User as UserIcon,
   LogOut,
   Bell,
+  CreditCard,
 } from 'lucide-react';
 
 export const StudentLayout: React.FC = () => {
@@ -47,8 +48,9 @@ export const StudentLayout: React.FC = () => {
 
   const navItems = [
     { label: 'Home', path: '/student/dashboard', icon: Home },
-    { label: 'Attendance', path: '/student/attendance', icon: CalendarCheck },
+    { label: 'Passes', path: '/student/membership', icon: CreditCard },
     { label: 'Scan QR', path: '/student/scan', icon: QrCode, isAction: true },
+    { label: 'Attendance', path: '/student/attendance', icon: CalendarCheck },
     { label: 'Complaints', path: '/student/tickets', icon: LifeBuoy },
     { label: 'Profile', path: '/student/profile', icon: UserIcon },
   ];

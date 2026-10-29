@@ -15,6 +15,9 @@ export interface User {
   isCurrentlyInside?: boolean;
   currentSeatNumber?: string;
   assignedSeatNumber?: string;
+  membershipStatus?: 'ACTIVE' | 'EXPIRED' | 'INACTIVE';
+  membershipPlan?: string;
+  membershipExpiresAt?: string;
   lastEntryTime?: string;
   lastExitTime?: string;
   createdAt?: string;
@@ -138,4 +141,46 @@ export interface NotificationItem {
   createdAt: string;
   updatedAt?: string;
   isRead: boolean;
+}
+
+export type PaymentStatus = 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+
+export interface MembershipPlan {
+  id: string;
+  name: string;
+  price: number;
+  durationDays: number;
+  description: string;
+  popular?: boolean;
+  features: string[];
+}
+
+export interface PaymentItem {
+  _id: string;
+  orderId: string;
+  studentName: string;
+  studentEmail: string;
+  planId: string;
+  planName: string;
+  amount: number;
+  currency: string;
+  durationDays: number;
+  status: PaymentStatus;
+  paymentMethod: string;
+  gatewayPaymentId?: string;
+  checkoutUrl?: string;
+  utr?: string;
+  verificationSource?: string;
+  verifiedAt?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface StudentMembershipOverview {
+  membership: {
+    status: 'ACTIVE' | 'EXPIRED' | 'INACTIVE';
+    plan: string | null;
+    expiresAt: string | null;
+  };
+  payments: PaymentItem[];
 }

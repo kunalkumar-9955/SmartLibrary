@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Bell,
   X,
+  CreditCard,
 } from 'lucide-react';
 import { formatISTTime, formatElapsedDuration } from '../../utils/timeHelper';
 
@@ -270,6 +271,22 @@ export const StudentDashboard: React.FC = () => {
             <div>
               <p className="font-bold text-slate-900 dark:text-white">My Attendance</p>
               <p className="text-[10px] text-slate-400">View visit history and time logs</p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </Link>
+
+        <Link
+          to="/student/membership"
+          className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 flex items-center justify-center">
+              <CreditCard className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-900 dark:text-white">Passes & Membership</p>
+              <p className="text-[10px] text-slate-400">Subscribe or renew via PhonePe UPI QR</p>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400" />

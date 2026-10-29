@@ -16,6 +16,7 @@ import {
   BellRing,
   BarChart3,
   Settings,
+  CreditCard,
   LogOut,
   Menu,
   X,
@@ -66,6 +67,7 @@ export const LibraryAdminLayout: React.FC = () => {
     { label: 'Complaints', path: '/admin/tickets', icon: Ticket },
     { label: 'Notices', path: '/admin/notices', icon: BellRing },
     { label: 'Reports', path: '/admin/reports', icon: BarChart3 },
+    { label: 'Payments', path: '/admin/payments', icon: CreditCard },
     { label: 'Settings', path: '/admin/settings', icon: Settings },
   ];
 

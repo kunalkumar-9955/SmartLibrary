@@ -18,6 +18,7 @@ import { StudentAttendancePage } from '../pages/student/StudentAttendancePage';
 import { StudentTicketsPage } from '../pages/student/StudentTicketsPage';
 import { StudentProfilePage } from '../pages/student/StudentProfilePage';
 import { StudentNotificationsPage } from '../pages/student/StudentNotificationsPage';
+import { StudentMembershipPage } from '../pages/student/StudentMembershipPage';
 
 // Admin Pages
 import { AdminDashboard } from '../pages/admin/AdminDashboard';
@@ -30,6 +31,7 @@ import { AdminTicketsPage } from '../pages/admin/AdminTicketsPage';
 import { AdminNoticesPage } from '../pages/admin/AdminNoticesPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
 import { AdminSettingsPage } from '../pages/admin/AdminSettingsPage';
+import { AdminPaymentsPage } from '../pages/admin/AdminPaymentsPage';
 
 const ProtectedRoute: React.FC<{
   allowedRoles: UserRole[];
@@ -131,6 +133,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="scan" element={<StudentScanPage />} />
         <Route path="attendance" element={<StudentAttendancePage />} />
         <Route path="tickets" element={<StudentTicketsPage />} />
+        <Route path="membership" element={<StudentMembershipPage />} />
         <Route path="notifications" element={<StudentNotificationsPage />} />
         <Route path="profile" element={<StudentProfilePage />} />
       </Route>
@@ -153,6 +156,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="tickets" element={<AdminTicketsPage />} />
         <Route path="notices" element={<AdminNoticesPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
+        <Route path="payments" element={<AdminPaymentsPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
 
