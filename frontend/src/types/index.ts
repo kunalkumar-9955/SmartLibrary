@@ -143,7 +143,19 @@ export interface NotificationItem {
   isRead: boolean;
 }
 
-export type PaymentStatus = 'CREATED' | 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+export type PaymentStatus =
+  | 'CREATED'
+  | 'PENDING'
+  | 'PENDING_APPROVAL'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'EXPIRED'
+  | 'CANCELLED';
+
+export type PaymentType = 'ONLINE' | 'OFFLINE';
+export type OfflinePaymentMethod = 'CASH' | 'UPI_DIRECT' | 'BANK_TRANSFER' | 'OTHER';
 
 export interface MembershipPlan {
   id: string;
@@ -158,15 +170,24 @@ export interface MembershipPlan {
 export interface PaymentItem {
   _id: string;
   orderId: string;
+  userId?: string;
   studentName: string;
   studentEmail: string;
+  studentPhone?: string;
+  studentIdNumber?: string;
   planId: string;
   planName: string;
   amount: number;
   currency: string;
   durationDays: number;
+  paymentType?: PaymentType;
   status: PaymentStatus;
   paymentMethod: string;
+  offlineMethod?: OfflinePaymentMethod;
+  paymentDate?: string;
+  receiptUrl?: string;
+  adminRejectionReason?: string;
+  adminActionAt?: string;
   gatewayPaymentId?: string;
   checkoutUrl?: string;
   utr?: string;
@@ -178,9 +199,15 @@ export interface PaymentItem {
 
 export interface StudentMembershipOverview {
   membership: {
-    status: 'ACTIVE' | 'EXPIRED' | 'INACTIVE';
+    status: 'ACTIVE' | 'GRACE_PERIOD' | 'EXPIRED' | 'INACTIVE';
     plan: string | null;
+    startDate?: string | null;
     expiresAt: string | null;
+    gracePeriodExpiresAt?: string | null;
+    lastRenewalDate?: string | null;
+    monthlyFee?: number;
+    hasPendingOfflineRequest?: boolean;
+    pendingOfflineOrderId?: string | null;
   };
   payments: PaymentItem[];
 }

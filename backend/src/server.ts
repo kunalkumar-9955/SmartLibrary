@@ -10,6 +10,7 @@ import { errorHandler } from './middleware/errorHandler';
 import apiRoutes from './routes';
 import { bootstrapSystem } from './config/bootstrap';
 import { User } from './models/User';
+import { runAutomaticExpiryChecks } from './services/membershipExpiryService';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -128,6 +129,22 @@ const startServer = async () => {
 
     await connectDB();
     await bootstrapSystem();
+
+    // Automatic Membership Expiry & Reminder Scheduler
+    // Runs on startup (after DB is connected) and every 6 hours
+    const runExpiryJob = async () => {
+      try {
+        console.log('[Scheduler] Running automatic membership expiry & grace period scan...');
+        const stats = await runAutomaticExpiryChecks();
+        console.log(`[Scheduler] Expiry scan finished. Expiries: ${stats.expired}, Reminders: ${stats.remindersSent}, Grace Ended: ${stats.gracePeriodEnded}`);
+      } catch (jobErr: any) {
+        console.error('[Scheduler] Automatic expiry check failed non-fatally:', jobErr.message);
+      }
+    };
+
+    // Run 15 seconds after bootstrap, then every 6 hours
+    setTimeout(runExpiryJob, 15000);
+    setInterval(runExpiryJob, 6 * 60 * 60 * 1000);
   } catch (error: any) {
     console.error('[Bootstrap] Server initialization failed:', error.message);
     process.exit(1);

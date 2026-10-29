@@ -1,61 +1,34 @@
 export interface IMembershipPlan {
   id: string;
   name: string;
-  price: number; // in INR
-  durationDays: number;
+  price: number; // strictly 500
+  durationDays: number; // 30 days (1 calendar month)
   description: string;
-  popular?: boolean;
   features: string[];
 }
 
+/**
+ * EXACTLY ONE MONTHLY MEMBERSHIP PLAN (₹500 ONLY)
+ * No multi-tier pricing, no additional plans, no hidden fees.
+ */
 export const MEMBERSHIP_PLANS: IMembershipPlan[] = [
   {
-    id: 'monthly-standard',
-    name: 'Monthly Standard Study Pass',
-    price: 600,
+    id: 'monthly-membership',
+    name: 'Monthly Library Membership',
+    price: 500,
     durationDays: 30,
-    description: 'Full access to general reading hall, high-speed Wi-Fi, and standard study hours (08:00 AM - 10:00 PM).',
-    popular: false,
+    description: 'Full monthly access to study desks, Wi-Fi, and attendance tracking.',
     features: [
-      'Access to General Reading Hall',
-      'High-Speed Wi-Fi',
+      'Full Day Library Study Access (08:00 AM - 10:00 PM)',
+      'High-Speed Wi-Fi & Power Sockets',
       'Daily Smart QR Attendance Tracking',
-      'Air Conditioned Study Ambience',
-      'Newspaper & Magazine Section',
-    ],
-  },
-  {
-    id: 'dedicated-seat',
-    name: 'Monthly Dedicated Seat Pass',
-    price: 1000,
-    durationDays: 30,
-    description: 'Guaranteed fixed personal seat with charging point and personal locker access.',
-    popular: true,
-    features: [
-      'Guaranteed Reserved Desk / Seat',
-      'Dedicated Power Charging Socket',
-      'Personal Locker Facility',
-      'High-Speed Wi-Fi & Priority Support',
-      'All Standard Study Pass Benefits',
-    ],
-  },
-  {
-    id: 'quarterly-pass',
-    name: 'Quarterly Dedicated Seat Pass',
-    price: 2700,
-    durationDays: 90,
-    description: '3 Months uninterrupted study with maximum savings and dedicated personal desk.',
-    popular: false,
-    features: [
-      'Fixed Reserved Desk for 90 Days',
-      'Personal Locker for 3 Months',
-      '10% Long-Term Subscription Discount',
-      'Uninterrupted AC & Wi-Fi Access',
-      'Priority Help Desk & Support',
+      'Peaceful Air-Conditioned Ambience',
+      '5-Day Renewal Grace Period Protection',
     ],
   },
 ];
 
-export function getPlanById(id: string): IMembershipPlan | undefined {
-  return MEMBERSHIP_PLANS.find((plan) => plan.id === id);
+export function getPlanById(id?: string): IMembershipPlan {
+  // Always return the standard ₹500 monthly plan
+  return MEMBERSHIP_PLANS[0];
 }

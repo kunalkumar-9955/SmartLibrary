@@ -17,9 +17,14 @@ export interface IUser extends Document {
   isCurrentlyInside: boolean;
   currentSeatNumber?: string;
   assignedSeatNumber?: string;
-  membershipStatus?: 'ACTIVE' | 'EXPIRED' | 'INACTIVE';
+  membershipStatus?: 'ACTIVE' | 'GRACE_PERIOD' | 'EXPIRED' | 'INACTIVE';
   membershipPlan?: string;
+  membershipStartDate?: Date;
   membershipExpiresAt?: Date;
+  gracePeriodExpiresAt?: Date;
+  lastRenewalDate?: Date;
+  lastReminderType?: string;
+  lastReminderSentAt?: Date;
   lastPaymentId?: mongoose.Types.ObjectId;
   lastEntryTime?: Date;
   lastExitTime?: Date;
@@ -55,12 +60,17 @@ const UserSchema = new Schema<IUser>(
     assignedSeatNumber: { type: String, trim: true },
     membershipStatus: {
       type: String,
-      enum: ['ACTIVE', 'EXPIRED', 'INACTIVE'],
+      enum: ['ACTIVE', 'GRACE_PERIOD', 'EXPIRED', 'INACTIVE'],
       default: 'INACTIVE',
       index: true,
     },
-    membershipPlan: { type: String, trim: true },
-    membershipExpiresAt: { type: Date },
+    membershipPlan: { type: String, default: 'Monthly Library Membership', trim: true },
+    membershipStartDate: { type: Date },
+    membershipExpiresAt: { type: Date, index: true },
+    gracePeriodExpiresAt: { type: Date, index: true },
+    lastRenewalDate: { type: Date },
+    lastReminderType: { type: String },
+    lastReminderSentAt: { type: Date },
     lastPaymentId: { type: Schema.Types.ObjectId, ref: 'Payment' },
     lastEntryTime: { type: Date },
     lastExitTime: { type: Date },

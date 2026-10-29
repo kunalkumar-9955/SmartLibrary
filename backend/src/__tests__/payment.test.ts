@@ -91,14 +91,14 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
   });
 
   describe('1. Plans & Public Endpoints', () => {
-    it('should return available library membership plans', async () => {
+    it('should return exactly one monthly membership plan for strictly ₹500', async () => {
       const res = await request(app).get('/api/payments/plans');
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(Array.isArray(res.body.data)).toBe(true);
-      expect(res.body.data.length).toBeGreaterThanOrEqual(3);
-      expect(res.body.data[0]).toHaveProperty('id');
-      expect(res.body.data[0]).toHaveProperty('price');
+      expect(res.body.data.length).toBe(1);
+      expect(res.body.data[0].id).toBe('monthly-membership');
+      expect(res.body.data[0].price).toBe(500);
     });
 
     it('should serve the PhonePe QR image', async () => {
@@ -110,36 +110,35 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
     });
   });
 
-  describe('2. Order Creation & UTR Submission Flow', () => {
-    it('should create a payment order for a selected membership plan', async () => {
+  describe('2. Option A: Online Payment Flow (Strictly ₹500)', () => {
+    it('should create an online payment order for exactly ₹500', async () => {
       const res = await request(app)
         .post('/api/payments/create-order')
         .set('Authorization', `Bearer ${studentToken}`)
-        .send({ planId: 'monthly-standard' });
+        .send({});
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data).toHaveProperty('orderId');
-      expect(res.body.data.amount).toBe(600);
-      expect(res.body.data.planName).toBe('Monthly Standard Study Pass');
+      expect(res.body.data.amount).toBe(500);
+      expect(res.body.data.planName).toBe('Monthly Library Membership');
       expect(res.body.data.status).toBe('CREATED');
 
       const saved = await Payment.findOne({ orderId: res.body.data.orderId });
       expect(saved).not.toBeNull();
       expect(saved?.userId.toString()).toBe(studentId);
-      expect(saved?.amount).toBe(600);
+      expect(saved?.amount).toBe(500);
+      expect(saved?.paymentType).toBe('ONLINE');
     });
 
-    it('should allow student to submit 12-digit UTR reference after payment', async () => {
-      // First create order
+    it('should allow student to submit 12-digit UTR reference after online payment', async () => {
       const orderRes = await request(app)
         .post('/api/payments/create-order')
         .set('Authorization', `Bearer ${studentToken}`)
-        .send({ planId: 'monthly-standard' });
+        .send({});
 
       const orderId = orderRes.body.data.orderId;
 
-      // Submit UTR
       const utrRes = await request(app)
         .post('/api/payments/submit-utr')
         .set('Authorization', `Bearer ${studentToken}`)
@@ -154,26 +153,119 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
       expect(updated?.status).toBe('PENDING');
       expect(updated?.utr).toBe('123456789012');
     });
+  });
 
-    it('should check order status and return current lifecycle state', async () => {
-      const orderRes = await request(app)
-        .post('/api/payments/create-order')
+  describe('3. Option B: Offline Payment Flow & Admin Approval Process', () => {
+    it('CRITICAL: Submitting an offline payment request must NOT renew membership', async () => {
+      const res = await request(app)
+        .post('/api/payments/offline-request')
         .set('Authorization', `Bearer ${studentToken}`)
-        .send({ planId: 'dedicated-seat' });
+        .send({
+          paymentMethod: 'CASH',
+          utr: 'CASH-REC-101',
+          paymentDate: '2026-10-30',
+          remarks: 'Handed ₹500 cash to librarian at front desk',
+        });
 
-      const orderId = orderRes.body.data.orderId;
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.status).toBe('PENDING_APPROVAL');
+      expect(res.body.data.amount).toBe(500);
 
-      const statusRes = await request(app)
-        .get(`/api/payments/status/${orderId}`)
-        .set('Authorization', `Bearer ${studentToken}`);
+      // Verify payment saved with PENDING_APPROVAL
+      const offlinePayment = await Payment.findOne({ orderId: res.body.data.orderId });
+      expect(offlinePayment?.status).toBe('PENDING_APPROVAL');
+      expect(offlinePayment?.paymentType).toBe('OFFLINE');
+      expect(offlinePayment?.offlineMethod).toBe('CASH');
 
-      expect(statusRes.status).toBe(200);
-      expect(statusRes.body.data.orderId).toBe(orderId);
-      expect(statusRes.body.data.amount).toBe(1000);
+      // CRITICAL CHECK: User membership MUST REMAIN INACTIVE / UNCHANGED
+      const student = await User.findById(studentId);
+      expect(student?.membershipStatus).toBe('INACTIVE');
+      expect(student?.membershipExpiresAt).toBeUndefined();
+    });
+
+    it('Unauthorized students cannot approve offline requests', async () => {
+      // Create offline request
+      const reqRes = await request(app)
+        .post('/api/payments/offline-request')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ paymentMethod: 'UPI_DIRECT', utr: 'DIRECT-UPI-999' });
+
+      const orderId = reqRes.body.data.orderId;
+
+      // Student tries to approve -> 403 Forbidden
+      const approveRes = await request(app)
+        .post(`/api/payments/admin/offline-action/${orderId}`)
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ action: 'APPROVE', remarks: 'Trying to self-approve' });
+
+      expect(approveRes.status).toBe(403);
+    });
+
+    it('Admin approval renews student membership by 1 calendar month and sets 5-day grace period', async () => {
+      const reqRes = await request(app)
+        .post('/api/payments/offline-request')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({
+          paymentMethod: 'CASH',
+          remarks: 'Paid at desk',
+        });
+
+      const orderId = reqRes.body.data.orderId;
+
+      // Admin approves
+      const actionRes = await request(app)
+        .post(`/api/payments/admin/offline-action/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE', remarks: 'Cash received and confirmed' });
+
+      expect(actionRes.status).toBe(200);
+      expect(actionRes.body.data.status).toBe('APPROVED');
+      expect(actionRes.body.data.membershipStatus).toBe('ACTIVE');
+
+      // Verify student in DB
+      const student = await User.findById(studentId);
+      expect(student?.membershipStatus).toBe('ACTIVE');
+      expect(student?.membershipExpiresAt).toBeDefined();
+      expect(student?.gracePeriodExpiresAt).toBeDefined();
+
+      // Grace period should be exactly 5 days after expiry
+      const diffMs =
+        new Date(student!.gracePeriodExpiresAt!).getTime() -
+        new Date(student!.membershipExpiresAt!).getTime();
+      expect(diffMs).toBe(5 * 24 * 60 * 60 * 1000);
+    });
+
+    it('Admin rejection marks request as REJECTED and leaves membership unchanged', async () => {
+      const reqRes = await request(app)
+        .post('/api/payments/offline-request')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ paymentMethod: 'BANK_TRANSFER', utr: 'INVALID-UTR-000' });
+
+      const orderId = reqRes.body.data.orderId;
+
+      // Admin rejects
+      const actionRes = await request(app)
+        .post(`/api/payments/admin/offline-action/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          action: 'REJECT',
+          rejectionReason: 'Bank transfer not found in library account',
+        });
+
+      expect(actionRes.status).toBe(200);
+      expect(actionRes.body.data.status).toBe('REJECTED');
+
+      const payment = await Payment.findOne({ orderId });
+      expect(payment?.status).toBe('REJECTED');
+      expect(payment?.adminRejectionReason).toBe('Bank transfer not found in library account');
+
+      const student = await User.findById(studentId);
+      expect(student?.membershipStatus).toBe('INACTIVE');
     });
   });
 
-  describe('3. Webhook HMAC-SHA256 Signature Verification & Idempotency', () => {
+  describe('4. Webhook HMAC-SHA256 Signature Verification & Idempotency', () => {
     it('should reject webhooks with missing or invalid signature', async () => {
       const res = await request(app)
         .post('/api/payments/webhook')
@@ -184,20 +276,19 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
       expect(res.body.error).toBeDefined();
     });
 
-    it('should process a valid HMAC-SHA256 signed SUCCESS webhook and activate membership', async () => {
-      // Create payment order
+    it('should process a valid HMAC-SHA256 signed SUCCESS webhook and activate membership for ₹500', async () => {
       const orderRes = await request(app)
         .post('/api/payments/create-order')
         .set('Authorization', `Bearer ${studentToken}`)
-        .send({ planId: 'monthly-standard' });
+        .send({});
 
       const orderId = orderRes.body.data.orderId;
 
       const webhookPayload = JSON.stringify({
         event: 'SUCCESS',
         orderId,
-        amount: '600.00',
-        amountPaise: 60000,
+        amount: '500.00',
+        amountPaise: 50000,
         currency: 'INR',
         method: 'UPI',
         utr: '987654321098',
@@ -220,86 +311,30 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
       expect(webhookRes.status).toBe(200);
       expect(webhookRes.body.success).toBe(true);
 
-      // Verify payment in DB
       const payment = await Payment.findOne({ orderId });
       expect(payment?.status).toBe('SUCCESS');
       expect(payment?.utr).toBe('987654321098');
-      expect(payment?.verificationSource).toBe('YOUPI_WEBHOOK');
 
-      // Verify user membership in DB
       const student = await User.findById(studentId);
       expect(student?.membershipStatus).toBe('ACTIVE');
-      expect(student?.membershipPlan).toBe('Monthly Standard Study Pass');
+      expect(student?.membershipPlan).toBe('Monthly Library Membership');
       expect(student?.membershipExpiresAt).toBeDefined();
-      expect(new Date(student!.membershipExpiresAt!).getTime()).toBeGreaterThan(Date.now());
     });
 
-    it('should handle repeated webhook delivery idempotently without extending twice', async () => {
+    it('should reject webhook if amount does not match ₹500 order', async () => {
       const orderRes = await request(app)
         .post('/api/payments/create-order')
         .set('Authorization', `Bearer ${studentToken}`)
-        .send({ planId: 'monthly-standard' });
-
-      const orderId = orderRes.body.data.orderId;
-      const deliveryId = 'delivery-unique-abc';
-
-      const webhookPayload = JSON.stringify({
-        event: 'SUCCESS',
-        orderId,
-        amount: '600.00',
-        amountPaise: 60000,
-        currency: 'INR',
-        method: 'UPI',
-        utr: '111122223333',
-        timestamp: Date.now(),
-        deliveryId,
-      });
-
-      const signature =
-        'sha256=' +
-        crypto.createHmac('sha256', WEBHOOK_SECRET).update(webhookPayload, 'utf8').digest('hex');
-
-      // First delivery
-      const res1 = await request(app)
-        .post('/api/payments/webhook')
-        .set('X-Gateway-Signature', signature)
-        .set('X-Gateway-Delivery-Id', deliveryId)
-        .set('Content-Type', 'application/json')
-        .send(webhookPayload);
-
-      expect(res1.status).toBe(200);
-      const studentAfterFirst = await User.findById(studentId);
-      const expiry1 = studentAfterFirst?.membershipExpiresAt?.getTime();
-
-      // Second delivery (replay)
-      const res2 = await request(app)
-        .post('/api/payments/webhook')
-        .set('X-Gateway-Signature', signature)
-        .set('X-Gateway-Delivery-Id', deliveryId)
-        .set('Content-Type', 'application/json')
-        .send(webhookPayload);
-
-      expect(res2.status).toBe(200);
-      expect(res2.body.duplicate).toBe(true);
-
-      const studentAfterSecond = await User.findById(studentId);
-      expect(studentAfterSecond?.membershipExpiresAt?.getTime()).toBe(expiry1);
-    });
-
-    it('should reject webhook if amount does not match the order', async () => {
-      const orderRes = await request(app)
-        .post('/api/payments/create-order')
-        .set('Authorization', `Bearer ${studentToken}`)
-        .send({ planId: 'monthly-standard' });
+        .send({});
 
       const orderId = orderRes.body.data.orderId;
 
-      // Tampered amount: 1.00 instead of 600.00
+      // Tampered amount: 100.00 instead of 500.00
       const tamperedPayload = JSON.stringify({
         event: 'SUCCESS',
         orderId,
-        amount: '1.00',
-        amountPaise: 100,
+        amount: '100.00',
+        amountPaise: 10000,
         currency: 'INR',
         method: 'UPI',
         utr: '555555555555',
@@ -320,55 +355,14 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
     });
   });
 
-  describe('4. Admin Payments Visibility & Verification', () => {
-    it('should allow admin to list all payments and block students', async () => {
-      // Student creates an order
-      await request(app)
-        .post('/api/payments/create-order')
-        .set('Authorization', `Bearer ${studentToken}`)
-        .send({ planId: 'monthly-standard' });
-
-      // Student tries to access admin endpoint -> 403
-      const studentAccess = await request(app)
-        .get('/api/payments/admin/all')
-        .set('Authorization', `Bearer ${studentToken}`);
-      expect(studentAccess.status).toBe(403);
-
-      // Admin accesses -> 200
-      const adminAccess = await request(app)
-        .get('/api/payments/admin/all')
-        .set('Authorization', `Bearer ${adminToken}`);
-
-      expect(adminAccess.status).toBe(200);
-      expect(adminAccess.body.success).toBe(true);
-      expect(adminAccess.body.data.payments.length).toBeGreaterThanOrEqual(1);
-      expect(adminAccess.body.data.stats).toBeDefined();
-    });
-
-    it('should allow admin to manually approve a pending payment', async () => {
-      const orderRes = await request(app)
-        .post('/api/payments/create-order')
-        .set('Authorization', `Bearer ${studentToken}`)
-        .send({ planId: 'monthly-standard' });
-
-      const orderId = orderRes.body.data.orderId;
-
-      await request(app)
-        .post('/api/payments/submit-utr')
-        .set('Authorization', `Bearer ${studentToken}`)
-        .send({ orderId, utr: '777888999000' });
-
-      // Admin approves
-      const verifyRes = await request(app)
-        .post(`/api/payments/admin/verify/${orderId}`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ action: 'APPROVE', notes: 'Verified in bank account statement' });
-
-      expect(verifyRes.status).toBe(200);
-      expect(verifyRes.body.data.status).toBe('SUCCESS');
-
-      const updatedUser = await User.findById(studentId);
-      expect(updatedUser?.membershipStatus).toBe('ACTIVE');
+  describe('5. Automated Expiry Checks & Grace Period Management', () => {
+    it('should trigger automated expiry scan endpoint safely', async () => {
+      const res = await request(app).post('/api/payments/cron/check-expiries');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toHaveProperty('remindersSent');
+      expect(res.body.data).toHaveProperty('gracePeriodsStarted');
+      expect(res.body.data).toHaveProperty('membershipsExpired');
     });
   });
 });

@@ -13,6 +13,10 @@ import {
   AlertCircle,
   Check,
   X,
+  Building2,
+  FileText,
+  ExternalLink,
+  Calendar,
 } from 'lucide-react';
 import { paymentService } from '../../services/api';
 import { PaymentItem } from '../../types';
@@ -21,19 +25,24 @@ import { Modal } from '../../components/Modal';
 
 export const AdminPaymentsPage: React.FC = () => {
   const [payments, setPayments] = useState<PaymentItem[]>([]);
-  const [stats, setStats] = useState<Record<string, { count: number; totalAmount: number }>>({});
+  const [stats, setStats] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Verification modal state
+  // Verification modal state for online / offline
   const [selectedPayment, setSelectedPayment] = useState<PaymentItem | null>(null);
-  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
-  const [verifyAction, setVerifyAction] = useState<'APPROVE' | 'REJECT'>('APPROVE');
-  const [verifyNotes, setVerifyNotes] = useState('');
+  const [actionModalOpen, setActionModalOpen] = useState(false);
+  const [selectedAction, setSelectedAction] = useState<'APPROVE' | 'REJECT'>('APPROVE');
+  const [adminNotes, setAdminNotes] = useState('');
+  const [rejectionReason, setRejectionReason] = useState('');
   const [submittingAction, setSubmittingAction] = useState(false);
+
+  // Receipt preview modal
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
 
   const { success, error } = useToast();
 
@@ -42,6 +51,7 @@ export const AdminPaymentsPage: React.FC = () => {
       setLoading(true);
       const res = await paymentService.getAdminPayments({
         status: statusFilter,
+        type: typeFilter,
         search: search.trim() || undefined,
         page,
         limit: 15,
@@ -61,7 +71,7 @@ export const AdminPaymentsPage: React.FC = () => {
 
   useEffect(() => {
     fetchPayments();
-  }, [statusFilter, page]);
+  }, [statusFilter, typeFilter, page]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,30 +79,53 @@ export const AdminPaymentsPage: React.FC = () => {
     fetchPayments();
   };
 
-  const handleOpenVerifyModal = (payment: PaymentItem, action: 'APPROVE' | 'REJECT') => {
+  const handleOpenActionModal = (payment: PaymentItem, action: 'APPROVE' | 'REJECT') => {
     setSelectedPayment(payment);
-    setVerifyAction(action);
-    setVerifyNotes(action === 'APPROVE' ? 'Bank transaction verified' : 'Payment not received');
-    setVerifyModalOpen(true);
+    setSelectedAction(action);
+    setAdminNotes(action === 'APPROVE' ? 'Verified in payment records' : '');
+    setRejectionReason(
+      action === 'REJECT' ? 'Payment could not be verified by library administration' : ''
+    );
+    setActionModalOpen(true);
   };
 
-  const handleConfirmVerification = async () => {
+  const handleConfirmAction = async () => {
     if (!selectedPayment) return;
     try {
       setSubmittingAction(true);
-      const res = await paymentService.verifyPaymentAdmin(selectedPayment.orderId, {
-        action: verifyAction,
-        notes: verifyNotes.trim() || undefined,
-      });
 
-      if (res.data.success) {
-        success(
-          verifyAction === 'APPROVE'
-            ? 'Payment confirmed and student membership activated!'
-            : 'Payment marked as rejected'
-        );
-        setVerifyModalOpen(false);
-        fetchPayments();
+      if (selectedPayment.paymentType === 'OFFLINE') {
+        const res = await paymentService.adminOfflineAction(selectedPayment.orderId, {
+          action: selectedAction,
+          rejectionReason: selectedAction === 'REJECT' ? rejectionReason.trim() : undefined,
+          remarks: adminNotes.trim() || undefined,
+        });
+
+        if (res.data.success) {
+          success(
+            selectedAction === 'APPROVE'
+              ? 'Offline payment approved & membership renewed by 1 calendar month!'
+              : 'Offline payment rejected'
+          );
+          setActionModalOpen(false);
+          fetchPayments();
+        }
+      } else {
+        // Online manual verification
+        const res = await paymentService.verifyPaymentAdmin(selectedPayment.orderId, {
+          action: selectedAction,
+          notes: adminNotes.trim() || undefined,
+        });
+
+        if (res.data.success) {
+          success(
+            selectedAction === 'APPROVE'
+              ? 'Online payment verified & membership renewed!'
+              : 'Payment marked as rejected'
+          );
+          setActionModalOpen(false);
+          fetchPayments();
+        }
       }
     } catch (err: any) {
       error(err.response?.data?.message || 'Action failed');
@@ -101,9 +134,10 @@ export const AdminPaymentsPage: React.FC = () => {
     }
   };
 
-  const totalCollected = stats.SUCCESS?.totalAmount || 0;
-  const pendingCount = stats.PENDING?.count || 0;
-  const successCount = stats.SUCCESS?.count || 0;
+  const totalCollected = stats.totalCollected || 0;
+  const pendingOffline = stats.pendingOfflineApproval || 0;
+  const onlineSuccess = stats.onlineSuccess || 0;
+  const offlineApproved = stats.offlineApproved || 0;
 
   return (
     <div className="space-y-6">
@@ -112,15 +146,15 @@ export const AdminPaymentsPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
             <CreditCard className="w-6 h-6 text-emerald-400" />
-            Payment History & Memberships
+            Lakshya Membership Payments & Approvals
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Real-time YouPI-PG Gateway & PhonePe UPI collections and verification ledger.
+            Review online UPI settlements and process offline cash/transfer requests. Strictly ₹500 monthly fee.
           </p>
         </div>
         <button
           onClick={fetchPayments}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold border border-slate-700 shadow-sm transition"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold border border-slate-700 shadow-sm transition self-start sm:self-auto"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Refresh Ledger
@@ -128,31 +162,49 @@ export const AdminPaymentsPage: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-sm">
           <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold block mb-1">
-            Total Verified Revenue
+            Total Revenue Collected
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-white">
+            <span className="text-2xl font-extrabold text-white">
               ₹{totalCollected.toLocaleString('en-IN')}
             </span>
-            <span className="text-xs text-emerald-400 font-semibold">
-              ({successCount} active passes)
-            </span>
           </div>
+          <span className="text-[11px] text-emerald-400 mt-1 block">
+            {onlineSuccess} online + {offlineApproved} offline
+          </span>
+        </div>
+
+        <div className="bg-slate-800/80 border border-purple-500/30 rounded-2xl p-5 shadow-sm">
+          <span className="text-xs uppercase tracking-wider text-purple-300 font-semibold block mb-1">
+            Pending Offline Approvals
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-extrabold text-purple-400">
+              {pendingOffline}
+            </span>
+            <span className="text-xs text-slate-400">requests</span>
+          </div>
+          <span className="text-[11px] text-purple-300/80 mt-1 block">
+            Requires Admin verification
+          </span>
         </div>
 
         <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-sm">
           <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold block mb-1">
-            Pending Verifications
+            Monthly Fee Standard
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-amber-400">
-              {pendingCount}
+            <span className="text-2xl font-extrabold text-white">
+              ₹500
             </span>
-            <span className="text-xs text-slate-400">awaiting bank match</span>
+            <span className="text-xs text-slate-400">/ student</span>
           </div>
+          <span className="text-[11px] text-slate-400 mt-1 block">
+            Calendar month + 5-day grace
+          </span>
         </div>
 
         <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 shadow-sm">
@@ -162,35 +214,54 @@ export const AdminPaymentsPage: React.FC = () => {
           <div className="flex items-center gap-2 mt-1">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
             <span className="text-sm font-bold text-white">
-              YouPI-PG V2 (HMAC-SHA256)
+              YouPI-PG + PhonePe
             </span>
           </div>
           <span className="text-[11px] text-slate-400 mt-1 block">
-            Direct PhonePe settlement • 0% aggregator fees
+            Zero gateway fee direct settlement
           </span>
         </div>
       </div>
 
       {/* Filters & Search Toolbar */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center">
-        {/* Status Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-          {['ALL', 'PENDING', 'SUCCESS', 'FAILED'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => {
-                setStatusFilter(tab);
-                setPage(1);
-              }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                statusFilter === tab
-                  ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                  : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              {tab === 'ALL' ? 'All Transactions' : tab}
-            </button>
-          ))}
+        {/* Type & Status Tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+          <select
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value);
+              setPage(1);
+            }}
+            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-emerald-500"
+          >
+            <option value="ALL">All Types (Online & Offline)</option>
+            <option value="ONLINE">Online Payments Only</option>
+            <option value="OFFLINE">Offline Payments Only</option>
+          </select>
+
+          <div className="flex items-center gap-1">
+            {['ALL', 'PENDING_APPROVAL', 'PENDING', 'SUCCESS', 'APPROVED', 'REJECTED'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => {
+                  setStatusFilter(tab);
+                  setPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                  statusFilter === tab
+                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                    : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                {tab === 'ALL'
+                  ? 'All Statuses'
+                  : tab === 'PENDING_APPROVAL'
+                  ? 'Offline Approvals'
+                  : tab}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Search */}
@@ -230,11 +301,12 @@ export const AdminPaymentsPage: React.FC = () => {
             <table className="w-full text-left text-sm text-slate-300">
               <thead className="bg-slate-800/80 text-xs uppercase text-slate-400 border-b border-slate-800 font-semibold tracking-wider">
                 <tr>
-                  <th className="py-3.5 px-4">Order ID</th>
+                  <th className="py-3.5 px-4">Order Ref</th>
                   <th className="py-3.5 px-4">Student</th>
-                  <th className="py-3.5 px-4">Pass Name</th>
+                  <th className="py-3.5 px-4">Method / Type</th>
                   <th className="py-3.5 px-4">Amount</th>
-                  <th className="py-3.5 px-4">UPI UTR / Ref</th>
+                  <th className="py-3.5 px-4">UTR / Ref</th>
+                  <th className="py-3.5 px-4">Receipt</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">Date</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -245,18 +317,18 @@ export const AdminPaymentsPage: React.FC = () => {
                   <tr key={p._id} className="hover:bg-slate-800/40 transition">
                     <td className="py-3.5 px-4 font-mono text-xs text-slate-200">
                       {p.orderId}
-                      {p.gatewayPaymentId && !p.gatewayPaymentId.startsWith('LOCAL_') && (
-                        <span className="block text-[10px] text-slate-500 truncate max-w-[140px]">
-                          GW: {p.gatewayPaymentId}
-                        </span>
-                      )}
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="font-medium text-white text-xs">{p.studentName}</div>
                       <div className="text-[11px] text-slate-400">{p.studentEmail}</div>
+                      {p.studentPhone && (
+                        <div className="text-[10px] text-slate-500">{p.studentPhone}</div>
+                      )}
                     </td>
-                    <td className="py-3.5 px-4 font-medium text-white text-xs">
-                      {p.planName}
+                    <td className="py-3.5 px-4">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                        {p.paymentType || 'ONLINE'} {p.offlineMethod ? `• ${p.offlineMethod}` : ''}
+                      </span>
                     </td>
                     <td className="py-3.5 px-4 font-bold text-white text-sm">
                       ₹{p.amount}
@@ -265,19 +337,42 @@ export const AdminPaymentsPage: React.FC = () => {
                       {p.utr || '—'}
                     </td>
                     <td className="py-3.5 px-4">
+                      {p.receiptUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => setReceiptPreviewUrl(p.receiptUrl!)}
+                          className="inline-flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 font-semibold"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> View Receipt
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-500">—</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4">
                       {p.status === 'SUCCESS' && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                           <CheckCircle2 className="w-3 h-3" /> SUCCESS
                         </span>
                       )}
+                      {p.status === 'APPROVED' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <CheckCircle2 className="w-3 h-3" /> APPROVED
+                        </span>
+                      )}
+                      {p.status === 'PENDING_APPROVAL' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30 animate-pulse">
+                          <Clock className="w-3 h-3" /> PENDING APPROVAL
+                        </span>
+                      )}
                       {p.status === 'PENDING' && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                           <Clock className="w-3 h-3" /> PENDING
                         </span>
                       )}
-                      {p.status === 'CREATED' && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                          CREATED
+                      {p.status === 'REJECTED' && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20" title={p.adminRejectionReason}>
+                          <XCircle className="w-3 h-3" /> REJECTED
                         </span>
                       )}
                       {['FAILED', 'EXPIRED', 'CANCELLED'].includes(p.status) && (
@@ -294,16 +389,16 @@ export const AdminPaymentsPage: React.FC = () => {
                       })}
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      {p.status === 'PENDING' ? (
+                      {p.status === 'PENDING_APPROVAL' || p.status === 'PENDING' ? (
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => handleOpenVerifyModal(p, 'APPROVE')}
+                            onClick={() => handleOpenActionModal(p, 'APPROVE')}
                             className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition"
                           >
                             Approve
                           </button>
                           <button
-                            onClick={() => handleOpenVerifyModal(p, 'REJECT')}
+                            onClick={() => handleOpenActionModal(p, 'REJECT')}
                             className="px-2.5 py-1 bg-rose-600/80 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold transition"
                           >
                             Reject
@@ -344,12 +439,16 @@ export const AdminPaymentsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Manual Verification Modal */}
-      {verifyModalOpen && selectedPayment && (
+      {/* Admin Action Modal (Approve / Reject) */}
+      {actionModalOpen && selectedPayment && (
         <Modal
-          isOpen={verifyModalOpen}
-          onClose={() => setVerifyModalOpen(false)}
-          title={verifyAction === 'APPROVE' ? 'Approve & Activate Pass' : 'Reject Payment'}
+          isOpen={actionModalOpen}
+          onClose={() => setActionModalOpen(false)}
+          title={
+            selectedAction === 'APPROVE'
+              ? `Approve ${selectedPayment.paymentType === 'OFFLINE' ? 'Offline' : 'Online'} Payment`
+              : `Reject Payment Request`
+          }
         >
           <div className="space-y-4">
             <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-700/80 text-xs space-y-2">
@@ -358,59 +457,113 @@ export const AdminPaymentsPage: React.FC = () => {
                 <span className="font-mono text-white">{selectedPayment.orderId}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-slate-400">Payment Type:</span>
+                <span className="text-purple-300 font-semibold">
+                  {selectedPayment.paymentType} {selectedPayment.offlineMethod ? `(${selectedPayment.offlineMethod})` : ''}
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-slate-400">Student:</span>
                 <span className="text-white font-medium">{selectedPayment.studentName} ({selectedPayment.studentEmail})</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Pass Plan:</span>
-                <span className="text-emerald-400 font-semibold">{selectedPayment.planName}</span>
-              </div>
-              <div className="flex justify-between">
                 <span className="text-slate-400">Amount:</span>
-                <span className="text-white font-bold text-sm">₹{selectedPayment.amount}</span>
+                <span className="text-emerald-400 font-bold text-sm">₹{selectedPayment.amount}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Submitted UTR:</span>
+                <span className="text-slate-400">Submitted UTR / Ref:</span>
                 <span className="font-mono text-amber-300 font-bold">{selectedPayment.utr || 'None'}</span>
               </div>
+              {selectedPayment.notes && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Student Remarks:</span>
+                  <span className="text-slate-300 italic">{selectedPayment.notes}</span>
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Verification Notes / Remark
-              </label>
-              <input
-                type="text"
-                value={verifyNotes}
-                onChange={(e) => setVerifyNotes(e.target.value)}
-                placeholder="e.g. Verified in PhonePe merchant statement"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-              />
-            </div>
+            {selectedAction === 'APPROVE' ? (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Approval Notes / Audit Remark
+                </label>
+                <input
+                  type="text"
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  placeholder="e.g. Cash received at front desk by admin"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  CRITICAL: Approving will extend student membership by exactly 1 calendar month and send confirmation notification & SMS.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Rejection Reason <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="e.g. Cash was not received, or UTR number could not be found in bank statement."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                />
+                <p className="text-[11px] text-rose-300/80 mt-1">
+                  Student membership will remain unchanged. The student will be notified with this reason.
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setVerifyModalOpen(false)}
+                onClick={() => setActionModalOpen(false)}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={submittingAction}
-                onClick={handleConfirmVerification}
+                disabled={submittingAction || (selectedAction === 'REJECT' && !rejectionReason.trim())}
+                onClick={handleConfirmAction}
                 className={`px-4 py-2 text-white text-xs font-bold rounded-xl shadow-md transition ${
-                  verifyAction === 'APPROVE'
+                  selectedAction === 'APPROVE'
                     ? 'bg-emerald-600 hover:bg-emerald-500'
                     : 'bg-rose-600 hover:bg-rose-500'
                 }`}
               >
-                {submittingAction ? 'Processing...' : `Confirm ${verifyAction}`}
+                {submittingAction ? 'Processing...' : `Confirm ${selectedAction}`}
               </button>
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Receipt Image Preview Modal */}
+      {receiptPreviewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-4 relative">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+              <h4 className="text-sm font-bold text-white">Payment Receipt Preview</h4>
+              <button
+                onClick={() => setReceiptPreviewUrl(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-auto rounded-xl bg-slate-950 p-2">
+              <img
+                src={receiptPreviewUrl}
+                alt="Uploaded Payment Receipt"
+                className="w-full h-auto rounded-lg object-contain"
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

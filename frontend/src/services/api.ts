@@ -174,17 +174,26 @@ export const adminNotificationService = {
   markAllAsRead: () => api.post('/admin-notifications/read-all'),
 };
 
-// Payment & Subscription Services (YouPI-PG Gateway & Direct UPI)
+// Payment & Subscription Services (YouPI-PG Gateway, Direct UPI & Admin Offline Approval)
 export const paymentService = {
   getPlans: () => api.get('/payments/plans'),
   getMyPayments: () => api.get('/payments/my-payments'),
-  createOrder: (data: { planId: string; idempotencyKey?: string }) =>
+  createOrder: (data: { planId?: string; idempotencyKey?: string }) =>
     api.post('/payments/create-order', data),
   submitUtr: (data: { orderId: string; utr: string; notes?: string }) =>
     api.post('/payments/submit-utr', data),
+  submitOfflineRequest: (formData: FormData) =>
+    api.post('/payments/offline-request', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   getOrderStatus: (orderId: string) => api.get(`/payments/status/${orderId}`),
-  getAdminPayments: (params?: { status?: string; search?: string; page?: number; limit?: number }) =>
+  getAdminPayments: (params?: { status?: string; type?: string; search?: string; page?: number; limit?: number }) =>
     api.get('/payments/admin/all', { params }),
   verifyPaymentAdmin: (orderId: string, data: { action: 'APPROVE' | 'REJECT'; notes?: string }) =>
     api.post(`/payments/admin/verify/${orderId}`, data),
+  adminOfflineAction: (
+    orderId: string,
+    data: { action: 'APPROVE' | 'REJECT'; rejectionReason?: string; remarks?: string }
+  ) => api.post(`/payments/admin/offline-action/${orderId}`, data),
+  triggerExpiryCheck: () => api.post('/payments/cron/check-expiries'),
 };
