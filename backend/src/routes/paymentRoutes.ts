@@ -6,6 +6,7 @@ import {
   submitUtr,
   getOrderStatus,
   serveQrImage,
+  getQrPayload,
   handleWebhook,
   getAdminPayments,
   verifyPaymentAdmin,
@@ -22,6 +23,7 @@ const router = Router();
 // Public / Gateway / Cron routes
 router.get('/plans', getPlans);
 router.get('/qr-image', serveQrImage);
+router.get('/qr-payload', getQrPayload);
 router.post('/webhook', handleWebhook);
 router.post('/cron/check-expiries', checkExpiriesEndpoint);
 

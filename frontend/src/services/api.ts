@@ -191,6 +191,7 @@ export const paymentService = {
     return api.post('/payments/offline-request', data);
   },
   getQrImageUrl: () => `${API_BASE_URL}/payments/qr-image`,
+  getQrPayload: () => api.get('/payments/qr-payload'),
   getOrderStatus: (orderId: string) => api.get(`/payments/status/${orderId}`),
   getAdminPayments: (params?: { status?: string; type?: string; search?: string; page?: number; limit?: number }) =>
     api.get('/payments/admin/all', { params }),

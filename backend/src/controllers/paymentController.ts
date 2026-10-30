@@ -207,6 +207,9 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     const amount = 500;
     const amountPaise = 50000;
 
+    const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
+    const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
+
     // Check for existing pending order with same idempotency key
     if (idempotencyKey) {
       const existing = await Payment.findOne({
@@ -215,6 +218,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         paymentType: 'ONLINE',
       });
       if (existing && existing.status !== 'FAILED' && existing.status !== 'CANCELLED') {
+        const existingUpiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}&tr=${existing.orderId}`;
         return sendSuccess(
           res,
           {
@@ -225,6 +229,9 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             checkoutUrl: existing.checkoutUrl,
             status: existing.status,
             isExisting: true,
+            upiId,
+            merchantName,
+            upiString: existingUpiString,
           },
           'Returning existing order session'
         );
@@ -232,6 +239,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     }
 
     const orderId = `LIB-ORD-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}&tr=${orderId}`;
 
     // Call YouPI-PG Gateway (falls back to direct PhonePe UPI QR mode if daemon offline)
     const gatewayResult = await youpiPaymentService.createPayment({
@@ -284,6 +292,9 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         checkoutUrl: payment.checkoutUrl,
         status: payment.status,
         isGatewayOnline: gatewayResult.isGatewayOnline,
+        upiId,
+        merchantName,
+        upiString,
       },
       'Payment order created successfully'
     );
@@ -776,6 +787,30 @@ export const serveQrImage = (req: Request, res: Response) => {
     if (!res.headersSent) res.status(500).end();
   });
   stream.pipe(res);
+};
+
+/**
+ * GET /api/payments/qr-payload
+ * Returns raw UPI payload and details for generating clean vector QR code directly without full poster.
+ */
+export const getQrPayload = (req: Request, res: Response) => {
+  const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
+  const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
+  const amount = 500;
+  const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}`;
+
+  return sendSuccess(
+    res,
+    {
+      upiId,
+      merchantName,
+      amount,
+      currency: 'INR',
+      note: 'Lakshya Smart Library Membership',
+      upiString,
+    },
+    'UPI QR payload retrieved successfully'
+  );
 };
 
 /**

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   CheckCircle2,
   Clock,
@@ -15,6 +16,8 @@ import {
   BadgeAlert,
   ArrowRight,
   ExternalLink,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { paymentService } from '../../services/api';
 import { PaymentItem, StudentMembershipOverview } from '../../types';
@@ -36,10 +39,63 @@ export const StudentMembershipPage: React.FC = () => {
     amount: number;
     planName: string;
     checkoutUrl?: string;
+    upiString?: string;
+    upiId?: string;
+    merchantName?: string;
   } | null>(null);
+  const [copiedUpi, setCopiedUpi] = useState(false);
+  const [showManualUtrFallback, setShowManualUtrFallback] = useState(false);
+  const [manualUtr, setManualUtr] = useState('');
+  const [submittingUtr, setSubmittingUtr] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState<'INITIAL' | 'PENDING' | 'SUCCESS' | 'FAILED'>('INITIAL');
   const [checkingStatus, setCheckingStatus] = useState(false);
-  const [qrLoaded, setQrLoaded] = useState(false);
+
+  const DEFAULT_UPI_ID = '9955008447-7@axl';
+  const DEFAULT_MERCHANT_NAME = 'Lakshya Smart Library';
+  const activeUpiId = activeOrder?.upiId || DEFAULT_UPI_ID;
+  const activeMerchant = activeOrder?.merchantName || DEFAULT_MERCHANT_NAME;
+  const activeUpiString =
+    activeOrder?.upiString ||
+    `upi://pay?pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(activeMerchant)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}${activeOrder?.orderId ? `&tr=${activeOrder.orderId}` : ''}`;
+
+  const handleCopyUpi = () => {
+    navigator.clipboard.writeText(activeUpiId);
+    setCopiedUpi(true);
+    success('UPI ID copied to clipboard');
+    setTimeout(() => setCopiedUpi(false), 2500);
+  };
+
+  const getAppIntentUrl = (appScheme: string) => {
+    const params = `pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(activeMerchant)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}${activeOrder?.orderId ? `&tr=${activeOrder.orderId}` : ''}`;
+    if (appScheme === 'upi') return `upi://pay?${params}`;
+    if (appScheme === 'phonepe') return `phonepe://pay?${params}`;
+    if (appScheme === 'gpay') return `gpay://upi/pay?${params}`;
+    if (appScheme === 'paytm') return `paytmmp://pay?${params}`;
+    return `upi://pay?${params}`;
+  };
+
+  const handleManualUtrSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOrder?.orderId || !manualUtr.trim() || submittingUtr) return;
+    try {
+      setSubmittingUtr(true);
+      const res = await paymentService.submitUtr({
+        orderId: activeOrder.orderId,
+        utr: manualUtr.trim(),
+        notes: 'Submitted via student dashboard',
+      });
+      if (res.data.success) {
+        success('Reference submitted. Verification is in progress.');
+        setManualUtr('');
+        setShowManualUtrFallback(false);
+        pollStatus(activeOrder.orderId, false);
+      }
+    } catch (err: any) {
+      error(err.response?.data?.message || 'Failed to submit UPI reference.');
+    } finally {
+      setSubmittingUtr(false);
+    }
+  };
 
   // Option B (Offline Payment) State
   const [offlineRemarks, setOfflineRemarks] = useState('');
@@ -97,13 +153,16 @@ export const StudentMembershipPage: React.FC = () => {
           amount: res.data.data.amount || 500,
           planName: res.data.data.planName || 'Monthly Library Membership',
           checkoutUrl: res.data.data.checkoutUrl,
+          upiString: res.data.data.upiString,
+          upiId: res.data.data.upiId || DEFAULT_UPI_ID,
+          merchantName: res.data.data.merchantName || DEFAULT_MERCHANT_NAME,
         });
         setOnlineStatus('PENDING');
       }
     } catch (err: any) {
       setOrderError(
         err.response?.data?.message ||
-          'Payment order session could not be established. You can still scan the PhonePe QR directly.'
+          'Payment order session could not be established. You can still scan the QR directly.'
       );
     } finally {
       setCreatingOrder(false);
@@ -561,28 +620,86 @@ export const StudentMembershipPage: React.FC = () => {
                     </div>
                   ) : (
                     <>
-                      {/* Authentic PhonePe Payment QR Display */}
-                      <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center">
-                        <div className="relative p-2.5 bg-white rounded-2xl shadow-md border border-slate-200 max-w-[210px] sm:max-w-[230px] mx-auto min-h-[210px] flex items-center justify-center">
-                          <img
-                            src={qrImageUrl}
-                            alt="Lakshya Library PhonePe QR"
-                            onLoad={() => setQrLoaded(true)}
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              if (!target.src.endsWith('/qr/QR.jpeg')) {
-                                target.src = '/qr/QR.jpeg';
-                              } else if (!target.src.endsWith('/QR.jpeg')) {
-                                target.src = '/QR.jpeg';
-                              }
-                            }}
-                            className="w-full h-auto rounded-xl object-contain"
+                      {/* Clean Square QR Display without full PhonePe poster */}
+                      <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 text-center">
+                        <div className="p-3.5 bg-white rounded-2xl shadow-sm border border-slate-200 inline-flex items-center justify-center mx-auto">
+                          <QRCodeSVG
+                            value={activeUpiString}
+                            size={200}
+                            level="M"
+                            includeMargin={false}
                           />
                         </div>
 
-                        <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
-                          <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                          <span>Scan with <strong>PhonePe, GPay, Paytm, or BHIM</strong></span>
+                        {/* Scannable Badge */}
+                        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Scan with PhonePe, GPay, Paytm, or BHIM</span>
+                        </div>
+
+                        {/* Verified Payment Details */}
+                        <div className="mt-3.5 w-full max-w-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs space-y-2 text-left">
+                          <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                            <span>Library / Payee:</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">{activeMerchant}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                            <span>Amount:</span>
+                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">₹500.00</span>
+                          </div>
+                          <div className="flex justify-between items-center text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                            <span>UPI ID:</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-medium text-slate-900 dark:text-white text-[11px]">
+                                {activeUpiId}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleCopyUpi}
+                                title="Copy UPI ID"
+                                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white transition cursor-pointer"
+                              >
+                                {copiedUpi ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 1-Tap Direct UPI App Buttons */}
+                      <div className="space-y-1.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">
+                          Or Pay Directly Via Installed App
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <a
+                            href={getAppIntentUrl('phonepe')}
+                            className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 transition"
+                          >
+                            <span>PhonePe</span>
+                          </a>
+                          <a
+                            href={getAppIntentUrl('gpay')}
+                            className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 transition"
+                          >
+                            <span>Google Pay</span>
+                          </a>
+                          <a
+                            href={getAppIntentUrl('paytm')}
+                            className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 transition"
+                          >
+                            <span>Paytm</span>
+                          </a>
+                          <a
+                            href={getAppIntentUrl('upi')}
+                            className="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800 transition"
+                          >
+                            <span>Any UPI</span>
+                          </a>
                         </div>
                       </div>
 
@@ -605,7 +722,7 @@ export const StudentMembershipPage: React.FC = () => {
                           href={activeOrder.checkoutUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition"
+                          className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition shadow-sm"
                         >
                           <span>Open Hosted Payment Checkout</span>
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -613,10 +730,10 @@ export const StudentMembershipPage: React.FC = () => {
                       )}
 
                       {/* Automatic Verification Status Notice */}
-                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-2">
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5">
                         <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
                           <Clock className={`w-4 h-4 text-emerald-500 ${checkingStatus ? 'animate-spin' : ''}`} />
-                          <span>Automatic Transaction Verification Active</span>
+                          <span>Automatic Settlement Verification Active</span>
                         </div>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                           Once you complete the payment on your UPI app, our system detects the incoming settlement and automatically renews your membership.
@@ -628,11 +745,46 @@ export const StudentMembershipPage: React.FC = () => {
                         type="button"
                         disabled={checkingStatus || !activeOrder}
                         onClick={() => activeOrder && pollStatus(activeOrder.orderId, true)}
-                        className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 shadow-sm"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${checkingStatus ? 'animate-spin' : ''}`} />
                         <span>{checkingStatus ? 'Checking Verification...' : 'I Have Paid / Check Status'}</span>
                       </button>
+
+                      {/* Optional Fallback for Network Lag / Manual UTR Entry */}
+                      <div className="pt-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setShowManualUtrFallback(!showManualUtrFallback)}
+                          className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline cursor-pointer"
+                        >
+                          {showManualUtrFallback ? 'Hide Manual Reference Submission' : 'Having trouble? Enter UPI reference manually'}
+                        </button>
+                        {showManualUtrFallback && (
+                          <form onSubmit={handleManualUtrSubmit} className="mt-2.5 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2 text-left">
+                            <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                              12-Digit UPI Transaction Reference (UTR)
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                maxLength={30}
+                                placeholder="e.g. 123456789012"
+                                value={manualUtr}
+                                onChange={(e) => setManualUtr(e.target.value)}
+                                className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+                              />
+                              <button
+                                type="submit"
+                                disabled={submittingUtr || !manualUtr.trim()}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-semibold rounded-lg disabled:opacity-50 transition"
+                              >
+                                {submittingUtr ? 'Submitting...' : 'Submit'}
+                              </button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
                     </>
                   )}
                 </div>
