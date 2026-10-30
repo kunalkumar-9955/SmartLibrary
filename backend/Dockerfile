@@ -9,6 +9,7 @@ RUN npm ci
 # Copy configuration and source files explicitly
 COPY tsconfig.json ./
 COPY src ./src
+COPY qr ./qr
 
 # Compile TypeScript to dist
 RUN npm run build
@@ -25,8 +26,9 @@ RUN npm ci --omit=dev
 # Copy compiled JavaScript from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Ensure uploads directory exists
-RUN mkdir -p uploads
+# Ensure uploads and qr directories exist
+RUN mkdir -p uploads qr
+COPY qr ./qr
 
 # Expose port and start server
 EXPOSE 5000

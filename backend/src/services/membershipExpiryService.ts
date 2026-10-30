@@ -40,6 +40,14 @@ export function formatIndianDate(date: Date | string): string {
   });
 }
 
+export interface ExpiryCheckStats {
+  remindersSent: number;
+  gracePeriodsStarted: number;
+  membershipsExpired: number;
+  expired: number;
+  gracePeriodEnded: number;
+}
+
 /**
  * Scans all student accounts to:
  * 1. Send reminders 2 days before expiry
@@ -47,11 +55,7 @@ export function formatIndianDate(date: Date | string): string {
  * 3. Transition lapsed grace periods to EXPIRED and notify student & admin
  * Safe and idempotent: will not send duplicate alerts in the same cycle.
  */
-export async function runAutomaticExpiryChecks(): Promise<{
-  remindersSent: number;
-  gracePeriodsStarted: number;
-  membershipsExpired: number;
-}> {
+export async function runAutomaticExpiryChecks(): Promise<ExpiryCheckStats> {
   const now = new Date();
   let remindersSent = 0;
   let gracePeriodsStarted = 0;
@@ -190,5 +194,11 @@ export async function runAutomaticExpiryChecks(): Promise<{
     }
   }
 
-  return { remindersSent, gracePeriodsStarted, membershipsExpired };
+  return {
+    remindersSent,
+    gracePeriodsStarted,
+    membershipsExpired,
+    expired: membershipsExpired,
+    gracePeriodEnded: membershipsExpired,
+  };
 }

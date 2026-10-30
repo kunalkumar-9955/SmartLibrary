@@ -743,6 +743,8 @@ export const serveQrImage = (req: Request, res: Response) => {
     path.join(process.cwd(), 'qr', 'qr.png'),
     path.join(process.cwd(), 'qr', 'QR.png'),
     path.join(process.cwd(), 'QR.jpeg'),
+    path.join(__dirname, '..', '..', 'qr', 'QR.jpeg'),
+    path.join(__dirname, '..', '..', '..', 'qr', 'QR.jpeg'),
     path.join(process.cwd(), '..', 'qr', 'QR.jpeg'),
     path.join(process.cwd(), '..', 'QR.jpeg'),
   ];

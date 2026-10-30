@@ -66,9 +66,9 @@ export const StudentLayout: React.FC = () => {
             </div>
             <div>
               <p className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight tracking-tight">
-                LAKSHYA SMART LIBRARY
+                Lakshya Smart Library
               </p>
-              <p className="text-[10px] text-pink-600 dark:text-pink-400 font-semibold">Student Portal</p>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Student Portal</p>
             </div>
           </Link>
 

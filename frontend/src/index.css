@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 selection:bg-pink-500 selection:text-white antialiased;
+    @apply bg-slate-50 text-slate-900 selection:bg-emerald-500/30 selection:text-emerald-950 dark:selection:text-emerald-100 antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
@@ -18,11 +18,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #f472b6;
+  background: #10b981;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #db2777;
+  background: #059669;
 }
 
 /* -----------------------------------------------------------------------

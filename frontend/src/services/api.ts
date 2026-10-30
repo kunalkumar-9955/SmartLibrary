@@ -182,10 +182,15 @@ export const paymentService = {
     api.post('/payments/create-order', data),
   submitUtr: (data: { orderId: string; utr: string; notes?: string }) =>
     api.post('/payments/submit-utr', data),
-  submitOfflineRequest: (formData: FormData) =>
-    api.post('/payments/offline-request', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+  submitOfflineRequest: (data: FormData | { paymentMethod?: string; remarks?: string }) => {
+    if (typeof FormData !== 'undefined' && data instanceof FormData) {
+      return api.post('/payments/offline-request', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    }
+    return api.post('/payments/offline-request', data);
+  },
+  getQrImageUrl: () => `${API_BASE_URL}/payments/qr-image`,
   getOrderStatus: (orderId: string) => api.get(`/payments/status/${orderId}`),
   getAdminPayments: (params?: { status?: string; type?: string; search?: string; page?: number; limit?: number }) =>
     api.get('/payments/admin/all', { params }),
