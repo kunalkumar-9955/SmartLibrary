@@ -48,11 +48,11 @@ export const StudentLayout: React.FC = () => {
 
   const navItems = [
     { label: 'Home', path: '/student/dashboard', icon: Home },
-    { label: 'Passes', path: '/student/membership', icon: CreditCard },
+    { label: 'Payments', path: '/student/membership', icon: CreditCard },
     { label: 'Scan QR', path: '/student/scan', icon: QrCode, isAction: true },
     { label: 'Attendance', path: '/student/attendance', icon: CalendarCheck },
     { label: 'Complaints', path: '/student/tickets', icon: LifeBuoy },
-    { label: 'Profile', path: '/student/profile', icon: UserIcon },
+
   ];
 
   return (
@@ -118,7 +118,7 @@ export const StudentLayout: React.FC = () => {
       </main>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-4 py-2 flex items-center justify-around md:hidden">
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 flex items-center justify-around md:hidden pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
@@ -130,7 +130,7 @@ export const StudentLayout: React.FC = () => {
                 to={item.path}
                 className="relative -top-5 flex flex-col items-center group"
               >
-                <div className="w-12 h-12 p-3 rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-500/30 group-hover:scale-105 transition-all flex items-center justify-center">
+                <div className="w-13 h-13 rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-500/35 border-4 border-white dark:border-slate-900 group-hover:scale-105 transition-all flex items-center justify-center">
                   <Icon className="w-6 h-6" />
                 </div>
                 <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-1">
@@ -144,14 +144,14 @@ export const StudentLayout: React.FC = () => {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center py-1 px-3 rounded-lg text-xs transition ${
+              className={`flex-1 flex flex-col items-center py-1 px-1 rounded-lg text-xs transition ${
                 isActive
                   ? 'text-indigo-600 dark:text-indigo-400 font-bold'
                   : 'text-slate-400 dark:text-slate-500 hover:text-slate-700'
               }`}
             >
               <Icon className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px]">{item.label}</span>
+              <span className="text-[10px] leading-tight truncate">{item.label}</span>
             </Link>
           );
         })}

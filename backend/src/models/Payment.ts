@@ -5,12 +5,14 @@ export type PaymentStatus =
   | 'CREATED'
   | 'PENDING'
   | 'PENDING_APPROVAL'
+  | 'PROCESSING'
   | 'APPROVED'
   | 'REJECTED'
   | 'SUCCESS'
   | 'FAILED'
   | 'EXPIRED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'REFUNDED';
 
 export type VerificationSource =
   | 'YOUPI_WEBHOOK'
@@ -35,6 +37,7 @@ export interface IPayment extends Document {
   currency: string;
   durationDays: number;
   isCustomAmount?: boolean;
+  isTestTransaction?: boolean;
   paymentType: PaymentType;
   status: PaymentStatus;
   paymentMethod: string;
@@ -46,9 +49,19 @@ export interface IPayment extends Document {
   gatewayRawResponse?: Record<string, any>;
   // Verification & Common Fields
   utr?: string;
+  receiptNumber?: string;
   verificationSource?: VerificationSource;
+  orderCreatedTime?: Date;
+  paymentInitiatedAt?: Date;
+  paymentCompletedAt?: Date;
+  lastStatusUpdatedAt?: Date;
+  webhookReceivedAt?: Date;
   verifiedAt?: Date;
   notes?: string;
+  // Membership Accounting Fields
+  membershipCyclePaidAmount?: number;
+  membershipRemainingBalance?: number;
+  membershipRenewed?: boolean;
   // Offline Payment Fields
   offlineMethod?: OfflinePaymentMethod;
   paymentDate?: Date;
@@ -86,6 +99,7 @@ const PaymentSchema = new Schema<IPayment>(
     currency: { type: String, default: 'INR', uppercase: true },
     durationDays: { type: Number, default: 30 },
     isCustomAmount: { type: Boolean, default: false },
+    isTestTransaction: { type: Boolean, default: false, index: true },
     paymentType: {
       type: String,
       enum: ['ONLINE', 'OFFLINE'],
@@ -99,12 +113,14 @@ const PaymentSchema = new Schema<IPayment>(
         'CREATED',
         'PENDING',
         'PENDING_APPROVAL',
+        'PROCESSING',
         'APPROVED',
         'REJECTED',
         'SUCCESS',
         'FAILED',
         'EXPIRED',
         'CANCELLED',
+        'REFUNDED',
       ],
       default: 'CREATED',
       index: true,
@@ -113,6 +129,7 @@ const PaymentSchema = new Schema<IPayment>(
     gatewayPaymentId: { type: String, trim: true, index: true },
     checkoutUrl: { type: String, trim: true },
     utr: { type: String, trim: true, index: true },
+    receiptNumber: { type: String, trim: true, index: true },
     verificationSource: {
       type: String,
       enum: [
@@ -123,11 +140,20 @@ const PaymentSchema = new Schema<IPayment>(
         'OFFLINE_ADMIN_APPROVAL',
       ],
     },
+    orderCreatedTime: { type: Date, default: Date.now },
+    paymentInitiatedAt: { type: Date },
+    paymentCompletedAt: { type: Date },
+    lastStatusUpdatedAt: { type: Date, default: Date.now },
+    webhookReceivedAt: { type: Date },
     verifiedAt: { type: Date },
     deliveryId: { type: String, trim: true, index: true },
     idempotencyKey: { type: String, trim: true, index: true },
     notes: { type: String, trim: true },
     gatewayRawResponse: { type: Schema.Types.Mixed },
+    // Membership Accounting
+    membershipCyclePaidAmount: { type: Number, default: 0 },
+    membershipRemainingBalance: { type: Number, default: 0 },
+    membershipRenewed: { type: Boolean, default: false },
     // Offline Details
     offlineMethod: {
       type: String,

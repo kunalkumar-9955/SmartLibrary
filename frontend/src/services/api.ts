@@ -178,7 +178,7 @@ export const adminNotificationService = {
 export const paymentService = {
   getPlans: () => api.get('/payments/plans'),
   getMyPayments: () => api.get('/payments/my-payments'),
-  createOrder: (data: { planId?: string; idempotencyKey?: string; amount?: number; isCustomAmount?: boolean }) =>
+  createOrder: (data: { planId?: string; idempotencyKey?: string; amount?: number; isCustomAmount?: boolean; isTestTransaction?: boolean }) =>
     api.post('/payments/create-order', data),
   submitUtr: (data: { orderId: string; utr: string; notes?: string }) =>
     api.post('/payments/submit-utr', data),
@@ -194,13 +194,14 @@ export const paymentService = {
   getQrPayload: () => api.get('/payments/qr-payload'),
   getQrSvgUrl: (orderId?: string) => orderId ? `${API_BASE_URL}/payments/qr.svg/${orderId}` : `${API_BASE_URL}/payments/qr.svg`,
   getOrderStatus: (orderId: string) => api.get(`/payments/status/${orderId}`),
-  getAdminPayments: (params?: { status?: string; type?: string; search?: string; page?: number; limit?: number }) =>
+  getPaymentReceipt: (orderId: string) => api.get(`/payments/receipt/${orderId}`),
+  getAdminPayments: (params?: { status?: string; type?: string; testClassification?: string; search?: string; page?: number; limit?: number }) =>
     api.get('/payments/admin/all', { params }),
   verifyPaymentAdmin: (orderId: string, data: { action: 'APPROVE' | 'REJECT'; notes?: string }) =>
     api.post(`/payments/admin/verify/${orderId}`, data),
   adminOfflineAction: (
     orderId: string,
-    data: { action: 'APPROVE' | 'REJECT'; rejectionReason?: string; remarks?: string }
+    data: { action: 'APPROVE' | 'REJECT'; rejectionReason?: string; remarks?: string; grantMembershipException?: boolean }
   ) => api.post(`/payments/admin/offline-action/${orderId}`, data),
   triggerExpiryCheck: () => api.post('/payments/cron/check-expiries'),
 };

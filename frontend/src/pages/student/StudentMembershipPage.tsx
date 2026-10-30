@@ -14,14 +14,17 @@ import {
   AlertTriangle,
   Info,
   BadgeAlert,
-  ArrowRight,
-  ExternalLink,
+  Printer,
   Copy,
   Check,
+  Lock,
+  ExternalLink,
 } from 'lucide-react';
 import { paymentService } from '../../services/api';
-import { PaymentItem, StudentMembershipOverview } from '../../types';
+import { PaymentItem, PaymentReceipt, StudentMembershipOverview } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
+import { Modal } from '../../components/Modal';
+import { formatISTDateTime } from '../../utils/timeHelper';
 
 export const StudentMembershipPage: React.FC = () => {
   const [membershipData, setMembershipData] = useState<StudentMembershipOverview | null>(null);
@@ -47,6 +50,7 @@ export const StudentMembershipPage: React.FC = () => {
     upiId?: string;
     merchantName?: string;
     qrSvg?: string;
+    receiptNumber?: string;
   } | null>(null);
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [showManualUtrFallback, setShowManualUtrFallback] = useState(false);
@@ -54,6 +58,19 @@ export const StudentMembershipPage: React.FC = () => {
   const [submittingUtr, setSubmittingUtr] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState<'INITIAL' | 'PENDING' | 'SUCCESS' | 'FAILED'>('INITIAL');
   const [checkingStatus, setCheckingStatus] = useState(false);
+
+  // Receipt modal state
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [receiptData, setReceiptData] = useState<PaymentReceipt | null>(null);
+  const [loadingReceipt, setLoadingReceipt] = useState(false);
+
+  // Option B (Offline Payment) State
+  const [offlineRemarks, setOfflineRemarks] = useState('');
+  const [submittingOffline, setSubmittingOffline] = useState(false);
+  const [offlineSubmitted, setOfflineSubmitted] = useState(false);
+  const [offlineSubmittedOrderId, setOfflineSubmittedOrderId] = useState<string | null>(null);
+
+  const { success, error, info } = useToast();
 
   const DEFAULT_UPI_ID = '9955008447-7@axl';
   const DEFAULT_MERCHANT_NAME = 'Lakshya Smart Library';
@@ -106,14 +123,6 @@ export const StudentMembershipPage: React.FC = () => {
     }
   };
 
-  // Option B (Offline Payment) State
-  const [offlineRemarks, setOfflineRemarks] = useState('');
-  const [submittingOffline, setSubmittingOffline] = useState(false);
-  const [offlineSubmitted, setOfflineSubmitted] = useState(false);
-  const [offlineSubmittedOrderId, setOfflineSubmittedOrderId] = useState<string | null>(null);
-
-  const { success, error, info } = useToast();
-
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -132,7 +141,6 @@ export const StudentMembershipPage: React.FC = () => {
     fetchData();
   }, []);
 
-  // Open modal with instant UI rendering and async order preparation
   const handleOpenPaymentModal = (
     tab: 'ONLINE' | 'OFFLINE' = 'ONLINE',
     mode: 'MONTHLY_PLAN' | 'CUSTOM_AMOUNT' = 'MONTHLY_PLAN'
@@ -190,6 +198,7 @@ export const StudentMembershipPage: React.FC = () => {
           upiId: res.data.data.upiId || DEFAULT_UPI_ID,
           merchantName: res.data.data.merchantName || DEFAULT_MERCHANT_NAME,
           qrSvg: res.data.data.qrSvg,
+          receiptNumber: res.data.data.receiptNumber,
         });
         setOnlineStatus('PENDING');
       }
@@ -203,7 +212,6 @@ export const StudentMembershipPage: React.FC = () => {
     }
   };
 
-  // Poll online payment status
   const pollStatus = async (orderId: string, showToast = true) => {
     try {
       setCheckingStatus(true);
@@ -213,7 +221,11 @@ export const StudentMembershipPage: React.FC = () => {
         if (status === 'SUCCESS' || status === 'APPROVED') {
           setOnlineStatus('SUCCESS');
           if (showToast) {
-            success(activeOrder?.isCustomAmount ? 'Custom Payment Verified & Credited!' : 'Payment Verified & Monthly Membership Renewed!');
+            success(
+              res.data.data.membershipRenewed
+                ? 'Payment Verified & Monthly Membership Renewed!'
+                : `Payment of ₹${res.data.data.amount} Verified & Credited to Balance!`
+            );
           }
           fetchData();
         } else if (status === 'FAILED' || status === 'CANCELLED') {
@@ -230,7 +242,6 @@ export const StudentMembershipPage: React.FC = () => {
     }
   };
 
-  // Automatic background polling every 4 seconds while modal is open in ONLINE mode
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (
@@ -242,14 +253,13 @@ export const StudentMembershipPage: React.FC = () => {
     ) {
       interval = setInterval(() => {
         pollStatus(activeOrder.orderId, false);
-      }, 4000);
+      }, 3500);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [isModalOpen, activeTab, activeOrder, onlineStatus]);
 
-  // Submit Offline Payment Request
   const handleSubmitOffline = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submittingOffline) return;
@@ -282,48 +292,64 @@ export const StudentMembershipPage: React.FC = () => {
     }
   };
 
+  const handleViewReceipt = async (orderId: string) => {
+    try {
+      setLoadingReceipt(true);
+      setReceiptModalOpen(true);
+      const res = await paymentService.getPaymentReceipt(orderId);
+      if (res.data.success) {
+        setReceiptData(res.data.data);
+      }
+    } catch (err: any) {
+      error(err.response?.data?.message || 'Failed to load official receipt');
+      setReceiptModalOpen(false);
+    } finally {
+      setLoadingReceipt(false);
+    }
+  };
+
   const getStatusBadge = (status?: string) => {
     switch (status) {
       case 'ACTIVE':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
             <CheckCircle2 className="w-3.5 h-3.5" /> Active Member
           </span>
         );
       case 'GRACE_PERIOD':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 animate-pulse">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 animate-pulse">
             <Clock className="w-3.5 h-3.5" /> 5-Day Grace Period
           </span>
         );
       case 'EXPIRED':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20">
             <BadgeAlert className="w-3.5 h-3.5" /> Membership Expired
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
             <AlertCircle className="w-3.5 h-3.5" /> No Active Plan
           </span>
         );
     }
   };
 
-  const qrImageUrl = paymentService.getQrImageUrl ? paymentService.getQrImageUrl() : '/api/payments/qr-image';
-
   if (loading) {
     return (
       <div className="min-h-[450px] flex flex-col items-center justify-center text-slate-600 dark:text-slate-300">
         <div className="w-9 h-9 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-sm font-medium">Loading membership status...</p>
+        <p className="text-sm font-semibold">Loading membership status...</p>
       </div>
     );
   }
 
   const membership = membershipData?.membership;
   const payments = membershipData?.payments || [];
+  const currentCyclePaid = membership?.currentCyclePaid || 0;
+  const remainingBalance = membership?.remainingBalance !== undefined ? membership.remainingBalance : Math.max(0, 500 - currentCyclePaid);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto px-4 py-4 sm:px-6 font-sans">
@@ -342,16 +368,24 @@ export const StudentMembershipPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl p-4 flex flex-col sm:items-end shrink-0">
-            <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-              Monthly Fee
+          {/* Membership Balance Summary Card */}
+          <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl p-4 flex flex-col sm:items-end shrink-0 space-y-1">
+            <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">
+              Monthly Fee: ₹500
             </span>
-            <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              ₹500 <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">/ month</span>
-            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs text-slate-500">Paid:</span>
+              <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                ₹{currentCyclePaid}
+              </span>
+              <span className="text-xs text-slate-500">| Due:</span>
+              <span className="text-base font-extrabold text-slate-900 dark:text-white">
+                ₹{remainingBalance}
+              </span>
+            </div>
             {membership?.expiresAt && (
-              <span className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-                Expiry:{' '}
+              <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                Expires:{' '}
                 <strong className="text-slate-900 dark:text-white">
                   {new Date(membership.expiresAt).toLocaleDateString('en-IN', {
                     day: 'numeric',
@@ -362,7 +396,7 @@ export const StudentMembershipPage: React.FC = () => {
               </span>
             )}
             {membership?.status === 'GRACE_PERIOD' && membership.gracePeriodExpiresAt && (
-              <span className="text-[11px] text-amber-600 dark:text-amber-300 font-semibold mt-1">
+              <span className="text-[11px] text-amber-600 dark:text-amber-300 font-semibold">
                 Grace ends:{' '}
                 {new Date(membership.gracePeriodExpiresAt).toLocaleDateString('en-IN', {
                   day: 'numeric',
@@ -380,7 +414,7 @@ export const StudentMembershipPage: React.FC = () => {
             <Info className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
             <div>
               <strong className="font-semibold block text-amber-900 dark:text-amber-100">
-                Offline Payment Request Pending Admin Approval
+                Offline Cash Request Pending Admin Approval
               </strong>
               <span>
                 Your offline payment request (Ref: {membership.pendingOfflineOrderId}) has been submitted and is currently being reviewed by library administration. Your membership will be renewed once approved.
@@ -405,7 +439,7 @@ export const StudentMembershipPage: React.FC = () => {
         )}
       </div>
 
-      {/* Single Fixed ₹500 Monthly Membership Plan Card */}
+      {/* Official Monthly Membership Plan Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-7 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200 dark:border-slate-800">
           <div>
@@ -421,7 +455,7 @@ export const StudentMembershipPage: React.FC = () => {
           </div>
           <div className="text-left sm:text-right">
             <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">₹500</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">per month</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">per calendar month</span>
           </div>
         </div>
 
@@ -449,7 +483,11 @@ export const StudentMembershipPage: React.FC = () => {
             className="w-full py-3 px-3 rounded-xl font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 transition cursor-pointer"
           >
             <QrCode className="w-4 h-4 shrink-0" />
-            <span>Pay ₹500 (Monthly Pass)</span>
+            <span>
+              {remainingBalance > 0 && remainingBalance < 500
+                ? `Pay Remaining ₹${remainingBalance}`
+                : 'Pay ₹500 (Monthly Pass)'}
+            </span>
           </button>
           <button
             type="button"
@@ -500,13 +538,15 @@ export const StudentMembershipPage: React.FC = () => {
                   <th scope="col" className="py-3 px-4 text-left">Type</th>
                   <th scope="col" className="py-3 px-4 text-left">Amount</th>
                   <th scope="col" className="py-3 px-4 text-left">Reference / UTR</th>
-                  <th scope="col" className="py-3 px-4 text-left">Date</th>
+                  <th scope="col" className="py-3 px-4 text-left">Date & Time (IST)</th>
                   <th scope="col" className="py-3 px-4 text-left">Status</th>
+                  <th scope="col" className="py-3 px-4 text-right">Receipt</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-left">
                 {payments.map((p) => {
                   const s = (p.status || 'PENDING').toUpperCase();
+                  const isVerified = s === 'SUCCESS' || s === 'APPROVED';
                   return (
                     <tr key={p._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
                       <td className="py-3 px-4 font-mono text-xs text-slate-900 dark:text-slate-200">
@@ -515,17 +555,20 @@ export const StudentMembershipPage: React.FC = () => {
                             ? `${p.orderId.slice(0, 11)}…${p.orderId.slice(-6)}`
                             : p.orderId}
                         </abbr>
+                        {p.receiptNumber && (
+                          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
+                            {p.receiptNumber}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-xs font-medium text-slate-600 dark:text-slate-400">
-                        {p.isCustomAmount || p.amount !== 500
-                          ? `Custom ${p.paymentType === 'OFFLINE' ? 'Cash' : 'Online'}`
-                          : (p.paymentType === 'OFFLINE' ? 'Offline (Cash)' : 'Online (UPI)')}
+                        {p.paymentType === 'OFFLINE' ? 'Cash at Desk' : 'Online UPI'}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white tabular-nums">
                         ₹{p.amount}
                         {p.isCustomAmount || p.amount !== 500 ? (
-                          <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400 font-normal">
-                            (Custom)
+                          <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/40 px-1 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                            Custom
                           </span>
                         ) : null}
                       </td>
@@ -533,37 +576,47 @@ export const StudentMembershipPage: React.FC = () => {
                         {p.utr || '—'}
                       </td>
                       <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                        {new Date(p.createdAt).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
+                        {formatISTDateTime(p.orderCreatedTime || p.createdAt)}
                       </td>
                       <td className="py-3 px-4">
                         {(s === 'SUCCESS' || s === 'APPROVED') && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                             <CheckCircle2 className="w-3 h-3" />
                             {s === 'APPROVED' ? 'Approved' : 'Completed'}
                           </span>
                         )}
                         {s === 'PENDING_APPROVAL' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30">
-                            <Clock className="w-3 h-3" /> Pending Approval
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30">
+                            <Clock className="w-3 h-3" /> Pending Review
                           </span>
                         )}
                         {s === 'PENDING' && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
                             <Clock className="w-3 h-3 animate-pulse" /> Processing
                           </span>
                         )}
                         {(s === 'REJECTED' || s === 'FAILED' || s === 'EXPIRED' || s === 'CANCELLED') && (
                           <span
-                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20"
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20"
                             title={p.adminRejectionReason}
                           >
                             <AlertCircle className="w-3 h-3" />
                             {s === 'REJECTED' ? 'Rejected' : 'Failed'}
                           </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {isVerified ? (
+                          <button
+                            type="button"
+                            onClick={() => handleViewReceipt(p.orderId)}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+                          >
+                            <Receipt className="w-3 h-3 text-indigo-500" />
+                            <span>Receipt</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
                         )}
                       </td>
                     </tr>
@@ -575,29 +628,30 @@ export const StudentMembershipPage: React.FC = () => {
         )}
       </div>
 
-      {/* Two-Option Payment Modal */}
+      {/* Professional Razorpay/Cashfree-Inspired Payment Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 dark:bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fade-in">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative flex flex-col max-h-[92vh]">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/90">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center font-bold">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold shadow-sm">
                   ₹
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Library Membership Payment
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span>Lakshya Smart Library Checkout</span>
+                    <Lock className="w-3.5 h-3.5 text-emerald-500" />
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Monthly Fee: <strong className="text-emerald-600 dark:text-emerald-400 font-bold">₹500 only</strong>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    256-Bit SSL Encrypted • Direct UPI Settlement
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -635,31 +689,40 @@ export const StudentMembershipPage: React.FC = () => {
             </div>
 
             {/* Modal Body */}
-            <div className="p-5 sm:p-6 overflow-y-auto space-y-5">
-              {/* Fee Banner */}
-              <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 block font-semibold">
-                    Amount Due
-                  </span>
-                  <span className="text-2xl font-black text-slate-900 dark:text-white">
-                    ₹{activeOrder?.amount ?? (paymentMode === 'CUSTOM_AMOUNT' ? (customAmountInput || '200') : '500')}
-                  </span>
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
+              {/* Fee Breakdown Card */}
+              <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 block font-semibold">
+                      Total Payable
+                    </span>
+                    <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">
+                      ₹{activeOrder?.amount ?? (paymentMode === 'CUSTOM_AMOUNT' ? (customAmountInput || '200') : '500')}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 block font-semibold">
+                      Fee Breakdown
+                    </span>
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                      Gateway Fee: ₹0.00 (Free)
+                    </span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 block font-semibold">
-                    {activeOrder?.isCustomAmount || paymentMode === 'CUSTOM_AMOUNT' ? 'Payment Type' : 'Plan Duration'}
-                  </span>
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    {activeOrder?.isCustomAmount || paymentMode === 'CUSTOM_AMOUNT' ? 'Custom Amount Payment' : '1 Month Library Access'}
-                  </span>
-                </div>
+
+                {remainingBalance > 0 && remainingBalance < 500 && (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                    <span>Already Paid this Cycle: ₹{currentCyclePaid}</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">Balance: ₹{remainingBalance}</span>
+                  </div>
+                )}
               </div>
 
-              {/* TAB 1: OPTION A — ONLINE PAYMENT */}
+              {/* TAB 1: ONLINE PAYMENT */}
               {activeTab === 'ONLINE' && (
                 <div className="space-y-4">
-                  {/* Mode Selector within Online Tab */}
+                  {/* Mode Selector */}
                   <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 gap-1">
                     <button
                       type="button"
@@ -746,7 +809,7 @@ export const StudentMembershipPage: React.FC = () => {
                         ))}
                       </div>
                       <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-normal">
-                        Note: Custom payments are credited to your student ledger. Full 1-month membership extension requires the ₹500 monthly pass.
+                        Partial payments accumulate towards your monthly renewal. Total ₹500 activates standard 1-month access.
                       </p>
                     </div>
                   )}
@@ -759,34 +822,46 @@ export const StudentMembershipPage: React.FC = () => {
                       <h4 className="text-lg font-bold text-slate-900 dark:text-white">Payment Confirmed!</h4>
                       <p className="text-xs text-slate-600 dark:text-slate-300">
                         {activeOrder?.isCustomAmount
-                          ? `Your payment of ₹${activeOrder?.amount} has been verified and recorded on your student account ledger.`
-                          : `Your ₹500 online payment has been verified. Your membership has been renewed for 1 calendar month.`}
+                          ? `Your partial payment of ₹${activeOrder?.amount} has been verified and credited towards your membership balance.`
+                          : `Your ₹500 payment has been verified. Your membership has been renewed for 1 calendar month.`}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsModalOpen(false);
-                          fetchData();
-                        }}
-                        className="mt-2 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition cursor-pointer"
-                      >
-                        Done & Refresh Dashboard
-                      </button>
+                      <div className="flex gap-2 pt-2">
+                        {activeOrder?.orderId && (
+                          <button
+                            type="button"
+                            onClick={() => handleViewReceipt(activeOrder.orderId)}
+                            className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <Receipt className="w-4 h-4" />
+                            <span>View Receipt</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsModalOpen(false);
+                            fetchData();
+                          }}
+                          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                        >
+                          Done
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <>
-                      {/* Clean Square QR Display without full PhonePe poster */}
-                      <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 text-center">
-                        <div className="p-3.5 bg-white rounded-2xl shadow-sm border border-slate-200 inline-flex items-center justify-center mx-auto overflow-hidden">
+                      {/* Dynamic Vector QR Display */}
+                      <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center">
+                        <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-200 inline-flex items-center justify-center mx-auto overflow-hidden">
                           {activeOrder?.qrSvg ? (
                             <div
-                              className="w-[200px] h-[200px] flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
+                              className="w-[190px] h-[190px] flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
                               dangerouslySetInnerHTML={{ __html: activeOrder.qrSvg }}
                             />
                           ) : (
                             <QRCodeSVG
                               value={activeUpiString}
-                              size={200}
+                              size={190}
                               level="M"
                               includeMargin={false}
                             />
@@ -794,24 +869,24 @@ export const StudentMembershipPage: React.FC = () => {
                         </div>
 
                         {/* Scannable Badge */}
-                        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                           <ShieldCheck className="w-3.5 h-3.5" />
                           <span>Scan with PhonePe, GPay, Paytm, or BHIM</span>
                         </div>
 
                         {/* Verified Payment Details */}
-                        <div className="mt-3.5 w-full max-w-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs space-y-2 text-left">
+                        <div className="mt-3 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs space-y-1.5 text-left">
                           <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
                             <span>Library / Payee:</span>
                             <span className="font-semibold text-slate-900 dark:text-white">{activeMerchant}</span>
                           </div>
                           <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
-                            <span>Amount:</span>
+                            <span>Payable Amount:</span>
                             <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
                               ₹{activeOrder?.amount ? Number(activeOrder.amount).toFixed(2) : effectiveAmount}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                          <div className="flex justify-between items-center text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
                             <span>UPI ID:</span>
                             <div className="flex items-center gap-1.5">
                               <span className="font-mono font-medium text-slate-900 dark:text-white text-[11px]">
@@ -821,10 +896,10 @@ export const StudentMembershipPage: React.FC = () => {
                                 type="button"
                                 onClick={handleCopyUpi}
                                 title="Copy UPI ID"
-                                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white transition cursor-pointer"
+                                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition cursor-pointer"
                               >
                                 {copiedUpi ? (
-                                  <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
                                 ) : (
                                   <Copy className="w-3.5 h-3.5" />
                                 )}
@@ -842,27 +917,27 @@ export const StudentMembershipPage: React.FC = () => {
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                           <a
                             href={getAppIntentUrl('phonepe')}
-                            className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 transition"
+                            className="py-2 px-2 text-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition"
                           >
-                            <span>PhonePe</span>
+                            PhonePe
                           </a>
                           <a
                             href={getAppIntentUrl('gpay')}
-                            className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 transition"
+                            className="py-2 px-2 text-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition"
                           >
-                            <span>Google Pay</span>
+                            Google Pay
                           </a>
                           <a
                             href={getAppIntentUrl('paytm')}
-                            className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 transition"
+                            className="py-2 px-2 text-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition"
                           >
-                            <span>Paytm</span>
+                            Paytm
                           </a>
                           <a
                             href={getAppIntentUrl('upi')}
-                            className="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800 transition"
+                            className="py-2 px-2 text-center bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-lg border border-emerald-200 dark:border-emerald-800 transition"
                           >
-                            <span>Any UPI</span>
+                            Any UPI
                           </a>
                         </div>
                       </div>
@@ -873,34 +948,21 @@ export const StudentMembershipPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => createOnlineOrder()}
-                            className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-900 dark:text-white rounded font-bold text-[11px]"
+                            className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 dark:bg-amber-800 rounded font-bold text-[11px]"
                           >
                             Retry
                           </button>
                         </div>
                       )}
 
-                      {/* Supported Gateway Checkout Link (if available) */}
-                      {activeOrder?.checkoutUrl && (
-                        <a
-                          href={activeOrder.checkoutUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition shadow-sm"
-                        >
-                          <span>Open Hosted Payment Checkout</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-
-                      {/* Automatic Verification Status Notice */}
-                      <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5">
+                      {/* Real-time Settlement Polling Notice */}
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1">
                         <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
                           <Clock className={`w-4 h-4 text-emerald-500 ${checkingStatus ? 'animate-spin' : ''}`} />
-                          <span>Automatic Settlement Verification Active</span>
+                          <span>Live Settlement Verification Active</span>
                         </div>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                          Once you complete the payment on your UPI app, our system detects the incoming settlement and automatically renews your membership.
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Our system detects the incoming bank settlement and automatically confirms your payment.
                         </p>
                       </div>
 
@@ -915,14 +977,14 @@ export const StudentMembershipPage: React.FC = () => {
                         <span>{checkingStatus ? 'Checking Verification...' : 'I Have Paid / Check Status'}</span>
                       </button>
 
-                      {/* Optional Fallback for Network Lag / Manual UTR Entry */}
+                      {/* Fallback UTR Entry */}
                       <div className="pt-1 text-center">
                         <button
                           type="button"
                           onClick={() => setShowManualUtrFallback(!showManualUtrFallback)}
                           className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline cursor-pointer"
                         >
-                          {showManualUtrFallback ? 'Hide Manual Reference Submission' : 'Having trouble? Enter UPI reference manually'}
+                          {showManualUtrFallback ? 'Hide Reference Input' : 'Having trouble? Enter UPI reference manually'}
                         </button>
                         {showManualUtrFallback && (
                           <form onSubmit={handleManualUtrSubmit} className="mt-2.5 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2 text-left">
@@ -936,12 +998,12 @@ export const StudentMembershipPage: React.FC = () => {
                                 placeholder="e.g. 123456789012"
                                 value={manualUtr}
                                 onChange={(e) => setManualUtr(e.target.value)}
-                                className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+                                className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
                               />
                               <button
                                 type="submit"
                                 disabled={submittingUtr || !manualUtr.trim()}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-semibold rounded-lg disabled:opacity-50 transition"
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg disabled:opacity-50 transition"
                               >
                                 {submittingUtr ? 'Submitting...' : 'Submit'}
                               </button>
@@ -954,7 +1016,7 @@ export const StudentMembershipPage: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 2: OPTION B — OFFLINE PAYMENT (SIMPLIFIED CASH AT DESK) */}
+              {/* TAB 2: OFFLINE PAYMENT (CASH AT DESK ONLY) */}
               {activeTab === 'OFFLINE' && (
                 <div className="space-y-4">
                   <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 rounded-xl space-y-2">
@@ -974,7 +1036,7 @@ export const StudentMembershipPage: React.FC = () => {
                       />
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Standard monthly pass is ₹500. Enter custom amount if paying partial fee or donation.
+                      Standard monthly pass is ₹500. Enter custom amount if paying partial fee or installment.
                     </p>
                   </div>
 
@@ -1022,7 +1084,7 @@ export const StudentMembershipPage: React.FC = () => {
                       <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-600 dark:text-slate-300 space-y-1">
                         <strong className="block text-slate-900 dark:text-white">Desk Payment Instructions</strong>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                          Please hand over ₹500 cash to the desk librarian. Submitting this request notifies the Admin to review and approve your membership.
+                          Please hand over the exact cash to the desk librarian. Submitting this request alerts the Admin to confirm receipt and renew your membership.
                         </p>
                       </div>
 
@@ -1037,7 +1099,7 @@ export const StudentMembershipPage: React.FC = () => {
                           placeholder="e.g. Paid cash to librarian at front desk"
                           value={offlineRemarks}
                           onChange={(e) => setOfflineRemarks(e.target.value)}
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-slate-900 dark:text-white text-xs placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-slate-900 dark:text-white text-xs placeholder-slate-400 focus:outline-none focus:border-purple-500"
                         />
                       </div>
 
@@ -1068,7 +1130,7 @@ export const StudentMembershipPage: React.FC = () => {
             <div className="p-3.5 bg-slate-50 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                Lakshya Smart Library Monthly System
+                Lakshya Smart Library Secured Payment
               </span>
               <button
                 type="button"
@@ -1080,6 +1142,89 @@ export const StudentMembershipPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Official Receipt Modal for Student */}
+      {receiptModalOpen && (
+        <Modal
+          isOpen={receiptModalOpen}
+          onClose={() => setReceiptModalOpen(false)}
+          title="Official Payment Receipt"
+        >
+          {loadingReceipt || !receiptData ? (
+            <div className="py-12 text-center text-slate-500 text-xs">
+              <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              Loading verified receipt...
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div id="student-receipt" className="p-6 bg-white border border-slate-300 rounded-2xl text-slate-900 font-sans space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <img src="/Logo.png" alt="Lakshya Smart Library" className="w-9 h-9 object-contain rounded-lg border border-slate-200 p-0.5" />
+                    <div>
+                      <h4 className="font-extrabold text-sm text-slate-900">{receiptData.organization.name}</h4>
+                      <p className="text-[10px] text-slate-500">{receiptData.organization.address}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-block px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase">
+                      Official Receipt
+                    </span>
+                    <p className="font-mono text-xs font-bold text-slate-800 mt-0.5">
+                      {receiptData.receiptNumber}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-slate-500 text-[11px] block">Student Name:</span>
+                    <strong className="text-slate-900">{receiptData.studentName}</strong>
+                    {receiptData.studentIdNumber && (
+                      <span className="text-emerald-700 font-mono block text-[11px]">
+                        ID: {receiptData.studentIdNumber}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-500 text-[11px] block">Date (IST):</span>
+                    <strong className="text-slate-900">
+                      {formatISTDateTime(receiptData.paymentCompletedAt || receiptData.verifiedAt)}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
+                  <div>
+                    <strong className="text-slate-900 block">{receiptData.planName}</strong>
+                    <span className="text-slate-500 text-[11px] font-mono">
+                      Ref: {receiptData.orderId}
+                      {receiptData.utr ? ` • UTR: ${receiptData.utr}` : ''}
+                    </span>
+                  </div>
+                  <span className="text-lg font-black text-emerald-600">
+                    ₹{Number(receiptData.amount).toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-xs">
+                  <span className="text-slate-600 text-[11px]">
+                    Status: <strong className="text-emerald-700">Verified & Confirmed</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print Receipt</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );

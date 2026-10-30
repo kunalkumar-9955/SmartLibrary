@@ -14,6 +14,7 @@ import {
   submitOfflineRequest,
   adminOfflineAction,
   checkExpiriesEndpoint,
+  getPaymentReceipt,
 } from '../controllers/paymentController';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../middleware/role';
@@ -36,6 +37,7 @@ router.post('/create-order', authenticate, createOrder);
 router.post('/submit-utr', authenticate, submitUtr);
 router.post('/offline-request', authenticate, upload.single('receipt'), submitOfflineRequest);
 router.get('/status/:orderId', authenticate, getOrderStatus);
+router.get('/receipt/:orderId', authenticate, getPaymentReceipt);
 
 // Admin routes
 router.get('/admin/all', authenticate, requireRole('ADMIN'), getAdminPayments);

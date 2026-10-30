@@ -22,6 +22,7 @@ export interface IUser extends Document {
   membershipStartDate?: Date;
   membershipExpiresAt?: Date;
   gracePeriodExpiresAt?: Date;
+  currentCyclePaidAmount?: number;
   lastRenewalDate?: Date;
   lastReminderType?: string;
   lastReminderSentAt?: Date;
@@ -68,6 +69,7 @@ const UserSchema = new Schema<IUser>(
     membershipStartDate: { type: Date },
     membershipExpiresAt: { type: Date, index: true },
     gracePeriodExpiresAt: { type: Date, index: true },
+    currentCyclePaidAmount: { type: Number, default: 0 },
     lastRenewalDate: { type: Date },
     lastReminderType: { type: String },
     lastReminderSentAt: { type: Date },

@@ -181,12 +181,14 @@ export interface PaymentItem {
   currency: string;
   durationDays: number;
   isCustomAmount?: boolean;
+  isTestTransaction?: boolean;
   paymentType?: PaymentType;
   status: PaymentStatus;
   paymentMethod: string;
   offlineMethod?: OfflinePaymentMethod;
   paymentDate?: string;
   receiptUrl?: string;
+  receiptNumber?: string;
   adminRejectionReason?: string;
   adminActionAt?: string;
   gatewayPaymentId?: string;
@@ -195,7 +197,49 @@ export interface PaymentItem {
   verificationSource?: string;
   verifiedAt?: string;
   notes?: string;
+  membershipCyclePaidAmount?: number;
+  membershipRemainingBalance?: number;
+  membershipRenewed?: boolean;
+  orderCreatedTime?: string;
+  paymentInitiatedAt?: string;
+  paymentCompletedAt?: string;
+  lastStatusUpdatedAt?: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PaymentReceipt {
+  receiptNumber: string;
+  orderId: string;
+  gatewayPaymentId?: string | null;
+  utr?: string | null;
+  studentName: string;
+  studentEmail: string;
+  studentPhone?: string | null;
+  studentIdNumber?: string | null;
+  amount: number;
+  currency: string;
+  paymentType: PaymentType;
+  paymentMethod: string;
+  offlineMethod?: OfflinePaymentMethod | null;
+  isCustomAmount?: boolean;
+  isTestTransaction?: boolean;
+  status: PaymentStatus;
+  planName: string;
+  createdAt: string;
+  verifiedAt: string;
+  paymentCompletedAt: string;
+  verificationSource?: string;
+  membershipCyclePaidAmount?: number;
+  membershipRemainingBalance?: number;
+  membershipRenewed?: boolean;
+  notes?: string | null;
+  organization: {
+    name: string;
+    tagline: string;
+    address: string;
+    supportEmail: string;
+  };
 }
 
 export interface StudentMembershipOverview {
@@ -207,6 +251,8 @@ export interface StudentMembershipOverview {
     gracePeriodExpiresAt?: string | null;
     lastRenewalDate?: string | null;
     monthlyFee?: number;
+    currentCyclePaid?: number;
+    remainingBalance?: number;
     hasPendingOfflineRequest?: boolean;
     pendingOfflineOrderId?: string | null;
   };

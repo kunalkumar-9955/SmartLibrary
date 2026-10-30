@@ -41,19 +41,62 @@ export async function fulfillPaymentAndActivate(
   // Update payment record
   payment.status = source === 'OFFLINE_ADMIN_APPROVAL' ? 'APPROVED' : 'SUCCESS';
   payment.verifiedAt = new Date();
+  payment.paymentCompletedAt = new Date();
+  payment.lastStatusUpdatedAt = new Date();
   payment.verificationSource = source;
+  if (!payment.receiptNumber) {
+    payment.receiptNumber = `LSL-REC-${Date.now().toString().slice(-6)}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+  }
   if (utr && !payment.utr) {
     payment.utr = utr;
   }
   if (gatewayDetails) {
     payment.gatewayRawResponse = gatewayDetails;
   }
+
+  // Admin Gateway Test payments must NOT renew membership, NOT alter student balances, and NOT count towards revenue
+  if (payment.isTestTransaction) {
+    payment.membershipRenewed = false;
+    payment.membershipRemainingBalance = 0;
+    payment.membershipCyclePaidAmount = 0;
+    await payment.save();
+    return { success: true, alreadyProcessed: false };
+  }
+
+  // Accounting: Check if standard ₹500 pass OR partial payment accumulation reaches ₹500
+  const isDirectMonthlyPass = payment.amount === 500 && !payment.isCustomAmount && payment.planId !== 'custom-amount';
+  let shouldRenew = false;
+  let newCyclePaid = 0;
+  let remaining = 0;
+
+  if (isDirectMonthlyPass) {
+    shouldRenew = true;
+    newCyclePaid = 500;
+    remaining = 0;
+    user.currentCyclePaidAmount = 0;
+  } else {
+    // Custom / partial payment accounting
+    const prevPaid = user.currentCyclePaidAmount || 0;
+    const accumulated = prevPaid + payment.amount;
+    if (accumulated >= 500) {
+      shouldRenew = true;
+      user.currentCyclePaidAmount = Math.max(0, accumulated - 500);
+      newCyclePaid = accumulated;
+      remaining = 0;
+    } else {
+      shouldRenew = false;
+      user.currentCyclePaidAmount = accumulated;
+      newCyclePaid = accumulated;
+      remaining = 500 - accumulated;
+    }
+  }
+
+  payment.membershipCyclePaidAmount = newCyclePaid;
+  payment.membershipRemainingBalance = remaining;
+  payment.membershipRenewed = shouldRenew;
   await payment.save();
 
-  // Rule: Only standard ₹500 membership payments automatically renew 1-month subscription
-  const isMonthlyPass = payment.amount === 500 && !payment.isCustomAmount && payment.planId !== 'custom-amount';
-
-  if (isMonthlyPass) {
+  if (shouldRenew) {
     const { startDate, expiresAt, gracePeriodExpiresAt } = calculateNextMonthlyExpiry(
       user.membershipExpiresAt
     );
@@ -75,10 +118,10 @@ export async function fulfillPaymentAndActivate(
     // 1. Notify Student via In-App Notification
     try {
       const isOffline = source === 'OFFLINE_ADMIN_APPROVAL';
-      const notifTitle = isOffline ? 'Payment Approved' : 'Membership Renewed Successfully';
+      const notifTitle = isOffline ? 'Payment Approved & Membership Renewed' : 'Membership Renewed Successfully';
       const notifMessage = isOffline
-        ? `Your offline payment has been approved and your membership has been renewed. Your next expiry date is ${formattedExpiry}.`
-        : `Your ₹500 online payment has been verified and your membership has been renewed. Your next expiry date is ${formattedExpiry}.`;
+        ? `Your offline payment has been approved and your membership has been renewed. Next expiry date: ${formattedExpiry}. (Receipt #${payment.receiptNumber})`
+        : `Your payment has fulfilled the ₹500 monthly pass requirement and your membership has been renewed. Next expiry date: ${formattedExpiry}. (Receipt #${payment.receiptNumber})`;
 
       await StudentNotification.create({
         studentId: user._id,
@@ -95,7 +138,7 @@ export async function fulfillPaymentAndActivate(
       try {
         await sendSms({
           phoneNumber: user.phone,
-          message: `Lakshya Smart Library: Your membership has been renewed successfully. Your next expiry date is ${formattedExpiry}. Thank you.`,
+          message: `Lakshya Smart Library: Your membership has been renewed successfully. Next expiry date: ${formattedExpiry}. Thank you.`,
           templateType: 'RENEWAL_SUCCESS',
         });
       } catch (err: any) {
@@ -108,7 +151,7 @@ export async function fulfillPaymentAndActivate(
       await AdminNotification.create({
         type: 'SYSTEM',
         title: 'Membership Payment Confirmed',
-        message: `${user.name} (${user.studentIdNumber || user.email}) renewed ₹500 monthly membership via ${source} (Ref: ${payment.orderId}). Active until ${formattedExpiry}.`,
+        message: `${user.name} (${user.studentIdNumber || user.email}) fulfilled ₹500 monthly membership via ${source} (Ref: ${payment.orderId}). Active until ${formattedExpiry}.`,
         relatedStudentId: user._id,
         studentName: user.name,
         seatNumber: user.assignedSeatNumber || user.currentSeatNumber,
@@ -117,13 +160,15 @@ export async function fulfillPaymentAndActivate(
       console.warn('[Notification Error] Failed to create admin notification:', err.message);
     }
   } else {
-    // Custom Amount Payment: record actual paid amount, do not auto-extend 1-month pass
+    // Partial payment verified without reaching ₹500 target
+    await user.save();
+
     try {
       await StudentNotification.create({
         studentId: user._id,
         type: 'SYSTEM',
-        title: 'Payment Received Successfully',
-        message: `Your payment of ₹${payment.amount} has been verified and recorded (Ref: ${payment.orderId}). Note: Standard 1-month membership renewal requires the ₹500 monthly pass.`,
+        title: 'Partial Payment Verified',
+        message: `Your payment of ₹${payment.amount} has been verified and credited. Total paid: ₹${newCyclePaid}/₹500. Remaining balance: ₹${remaining}. (Ref: ${payment.orderId})`,
       });
     } catch (err: any) {
       console.warn('[Notification Error] Failed to create student custom payment notification:', err.message);
@@ -133,7 +178,7 @@ export async function fulfillPaymentAndActivate(
       try {
         await sendSms({
           phoneNumber: user.phone,
-          message: `Lakshya Smart Library: Your payment of ₹${payment.amount} has been verified successfully (Ref: ${payment.orderId}). Thank you.`,
+          message: `Lakshya Smart Library: Partial payment of ₹${payment.amount} verified. Remaining balance for monthly renewal: ₹${remaining}. Thank you.`,
           templateType: 'RENEWAL_SUCCESS',
         });
       } catch (err: any) {
@@ -144,8 +189,8 @@ export async function fulfillPaymentAndActivate(
     try {
       await AdminNotification.create({
         type: 'SYSTEM',
-        title: 'Custom Payment Received',
-        message: `${user.name} (${user.studentIdNumber || user.email}) paid custom amount ₹${payment.amount} via ${source} (Ref: ${payment.orderId}). Verified successfully.`,
+        title: 'Partial Payment Received',
+        message: `${user.name} (${user.studentIdNumber || user.email}) paid partial amount ₹${payment.amount} via ${source}. Cumulative: ₹${newCyclePaid}/₹500. Remaining: ₹${remaining}. (Ref: ${payment.orderId})`,
         relatedStudentId: user._id,
         studentName: user.name,
         seatNumber: user.assignedSeatNumber || user.currentSeatNumber,
@@ -181,7 +226,7 @@ export const getMyPayments = async (req: Request, res: Response, next: NextFunct
     const [payments, fullUser] = await Promise.all([
       Payment.find({ userId }).sort({ createdAt: -1 }).limit(50),
       User.findById(userId).select(
-        'membershipStatus membershipPlan membershipStartDate membershipExpiresAt gracePeriodExpiresAt lastRenewalDate assignedSeatNumber currentSeatNumber'
+        'membershipStatus membershipPlan membershipStartDate membershipExpiresAt gracePeriodExpiresAt currentCyclePaidAmount lastRenewalDate assignedSeatNumber currentSeatNumber'
       ),
     ]);
 
@@ -208,6 +253,9 @@ export const getMyPayments = async (req: Request, res: Response, next: NextFunct
       (p) => p.paymentType === 'OFFLINE' && p.status === 'PENDING_APPROVAL'
     );
 
+    const currentCyclePaid = fullUser?.currentCyclePaidAmount || 0;
+    const remainingBalance = Math.max(0, 500 - currentCyclePaid);
+
     return sendSuccess(res, {
       membership: {
         status: effectiveStatus,
@@ -217,6 +265,8 @@ export const getMyPayments = async (req: Request, res: Response, next: NextFunct
         gracePeriodExpiresAt: fullUser?.gracePeriodExpiresAt || null,
         lastRenewalDate: fullUser?.lastRenewalDate || null,
         monthlyFee: 500,
+        currentCyclePaid,
+        remainingBalance,
         hasPendingOfflineRequest: Boolean(pendingOffline),
         pendingOfflineOrderId: pendingOffline?.orderId || null,
       },
@@ -243,9 +293,10 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       return sendError(res, 'User not found', 404);
     }
 
-    const { idempotencyKey, amount: reqAmount, isCustomAmount } = req.body;
+    const { idempotencyKey, amount: reqAmount, isCustomAmount, isTestTransaction } = req.body;
     let amount = 500;
     let isCustom = Boolean(isCustomAmount);
+    const isTest = Boolean(isTestTransaction || req.body.planId === 'gateway-test');
 
     if (reqAmount !== undefined && reqAmount !== null && reqAmount !== '') {
       const parsedAmount = Number(reqAmount);
@@ -256,15 +307,20 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         return sendError(res, 'Payment amount cannot exceed ₹50,000.00', 400);
       }
       amount = Math.round(parsedAmount * 100) / 100;
-      if (amount !== 500) {
+      if (amount !== 500 && !isTest) {
         isCustom = true;
       }
     }
 
     const amountPaise = Math.round(amount * 100);
     const plan = getPlanById();
-    const planId = isCustom ? 'custom-amount' : plan.id;
-    const planName = isCustom ? `Custom Payment (₹${amount})` : plan.name;
+    let planId = isCustom ? 'custom-amount' : plan.id;
+    let planName = isCustom ? `Custom Payment (₹${amount})` : plan.name;
+
+    if (isTest) {
+      planId = 'gateway-test';
+      planName = `Admin Gateway Test (₹${amount})`;
+    }
 
     const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
     const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
@@ -282,7 +338,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           payeeName: merchantName,
           amountRupees: existing.amount,
           transactionRef: existing.orderId,
-          transactionNote: isCustom ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership',
+          transactionNote: isTest ? 'Gateway Test' : (isCustom ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership'),
         });
         const existingQrSvg = generateQrSvg(existingUpiString, 240);
         return sendSuccess(
@@ -293,6 +349,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             amount: existing.amount,
             planName: existing.planName,
             isCustomAmount: existing.isCustomAmount,
+            isTestTransaction: existing.isTestTransaction,
             checkoutUrl: existing.checkoutUrl,
             status: existing.status,
             isExisting: true,
@@ -307,13 +364,14 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       }
     }
 
-    const orderId = `LIB-ORD-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    const orderPrefix = isTest ? 'LIB-TEST' : 'LIB-ORD';
+    const orderId = `${orderPrefix}-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
     const upiString = buildCanonicalUpiUri({
       payeeVpa: upiId,
       payeeName: merchantName,
       amountRupees: amount,
       transactionRef: orderId,
-      transactionNote: isCustom ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership',
+      transactionNote: isTest ? 'Gateway Test' : (isCustom ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership'),
     });
     const qrSvg = generateQrSvg(upiString, 240);
 
@@ -332,11 +390,13 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         planId,
         planName,
         isCustomAmount: isCustom,
+        isTestTransaction: isTest,
         amount,
       },
       idempotencyKey,
     });
 
+    const now = new Date();
     const payment = await Payment.create({
       orderId,
       userId: user._id,
@@ -349,14 +409,18 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       amount,
       amountPaise,
       currency: 'INR',
-      durationDays: isCustom ? 0 : 30,
+      durationDays: (isCustom || isTest) ? 0 : 30,
       paymentType: 'ONLINE',
       status: 'CREATED',
       paymentMethod: 'UPI',
       isCustomAmount: isCustom,
+      isTestTransaction: isTest,
       gatewayPaymentId: gatewayResult.paymentId,
       checkoutUrl: gatewayResult.checkoutUrl,
       idempotencyKey: idempotencyKey || undefined,
+      orderCreatedTime: now,
+      lastStatusUpdatedAt: now,
+      paymentInitiatedAt: now,
     });
 
     return sendSuccess(
@@ -368,6 +432,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         planName: payment.planName,
         durationDays: payment.durationDays,
         isCustomAmount: payment.isCustomAmount,
+        isTestTransaction: payment.isTestTransaction,
         checkoutUrl: payment.checkoutUrl,
         status: payment.status,
         isGatewayOnline: gatewayResult.isGatewayOnline,
@@ -549,6 +614,8 @@ export const submitOfflineRequest = async (req: Request, res: Response, next: Ne
       paymentDate: effectivePaymentDate,
       utr: cleanUtr,
       receiptUrl,
+      orderCreatedTime: new Date(),
+      lastStatusUpdatedAt: new Date(),
       notes: remarks ? String(remarks).trim().slice(0, 300) : undefined,
     });
 
@@ -608,7 +675,7 @@ export const adminOfflineAction = async (req: Request, res: Response, next: Next
     }
 
     const { orderId } = req.params;
-    const { action, rejectionReason, remarks } = req.body; // action: 'APPROVE' | 'REJECT'
+    const { action, rejectionReason, remarks, grantMembershipException } = req.body; // action: 'APPROVE' | 'REJECT'
 
     const payment = await Payment.findOne({ orderId, paymentType: 'OFFLINE' });
     if (!payment) {
@@ -628,18 +695,55 @@ export const adminOfflineAction = async (req: Request, res: Response, next: Next
       return sendError(res, 'Student account associated with this request was not found', 404);
     }
 
+    const now = new Date();
+
     if (action === 'APPROVE') {
       payment.status = 'APPROVED';
       payment.adminActionBy = new mongoose.Types.ObjectId(authUser.id);
-      payment.adminActionAt = new Date();
-      payment.notes = remarks ? String(remarks).trim() : payment.notes;
-      payment.verifiedAt = new Date();
+      payment.adminActionAt = now;
+      payment.paymentCompletedAt = now;
+      payment.verifiedAt = now;
+      payment.lastStatusUpdatedAt = now;
       payment.verificationSource = 'OFFLINE_ADMIN_APPROVAL';
+      if (!payment.receiptNumber) {
+        payment.receiptNumber = `LSL-REC-${Date.now().toString().slice(-6)}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+      }
+      payment.notes = remarks ? String(remarks).trim() : payment.notes;
+
+      const isDirectMonthlyPass = payment.amount === 500 && !payment.isCustomAmount && payment.planId !== 'custom-amount';
+      const allowException = Boolean(grantMembershipException);
+
+      let shouldRenew = false;
+      let newCyclePaid = 0;
+      let remaining = 0;
+
+      if (isDirectMonthlyPass || allowException) {
+        shouldRenew = true;
+        newCyclePaid = 500;
+        remaining = 0;
+        student.currentCyclePaidAmount = 0;
+      } else {
+        const prevPaid = student.currentCyclePaidAmount || 0;
+        const accumulated = prevPaid + payment.amount;
+        if (accumulated >= 500) {
+          shouldRenew = true;
+          student.currentCyclePaidAmount = Math.max(0, accumulated - 500);
+          newCyclePaid = accumulated;
+          remaining = 0;
+        } else {
+          shouldRenew = false;
+          student.currentCyclePaidAmount = accumulated;
+          newCyclePaid = accumulated;
+          remaining = 500 - accumulated;
+        }
+      }
+
+      payment.membershipCyclePaidAmount = newCyclePaid;
+      payment.membershipRemainingBalance = remaining;
+      payment.membershipRenewed = shouldRenew;
       await payment.save();
 
-      const isMonthlyPass = payment.amount === 500 && !payment.isCustomAmount && payment.planId !== 'custom-amount';
-
-      if (isMonthlyPass) {
+      if (shouldRenew) {
         // Extend / Activate Student Membership by 1 Calendar Month + 5 Days Grace Period
         const { startDate, expiresAt, gracePeriodExpiresAt } = calculateNextMonthlyExpiry(
           student.membershipExpiresAt
@@ -652,7 +756,7 @@ export const adminOfflineAction = async (req: Request, res: Response, next: Next
         }
         student.membershipExpiresAt = expiresAt;
         student.gracePeriodExpiresAt = gracePeriodExpiresAt;
-        student.lastRenewalDate = new Date();
+        student.lastRenewalDate = now;
         student.lastPaymentId = payment._id as mongoose.Types.ObjectId;
         student.lastReminderType = undefined;
         await student.save();
@@ -664,8 +768,8 @@ export const adminOfflineAction = async (req: Request, res: Response, next: Next
           await StudentNotification.create({
             studentId: student._id,
             type: 'SYSTEM',
-            title: 'Payment Approved',
-            message: `Your offline payment has been approved and your membership has been renewed. Your next expiry date is ${formattedExpiry}.`,
+            title: 'Offline Payment Approved',
+            message: `Your offline payment of ₹${payment.amount} has been approved and your membership has been renewed. Next expiry: ${formattedExpiry}. (Receipt #${payment.receiptNumber})`,
           });
         } catch (err: any) {
           console.warn('Failed to notify student:', err.message);
@@ -676,7 +780,7 @@ export const adminOfflineAction = async (req: Request, res: Response, next: Next
           try {
             await sendSms({
               phoneNumber: student.phone,
-              message: `Lakshya Smart Library: Your membership has been renewed successfully. Your next expiry date is ${formattedExpiry}. Thank you.`,
+              message: `Lakshya Smart Library: Your offline payment has been approved and membership renewed. Next expiry: ${formattedExpiry}. Thank you.`,
               templateType: 'RENEWAL_SUCCESS',
             });
           } catch (err: any) {
@@ -684,13 +788,14 @@ export const adminOfflineAction = async (req: Request, res: Response, next: Next
           }
         }
       } else {
-        // Custom amount offline: marked approved without 1-month pass extension
+        // Custom amount offline partial payment
+        await student.save();
         try {
           await StudentNotification.create({
             studentId: student._id,
             type: 'SYSTEM',
-            title: 'Payment Approved',
-            message: `Your offline payment of ₹${payment.amount} has been approved by library administration (Ref: ${payment.orderId}).`,
+            title: 'Offline Payment Approved (Partial)',
+            message: `Your offline payment of ₹${payment.amount} has been approved. Total paid: ₹${newCyclePaid}/₹500. Remaining balance: ₹${remaining}. (Ref: ${payment.orderId})`,
           });
         } catch (err: any) {
           console.warn('Failed to notify student:', err.message);
@@ -700,7 +805,7 @@ export const adminOfflineAction = async (req: Request, res: Response, next: Next
           try {
             await sendSms({
               phoneNumber: student.phone,
-              message: `Lakshya Smart Library: Your offline payment of ₹${payment.amount} has been approved (Ref: ${payment.orderId}). Thank you.`,
+              message: `Lakshya Smart Library: Offline payment of ₹${payment.amount} approved. Remaining balance: ₹${remaining}. Thank you.`,
               templateType: 'RENEWAL_SUCCESS',
             });
           } catch (err: any) {
@@ -714,15 +819,22 @@ export const adminOfflineAction = async (req: Request, res: Response, next: Next
         {
           orderId: payment.orderId,
           status: payment.status,
+          receiptNumber: payment.receiptNumber,
+          amount: payment.amount,
+          membershipRenewed: payment.membershipRenewed,
+          remainingBalance: remaining,
           membershipStatus: student.membershipStatus,
           membershipExpiresAt: student.membershipExpiresAt,
         },
-        'Offline payment approved and membership renewed successfully'
+        shouldRenew
+          ? 'Offline payment approved and membership renewed successfully'
+          : 'Offline partial payment approved and credited to balance'
       );
     } else if (action === 'REJECT') {
       payment.status = 'REJECTED';
       payment.adminActionBy = new mongoose.Types.ObjectId(authUser.id);
-      payment.adminActionAt = new Date();
+      payment.adminActionAt = now;
+      payment.lastStatusUpdatedAt = now;
       payment.adminRejectionReason = rejectionReason
         ? String(rejectionReason).trim()
         : 'Payment could not be verified by administration.';
@@ -858,12 +970,21 @@ export const getOrderStatus = async (req: Request, res: Response, next: NextFunc
       status: payment.status,
       amount: payment.amount,
       planName: payment.planName,
+      isCustomAmount: payment.isCustomAmount,
+      isTestTransaction: payment.isTestTransaction,
+      receiptNumber: payment.receiptNumber,
+      membershipRemainingBalance: payment.membershipRemainingBalance,
+      membershipCyclePaidAmount: payment.membershipCyclePaidAmount,
+      membershipRenewed: payment.membershipRenewed,
       utr: payment.utr,
       receiptUrl: payment.receiptUrl,
       offlineMethod: payment.offlineMethod,
       adminRejectionReason: payment.adminRejectionReason,
       verificationSource: payment.verificationSource,
       verifiedAt: payment.verifiedAt,
+      orderCreatedTime: payment.orderCreatedTime || payment.createdAt,
+      paymentCompletedAt: payment.paymentCompletedAt || payment.verifiedAt,
+      lastStatusUpdatedAt: payment.lastStatusUpdatedAt || payment.updatedAt,
       createdAt: payment.createdAt,
     });
   } catch (error) {
@@ -1061,7 +1182,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
  */
 export const getAdminPayments = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status, type, search, page = 1, limit = 15 } = req.query;
+    const { status, type, testClassification, search, page = 1, limit = 15 } = req.query;
 
     const query: any = {};
     if (status && status !== 'ALL') {
@@ -1069,6 +1190,11 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
     }
     if (type && type !== 'ALL') {
       query.paymentType = type;
+    }
+    if (testClassification === 'TEST') {
+      query.isTestTransaction = true;
+    } else if (testClassification === 'PROD') {
+      query.isTestTransaction = { $ne: true };
     }
 
     if (search) {
@@ -1078,6 +1204,7 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
         { studentName: searchRegex },
         { studentEmail: searchRegex },
         { utr: searchRegex },
+        { receiptNumber: searchRegex },
         { studentIdNumber: searchRegex },
       ];
     }
@@ -1091,11 +1218,16 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
       Payment.countDocuments(query),
     ]);
 
-    // Aggregate statistics
+    // Aggregate statistics across entire database
     const statsAgg = await Payment.aggregate([
       {
         $group: {
-          _id: { status: '$status', type: '$paymentType' },
+          _id: {
+            status: '$status',
+            type: '$paymentType',
+            isCustom: { $ifNull: ['$isCustomAmount', false] },
+            isTest: { $ifNull: ['$isTestTransaction', false] },
+          },
           count: { $sum: 1 },
           totalAmount: { $sum: '$amount' },
         },
@@ -1104,24 +1236,57 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
 
     const stats = {
       totalCollected: 0,
+      totalOnlineRevenue: 0,
+      totalOfflineRevenue: 0,
       onlineSuccess: 0,
       offlineApproved: 0,
       pendingOfflineApproval: 0,
       pendingOnline: 0,
+      totalFailed: 0,
+      customPayments: 0,
+      monthlyPayments: 0,
+      testTransactions: 0,
+      testRevenue: 0,
     };
 
     statsAgg.forEach((item) => {
-      const { status } = item._id;
+      const { status, type: paymentType, isCustom, isTest } = item._id;
+
+      if (isTest) {
+        stats.testTransactions += item.count;
+        if (status === 'SUCCESS' || status === 'APPROVED') {
+          stats.testRevenue += item.totalAmount;
+        }
+        return; // Test transactions do not increment production revenue or production counters
+      }
+
+      // Production counts and revenues
       if (status === 'SUCCESS' || status === 'APPROVED') {
         stats.totalCollected += item.totalAmount;
-        if (status === 'SUCCESS') stats.onlineSuccess += item.count;
-        if (status === 'APPROVED') stats.offlineApproved += item.count;
+        if (status === 'SUCCESS' && paymentType === 'ONLINE') {
+          stats.onlineSuccess += item.count;
+          stats.totalOnlineRevenue += item.totalAmount;
+        }
+        if (status === 'APPROVED' && paymentType === 'OFFLINE') {
+          stats.offlineApproved += item.count;
+          stats.totalOfflineRevenue += item.totalAmount;
+        }
       }
+
       if (status === 'PENDING_APPROVAL') {
         stats.pendingOfflineApproval += item.count;
       }
-      if (status === 'PENDING') {
+      if (status === 'PENDING' || status === 'PROCESSING') {
         stats.pendingOnline += item.count;
+      }
+      if (status === 'FAILED' || status === 'REJECTED' || status === 'CANCELLED' || status === 'EXPIRED') {
+        stats.totalFailed += item.count;
+      }
+
+      if (isCustom) {
+        stats.customPayments += item.count;
+      } else {
+        stats.monthlyPayments += item.count;
       }
     });
 
@@ -1135,6 +1300,72 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
       },
       stats,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/payments/receipt/:orderId
+ * Returns full verified official payment receipt.
+ */
+export const getPaymentReceipt = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authUser = req.user;
+    if (!authUser) {
+      return sendError(res, 'Unauthorized', 401);
+    }
+    const { orderId } = req.params;
+
+    const query: any = { orderId };
+    if (authUser.role !== 'ADMIN') {
+      query.userId = new mongoose.Types.ObjectId(authUser.id);
+    }
+
+    const payment = await Payment.findOne(query);
+    if (!payment) {
+      return sendError(res, 'Payment transaction not found', 404);
+    }
+
+    if (payment.status !== 'SUCCESS' && payment.status !== 'APPROVED') {
+      return sendError(res, 'Receipt can only be generated for verified and completed payments', 400);
+    }
+
+    const receipt = {
+      receiptNumber: payment.receiptNumber || `LSL-REC-${payment.orderId.slice(-6)}`,
+      orderId: payment.orderId,
+      gatewayPaymentId: payment.gatewayPaymentId || null,
+      utr: payment.utr || null,
+      studentName: payment.studentName,
+      studentEmail: payment.studentEmail,
+      studentPhone: payment.studentPhone || null,
+      studentIdNumber: payment.studentIdNumber || null,
+      amount: payment.amount,
+      currency: payment.currency,
+      paymentType: payment.paymentType,
+      paymentMethod: payment.paymentMethod,
+      offlineMethod: payment.offlineMethod || null,
+      isCustomAmount: payment.isCustomAmount,
+      isTestTransaction: payment.isTestTransaction,
+      status: payment.status,
+      planName: payment.planName,
+      createdAt: payment.createdAt,
+      verifiedAt: payment.verifiedAt || payment.updatedAt,
+      paymentCompletedAt: payment.paymentCompletedAt || payment.verifiedAt || payment.updatedAt,
+      verificationSource: payment.verificationSource,
+      membershipCyclePaidAmount: payment.membershipCyclePaidAmount,
+      membershipRemainingBalance: payment.membershipRemainingBalance,
+      membershipRenewed: payment.membershipRenewed,
+      notes: payment.notes || null,
+      organization: {
+        name: 'Lakshya Smart Library',
+        tagline: 'Personal Library Management & Attendance System',
+        address: 'Lakshya Smart Library, Main Road, Study Center',
+        supportEmail: 'support@lakshyalibrary.com',
+      },
+    };
+
+    return sendSuccess(res, receipt, 'Receipt retrieved successfully');
   } catch (error) {
     next(error);
   }

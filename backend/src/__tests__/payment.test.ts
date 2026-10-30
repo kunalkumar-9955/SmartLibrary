@@ -500,6 +500,98 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
       expect(user?.membershipExpiresAt).toBeDefined();
     });
 
+    it('should accumulate partial payments: ₹200 + ₹300 = ₹500 and activate membership', async () => {
+      // 1. First partial payment: ₹200
+      const order1Res = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 200, isCustomAmount: true });
+      const order1Id = order1Res.body.data.orderId;
+
+      await request(app)
+        .post(`/api/payments/admin/verify/${order1Id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE' });
+
+      let user = await User.findById(studentId);
+      expect(user?.currentCyclePaidAmount).toBe(200);
+      expect(user?.membershipStatus).toBe('INACTIVE');
+
+      // 2. Second partial payment: ₹300 (total = 500)
+      const order2Res = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 300, isCustomAmount: true });
+      const order2Id = order2Res.body.data.orderId;
+
+      await request(app)
+        .post(`/api/payments/admin/verify/${order2Id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE' });
+
+      user = await User.findById(studentId);
+      expect(user?.membershipStatus).toBe('ACTIVE');
+      expect(user?.membershipExpiresAt).toBeDefined();
+
+      const payment2 = await Payment.findOne({ orderId: order2Id });
+      expect(payment2?.membershipRenewed).toBe(true);
+      expect(payment2?.receiptNumber).toBeDefined();
+    });
+
+    it('should not count test transactions towards membership renewal or production revenue', async () => {
+      const testOrderRes = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 2, isTestTransaction: true, planId: 'gateway-test' });
+
+      expect(testOrderRes.status).toBe(200);
+      const testOrderId = testOrderRes.body.data.orderId;
+      expect(testOrderId).toMatch(/^LIB-TEST-/);
+
+      // Verify test order
+      const verifyRes = await request(app)
+        .post(`/api/payments/admin/verify/${testOrderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE' });
+
+      expect(verifyRes.status).toBe(200);
+
+      // Verify admin ledger stats
+      const adminAllRes = await request(app)
+        .get('/api/payments/admin/all')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(adminAllRes.status).toBe(200);
+      expect(adminAllRes.body.data.stats.totalCollected).toBe(0); // Production revenue is 0
+      expect(adminAllRes.body.data.stats.testTransactions).toBe(1);
+      expect(adminAllRes.body.data.stats.testRevenue).toBe(2);
+    });
+
+    it('should return official receipt for completed verified payment', async () => {
+      const orderRes = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 500 });
+      const orderId = orderRes.body.data.orderId;
+
+      await request(app)
+        .post(`/api/payments/admin/verify/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE' });
+
+      const receiptRes = await request(app)
+        .get(`/api/payments/receipt/${orderId}`)
+        .set('Authorization', `Bearer ${studentToken}`);
+
+      expect(receiptRes.status).toBe(200);
+      expect(receiptRes.body.success).toBe(true);
+      expect(receiptRes.body.data.orderId).toBe(orderId);
+      expect(receiptRes.body.data.receiptNumber).toBeDefined();
+      expect(receiptRes.body.data.studentName).toBe('Rohan Sharma');
+      expect(receiptRes.body.data.amount).toBe(500);
+      expect(receiptRes.body.data.status).toBe('SUCCESS');
+    });
+
     it('should allow student to submit offline request with custom amount', async () => {
       const res = await request(app)
         .post('/api/payments/offline-request')
