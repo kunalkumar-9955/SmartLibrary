@@ -23,6 +23,15 @@ export type VerificationSource =
 
 export type OfflinePaymentMethod = 'CASH' | 'UPI_DIRECT' | 'BANK_TRANSFER' | 'OTHER';
 
+export type RefundStatus =
+  | 'REFUND_REQUESTED'
+  | 'REFUND_UNDER_REVIEW'
+  | 'REFUND_APPROVED'
+  | 'REFUND_PROCESSING'
+  | 'REFUNDED'
+  | 'REFUND_FAILED'
+  | 'REFUND_REJECTED';
+
 export interface IPayment extends Document {
   orderId: string;
   userId: mongoose.Types.ObjectId;
@@ -47,6 +56,7 @@ export interface IPayment extends Document {
   deliveryId?: string;
   idempotencyKey?: string;
   gatewayRawResponse?: Record<string, any>;
+  expiresAt?: Date;
   // Verification & Common Fields
   utr?: string;
   receiptNumber?: string;
@@ -62,6 +72,17 @@ export interface IPayment extends Document {
   membershipCyclePaidAmount?: number;
   membershipRemainingBalance?: number;
   membershipRenewed?: boolean;
+  // Refund Workflow Fields
+  refundStatus?: RefundStatus;
+  refundRequestedAt?: Date;
+  refundReason?: string;
+  refundAdminActionAt?: Date;
+  refundAdminActionBy?: mongoose.Types.ObjectId;
+  refundRejectionReason?: string;
+  refundGatewayId?: string;
+  refundReference?: string;
+  refundCompletedAt?: Date;
+  refundAmount?: number;
   // Offline Payment Fields
   offlineMethod?: OfflinePaymentMethod;
   paymentDate?: Date;
@@ -128,6 +149,7 @@ const PaymentSchema = new Schema<IPayment>(
     paymentMethod: { type: String, default: 'UPI' },
     gatewayPaymentId: { type: String, trim: true, index: true },
     checkoutUrl: { type: String, trim: true },
+    expiresAt: { type: Date, index: true },
     utr: { type: String, trim: true, index: true },
     receiptNumber: { type: String, trim: true, index: true },
     verificationSource: {
@@ -154,6 +176,29 @@ const PaymentSchema = new Schema<IPayment>(
     membershipCyclePaidAmount: { type: Number, default: 0 },
     membershipRemainingBalance: { type: Number, default: 0 },
     membershipRenewed: { type: Boolean, default: false },
+    // Refund Workflow
+    refundStatus: {
+      type: String,
+      enum: [
+        'REFUND_REQUESTED',
+        'REFUND_UNDER_REVIEW',
+        'REFUND_APPROVED',
+        'REFUND_PROCESSING',
+        'REFUNDED',
+        'REFUND_FAILED',
+        'REFUND_REJECTED',
+      ],
+      index: true,
+    },
+    refundRequestedAt: { type: Date },
+    refundReason: { type: String, trim: true },
+    refundAdminActionAt: { type: Date },
+    refundAdminActionBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    refundRejectionReason: { type: String, trim: true },
+    refundGatewayId: { type: String, trim: true },
+    refundReference: { type: String, trim: true },
+    refundCompletedAt: { type: Date },
+    refundAmount: { type: Number },
     // Offline Details
     offlineMethod: {
       type: String,

@@ -54,6 +54,14 @@ export const AdminPaymentsPage: React.FC = () => {
   const [receiptData, setReceiptData] = useState<PaymentReceipt | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
 
+  // Refund Management State
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundPayment, setRefundPayment] = useState<PaymentItem | null>(null);
+  const [refundAction, setRefundAction] = useState<'APPROVE' | 'REJECT'>('APPROVE');
+  const [refundReference, setRefundReference] = useState('');
+  const [refundRejectionReason, setRefundRejectionReason] = useState('');
+  const [submittingRefund, setSubmittingRefund] = useState(false);
+
   // Gateway Testing State
   const [testModalOpen, setTestModalOpen] = useState(false);
   const [testAmountInput, setTestAmountInput] = useState<string>('1');
@@ -213,6 +221,36 @@ export const AdminPaymentsPage: React.FC = () => {
     }
   };
 
+  const handleOpenRefundModal = (payment: PaymentItem, action: 'APPROVE' | 'REJECT') => {
+    setRefundPayment(payment);
+    setRefundAction(action);
+    setRefundReference('');
+    setRefundRejectionReason('');
+    setRefundModalOpen(true);
+  };
+
+  const handleConfirmRefundAction = async () => {
+    if (!refundPayment || submittingRefund) return;
+    try {
+      setSubmittingRefund(true);
+      const res = await paymentService.adminProcessRefund(refundPayment.orderId, {
+        action: refundAction,
+        refundReference: refundAction === 'APPROVE' ? refundReference.trim() || undefined : undefined,
+        rejectionReason: refundAction === 'REJECT' ? refundRejectionReason.trim() || undefined : undefined,
+      });
+      if (res.data.success) {
+        success(refundAction === 'APPROVE' ? 'Refund approved & processed!' : 'Refund request rejected.');
+        setRefundModalOpen(false);
+        setRefundPayment(null);
+        fetchPayments();
+      }
+    } catch (err: any) {
+      error(err.response?.data?.message || 'Refund action failed');
+    } finally {
+      setSubmittingRefund(false);
+    }
+  };
+
   const handleViewReceipt = async (orderId: string) => {
     try {
       setLoadingReceipt(true);
@@ -238,6 +276,8 @@ export const AdminPaymentsPage: React.FC = () => {
   const monthlyPayments = stats.monthlyPayments || 0;
   const testTransactions = stats.testTransactions || 0;
   const testRevenue = stats.testRevenue || 0;
+  const pendingRefundRequests = stats.pendingRefundRequestsCount || 0;
+  const totalRefundedAmount = stats.totalRefundedAmount || 0;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 font-sans">
@@ -357,6 +397,26 @@ export const AdminPaymentsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Refund Requests Alert Banner */}
+      {pendingRefundRequests > 0 && (
+        <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+            <div>
+              <strong className="text-sm font-bold text-rose-800 dark:text-rose-200">{pendingRefundRequests} Pending Refund Request{pendingRefundRequests > 1 ? 's' : ''}</strong>
+              <p className="text-xs text-rose-700 dark:text-rose-300">Student(s) have requested a refund. Total refunded to date: ₹{totalRefundedAmount.toLocaleString('en-IN')}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setStatusFilter('SUCCESS'); setPage(1); }}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition cursor-pointer shrink-0"
+          >
+            Review
+          </button>
+        </div>
+      )}
 
       {/* Filters & Search Toolbar */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
@@ -596,6 +656,21 @@ export const AdminPaymentsPage: React.FC = () => {
                             {s === 'REJECTED' ? 'Rejected' : 'Failed'}
                           </span>
                         )}
+                        {/* Refund Status Badge */}
+                        {p.refundStatus && (
+                          <div className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            p.refundStatus === 'REFUNDED'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
+                              : p.refundStatus === 'REFUND_REJECTED'
+                              ? 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                              : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800'
+                          }`}>
+                            {p.refundStatus === 'REFUNDED' ? '↩ Refunded' :
+                             p.refundStatus === 'REFUND_REQUESTED' ? '⚑ Refund Req.' :
+                             p.refundStatus === 'REFUND_REJECTED' ? '✕ Refund Rej.' :
+                             p.refundStatus.replace('REFUND_', '').replace(/_/g, ' ')}
+                          </div>
+                        )}
                       </td>
 
                       {/* Actions */}
@@ -630,6 +705,16 @@ export const AdminPaymentsPage: React.FC = () => {
                               className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
                             >
                               Verify
+                            </button>
+                          )}
+                          {/* Refund Action Button */}
+                          {isSuccess && p.refundStatus === 'REFUND_REQUESTED' && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRefundModal(p, 'APPROVE')}
+                              className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                            >
+                              Refund
                             </button>
                           )}
                         </div>
@@ -805,6 +890,119 @@ export const AdminPaymentsPage: React.FC = () => {
                 }`}
               >
                 {submittingAction ? 'Processing...' : `Confirm ${selectedAction}`}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Refund Processing Modal */}
+      {refundModalOpen && refundPayment && (
+        <Modal
+          isOpen={refundModalOpen}
+          onClose={() => setRefundModalOpen(false)}
+          title="Process Refund Request"
+        >
+          <div className="space-y-4">
+            <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Student:</span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {refundPayment.studentName} ({refundPayment.studentIdNumber || 'No ID'})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Refund Amount:</span>
+                <span className="font-extrabold text-rose-600 dark:text-rose-400 text-sm">
+                  ₹{refundPayment.amount}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Order ID:</span>
+                <span className="font-mono text-slate-900 dark:text-white">{refundPayment.orderId}</span>
+              </div>
+              {refundPayment.refundReason && (
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/50">
+                  <span className="text-[11px] font-bold text-rose-700 dark:text-rose-300 block mb-0.5">Student's Reason:</span>
+                  <p className="text-xs text-rose-900 dark:text-rose-200">{refundPayment.refundReason}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Action Toggle */}
+            <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 gap-1">
+              <button
+                type="button"
+                onClick={() => setRefundAction('APPROVE')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  refundAction === 'APPROVE'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                Approve & Refund
+              </button>
+              <button
+                type="button"
+                onClick={() => setRefundAction('REJECT')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  refundAction === 'REJECT'
+                    ? 'bg-slate-700 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                Reject Request
+              </button>
+            </div>
+
+            {refundAction === 'APPROVE' ? (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Approving this refund will mark the payment as <strong>REFUNDED</strong>, reverse any membership extension granted, and adjust the student's payment balance.
+                </p>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Refund Reference / UTR (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={refundReference}
+                    onChange={(e) => setRefundReference(e.target.value)}
+                    placeholder="e.g. Bank UTR, UPI Ref, or Cash Refund ID"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Rejection Reason (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={refundRejectionReason}
+                  onChange={(e) => setRefundRejectionReason(e.target.value)}
+                  placeholder="e.g. Policy does not permit refunds after 7 days"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-3 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-rose-500"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setRefundModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingRefund}
+                onClick={handleConfirmRefundAction}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition bg-rose-600 hover:bg-rose-700 disabled:opacity-50"
+              >
+                {submittingRefund ? 'Processing...' : `Confirm ${refundAction === 'APPROVE' ? 'Approval' : 'Rejection'}`}
               </button>
             </div>
           </div>

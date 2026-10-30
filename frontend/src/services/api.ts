@@ -204,4 +204,10 @@ export const paymentService = {
     data: { action: 'APPROVE' | 'REJECT'; rejectionReason?: string; remarks?: string; grantMembershipException?: boolean }
   ) => api.post(`/payments/admin/offline-action/${orderId}`, data),
   triggerExpiryCheck: () => api.post('/payments/cron/check-expiries'),
+  requestRefund: (orderId: string, data: { reason?: string }) =>
+    api.post(`/payments/refund-request/${orderId}`, data),
+  adminProcessRefund: (
+    orderId: string,
+    data: { action: 'APPROVE' | 'REJECT'; rejectionReason?: string; refundReference?: string; remarks?: string }
+  ) => api.post(`/payments/admin/refund-action/${orderId}`, data),
 };

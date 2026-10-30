@@ -15,6 +15,8 @@ import {
   adminOfflineAction,
   checkExpiriesEndpoint,
   getPaymentReceipt,
+  requestRefund,
+  adminProcessRefund,
 } from '../controllers/paymentController';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../middleware/role';
@@ -38,10 +40,12 @@ router.post('/submit-utr', authenticate, submitUtr);
 router.post('/offline-request', authenticate, upload.single('receipt'), submitOfflineRequest);
 router.get('/status/:orderId', authenticate, getOrderStatus);
 router.get('/receipt/:orderId', authenticate, getPaymentReceipt);
+router.post('/refund-request/:orderId', authenticate, requestRefund);
 
 // Admin routes
 router.get('/admin/all', authenticate, requireRole('ADMIN'), getAdminPayments);
 router.post('/admin/verify/:orderId', authenticate, requireRole('ADMIN'), verifyPaymentAdmin);
 router.post('/admin/offline-action/:orderId', authenticate, requireRole('ADMIN'), adminOfflineAction);
+router.post('/admin/refund-action/:orderId', authenticate, requireRole('ADMIN'), adminProcessRefund);
 
 export default router;

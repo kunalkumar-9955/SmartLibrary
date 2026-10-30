@@ -147,15 +147,26 @@ export type PaymentStatus =
   | 'CREATED'
   | 'PENDING'
   | 'PENDING_APPROVAL'
+  | 'PROCESSING'
   | 'APPROVED'
   | 'REJECTED'
   | 'SUCCESS'
   | 'FAILED'
   | 'EXPIRED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'REFUNDED';
 
 export type PaymentType = 'ONLINE' | 'OFFLINE';
 export type OfflinePaymentMethod = 'CASH' | 'UPI_DIRECT' | 'BANK_TRANSFER' | 'OTHER';
+
+export type RefundStatus =
+  | 'REFUND_REQUESTED'
+  | 'REFUND_UNDER_REVIEW'
+  | 'REFUND_APPROVED'
+  | 'REFUND_PROCESSING'
+  | 'REFUNDED'
+  | 'REFUND_FAILED'
+  | 'REFUND_REJECTED';
 
 export interface MembershipPlan {
   id: string;
@@ -193,6 +204,8 @@ export interface PaymentItem {
   adminActionAt?: string;
   gatewayPaymentId?: string;
   checkoutUrl?: string;
+  expiresAt?: string;
+  isSessionExpired?: boolean;
   utr?: string;
   verificationSource?: string;
   verifiedAt?: string;
@@ -204,6 +217,16 @@ export interface PaymentItem {
   paymentInitiatedAt?: string;
   paymentCompletedAt?: string;
   lastStatusUpdatedAt?: string;
+  // Refund Fields
+  refundStatus?: RefundStatus;
+  refundRequestedAt?: string;
+  refundReason?: string;
+  refundAdminActionAt?: string;
+  refundRejectionReason?: string;
+  refundGatewayId?: string;
+  refundReference?: string;
+  refundCompletedAt?: string;
+  refundAmount?: number;
   createdAt: string;
   updatedAt?: string;
 }

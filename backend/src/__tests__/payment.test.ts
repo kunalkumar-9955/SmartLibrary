@@ -607,5 +607,111 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
       expect(saved?.amountPaise).toBe(35000);
       expect(saved?.isCustomAmount).toBe(true);
     });
+
+    it('should set expiresAt (5 minutes) on order creation and return it in status', async () => {
+      const orderRes = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 500 });
+
+      expect(orderRes.status).toBe(200);
+      expect(orderRes.body.data.expiresAt).toBeDefined();
+
+      const statusRes = await request(app)
+        .get(`/api/payments/status/${orderRes.body.data.orderId}`)
+        .set('Authorization', `Bearer ${studentToken}`);
+
+      expect(statusRes.status).toBe(200);
+      expect(statusRes.body.data.expiresAt).toBeDefined();
+      expect(statusRes.body.data.isSessionExpired).toBe(false);
+    });
+
+    it('should allow student to request a refund on completed payment and prevent duplicate requests', async () => {
+      const orderRes = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 500 });
+      const orderId = orderRes.body.data.orderId;
+
+      await request(app)
+        .post(`/api/payments/admin/verify/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE' });
+
+      // Request refund
+      const refundRes = await request(app)
+        .post(`/api/payments/refund-request/${orderId}`)
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ reason: 'Paid twice by mistake' });
+
+      expect(refundRes.status).toBe(200);
+      expect(refundRes.body.success).toBe(true);
+      expect(refundRes.body.data.refundStatus).toBe('REFUND_REQUESTED');
+
+      // Attempt duplicate refund request
+      const dupRes = await request(app)
+        .post(`/api/payments/refund-request/${orderId}`)
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ reason: 'Another reason' });
+
+      expect(dupRes.status).toBe(409);
+    });
+
+    it('should allow admin to approve refund and reverse membership accounting', async () => {
+      const orderRes = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 500 });
+      const orderId = orderRes.body.data.orderId;
+
+      await request(app)
+        .post(`/api/payments/admin/verify/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE' });
+
+      // Verify membership active
+      let user = await User.findById(studentId);
+      expect(user?.membershipStatus).toBe('ACTIVE');
+
+      // Admin approves refund
+      const adminRefundRes = await request(app)
+        .post(`/api/payments/admin/refund-action/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE', refundReference: 'REFUND_TX_12345' });
+
+      expect(adminRefundRes.status).toBe(200);
+      expect(adminRefundRes.body.success).toBe(true);
+      expect(adminRefundRes.body.data.refundStatus).toBe('REFUNDED');
+
+      // Verify membership reversed
+      user = await User.findById(studentId);
+      expect(user?.membershipStatus).toBe('INACTIVE');
+    });
+
+    it('should allow admin to reject a refund request', async () => {
+      const orderRes = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 500 });
+      const orderId = orderRes.body.data.orderId;
+
+      await request(app)
+        .post(`/api/payments/admin/verify/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE' });
+
+      await request(app)
+        .post(`/api/payments/refund-request/${orderId}`)
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ reason: 'Need money back' });
+
+      const rejectRes = await request(app)
+        .post(`/api/payments/admin/refund-action/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'REJECT', rejectionReason: 'Non-refundable after access started' });
+
+      expect(rejectRes.status).toBe(200);
+      expect(rejectRes.body.data.refundStatus).toBe('REFUND_REJECTED');
+    });
   });
 });

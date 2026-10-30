@@ -353,6 +353,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             checkoutUrl: existing.checkoutUrl,
             status: existing.status,
             isExisting: true,
+            expiresAt: existing.expiresAt,
             upiId,
             merchantName,
             upiString: existingUpiString,
@@ -397,6 +398,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     });
 
     const now = new Date();
+    const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5-minute validity
     const payment = await Payment.create({
       orderId,
       userId: user._id,
@@ -419,6 +421,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       checkoutUrl: gatewayResult.checkoutUrl,
       idempotencyKey: idempotencyKey || undefined,
       orderCreatedTime: now,
+      expiresAt,
       lastStatusUpdatedAt: now,
       paymentInitiatedAt: now,
     });
@@ -435,6 +438,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         isTestTransaction: payment.isTestTransaction,
         checkoutUrl: payment.checkoutUrl,
         status: payment.status,
+        expiresAt: payment.expiresAt,
         isGatewayOnline: gatewayResult.isGatewayOnline,
         upiId,
         merchantName,
@@ -964,6 +968,9 @@ export const getOrderStatus = async (req: Request, res: Response, next: NextFunc
       }
     }
 
+    const now = new Date();
+    const isSessionExpired = Boolean(payment.expiresAt && now > payment.expiresAt);
+
     return sendSuccess(res, {
       orderId: payment.orderId,
       paymentType: payment.paymentType,
@@ -976,6 +983,8 @@ export const getOrderStatus = async (req: Request, res: Response, next: NextFunc
       membershipRemainingBalance: payment.membershipRemainingBalance,
       membershipCyclePaidAmount: payment.membershipCyclePaidAmount,
       membershipRenewed: payment.membershipRenewed,
+      expiresAt: payment.expiresAt,
+      isSessionExpired,
       utr: payment.utr,
       receiptUrl: payment.receiptUrl,
       offlineMethod: payment.offlineMethod,
@@ -985,6 +994,12 @@ export const getOrderStatus = async (req: Request, res: Response, next: NextFunc
       orderCreatedTime: payment.orderCreatedTime || payment.createdAt,
       paymentCompletedAt: payment.paymentCompletedAt || payment.verifiedAt,
       lastStatusUpdatedAt: payment.lastStatusUpdatedAt || payment.updatedAt,
+      refundStatus: payment.refundStatus,
+      refundRequestedAt: payment.refundRequestedAt,
+      refundReason: payment.refundReason,
+      refundCompletedAt: payment.refundCompletedAt,
+      refundReference: payment.refundReference,
+      refundRejectionReason: payment.refundRejectionReason,
       createdAt: payment.createdAt,
     });
   } catch (error) {
@@ -1205,6 +1220,7 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
         { studentEmail: searchRegex },
         { utr: searchRegex },
         { receiptNumber: searchRegex },
+        { refundReference: searchRegex },
         { studentIdNumber: searchRegex },
       ];
     }
@@ -1225,6 +1241,7 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
           _id: {
             status: '$status',
             type: '$paymentType',
+            refundStatus: '$refundStatus',
             isCustom: { $ifNull: ['$isCustomAmount', false] },
             isTest: { $ifNull: ['$isTestTransaction', false] },
           },
@@ -1247,10 +1264,13 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
       monthlyPayments: 0,
       testTransactions: 0,
       testRevenue: 0,
+      totalRefundedAmount: 0,
+      totalRefundsCount: 0,
+      pendingRefundRequestsCount: 0,
     };
 
     statsAgg.forEach((item) => {
-      const { status, type: paymentType, isCustom, isTest } = item._id;
+      const { status, type: paymentType, refundStatus, isCustom, isTest } = item._id;
 
       if (isTest) {
         stats.testTransactions += item.count;
@@ -1260,8 +1280,17 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
         return; // Test transactions do not increment production revenue or production counters
       }
 
-      // Production counts and revenues
-      if (status === 'SUCCESS' || status === 'APPROVED') {
+      // Refund tracking
+      if (status === 'REFUNDED' || refundStatus === 'REFUNDED') {
+        stats.totalRefundsCount += item.count;
+        stats.totalRefundedAmount += item.totalAmount;
+      }
+      if (refundStatus === 'REFUND_REQUESTED' || refundStatus === 'REFUND_UNDER_REVIEW') {
+        stats.pendingRefundRequestsCount += item.count;
+      }
+
+      // Production counts and revenues (exclude refunded payments from active revenue)
+      if ((status === 'SUCCESS' || status === 'APPROVED') && refundStatus !== 'REFUNDED') {
         stats.totalCollected += item.totalAmount;
         if (status === 'SUCCESS' && paymentType === 'ONLINE') {
           stats.onlineSuccess += item.count;
@@ -1300,6 +1329,215 @@ export const getAdminPayments = async (req: Request, res: Response, next: NextFu
       },
       stats,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/payments/refund-request/:orderId
+ * Student submits a refund request for an eligible verified payment.
+ */
+export const requestRefund = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authUser = req.user;
+    if (!authUser) {
+      return sendError(res, 'Unauthorized', 401);
+    }
+    const { orderId } = req.params;
+    const { reason } = req.body;
+
+    const payment = await Payment.findOne({
+      orderId,
+      userId: new mongoose.Types.ObjectId(authUser.id),
+    });
+
+    if (!payment) {
+      return sendError(res, 'Payment transaction not found', 404);
+    }
+
+    if (payment.status !== 'SUCCESS' && payment.status !== 'APPROVED') {
+      return sendError(res, 'Only successful or approved payments are eligible for a refund request', 400);
+    }
+
+    if (
+      payment.refundStatus &&
+      ['REFUND_REQUESTED', 'REFUND_UNDER_REVIEW', 'REFUND_APPROVED', 'REFUND_PROCESSING', 'REFUNDED'].includes(
+        payment.refundStatus
+      )
+    ) {
+      return sendError(res, `A refund request is already active or completed with status: ${payment.refundStatus}`, 409);
+    }
+
+    const cleanReason = reason ? String(reason).trim().slice(0, 500) : 'Student requested refund';
+
+    payment.refundStatus = 'REFUND_REQUESTED';
+    payment.refundRequestedAt = new Date();
+    payment.refundReason = cleanReason;
+    payment.lastStatusUpdatedAt = new Date();
+    await payment.save();
+
+    // Notify Student
+    try {
+      await StudentNotification.create({
+        studentId: payment.userId,
+        type: 'SYSTEM',
+        title: 'Refund Request Submitted',
+        message: `Your refund request for ₹${payment.amount} (Ref: ${payment.orderId}) has been submitted for Admin review.`,
+      });
+    } catch (err: any) {
+      console.warn('Student notification error:', err.message);
+    }
+
+    // Notify Admin
+    try {
+      await AdminNotification.create({
+        type: 'SYSTEM',
+        title: 'New Refund Request Submitted',
+        message: `${payment.studentName} (${payment.studentIdNumber || payment.studentEmail}) requested a refund of ₹${payment.amount} (Ref: ${payment.orderId}). Reason: ${cleanReason}`,
+        relatedStudentId: payment.userId,
+        studentName: payment.studentName,
+      });
+    } catch (err: any) {
+      console.warn('Admin notification error:', err.message);
+    }
+
+    return sendSuccess(
+      res,
+      {
+        orderId: payment.orderId,
+        refundStatus: payment.refundStatus,
+        refundRequestedAt: payment.refundRequestedAt,
+        refundReason: payment.refundReason,
+      },
+      'Refund request submitted successfully and is under Admin review'
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/payments/admin/refund-action/:orderId
+ * Admin approves or rejects a refund request and updates accounting.
+ */
+export const adminProcessRefund = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authUser = req.user;
+    if (!authUser || authUser.role !== 'ADMIN') {
+      return sendError(res, 'Unauthorized: Admin role required', 403);
+    }
+
+    const { orderId } = req.params;
+    const { action, rejectionReason, refundReference, remarks } = req.body; // 'APPROVE' | 'REJECT'
+
+    const payment = await Payment.findOne({ orderId });
+    if (!payment) {
+      return sendError(res, 'Payment transaction not found', 404);
+    }
+
+    if (payment.refundStatus === 'REFUNDED') {
+      return sendError(res, 'This payment has already been refunded', 400);
+    }
+
+    const student = await User.findById(payment.userId);
+    if (!student) {
+      return sendError(res, 'Student account not found', 404);
+    }
+
+    const now = new Date();
+
+    if (action === 'APPROVE') {
+      payment.refundStatus = 'REFUNDED';
+      payment.status = 'REFUNDED';
+      payment.refundAdminActionAt = now;
+      payment.refundAdminActionBy = new mongoose.Types.ObjectId(authUser.id);
+      payment.refundCompletedAt = now;
+      payment.refundAmount = payment.amount;
+      payment.refundReference = refundReference ? String(refundReference).trim() : `REF-${Date.now()}`;
+      payment.lastStatusUpdatedAt = now;
+      if (remarks) payment.notes = `${payment.notes ? payment.notes + ' | ' : ''}Refund notes: ${remarks}`;
+      await payment.save();
+
+      // Reverse membership accounting
+      student.currentCyclePaidAmount = Math.max(0, (student.currentCyclePaidAmount || 0) - payment.amount);
+      if (payment.membershipRenewed) {
+        student.membershipStatus = 'INACTIVE';
+      }
+      await student.save();
+
+      // Notify Student
+      try {
+        await StudentNotification.create({
+          studentId: student._id,
+          type: 'SYSTEM',
+          title: 'Refund Processed Successfully',
+          message: `Your refund of ₹${payment.amount} has been approved and processed (Ref: ${payment.refundReference}). Your membership balance has been adjusted.`,
+        });
+      } catch (err: any) {
+        console.warn('Failed to notify student:', err.message);
+      }
+
+      // Send SMS
+      if (student.phone) {
+        try {
+          await sendSms({
+            phoneNumber: student.phone,
+            message: `Lakshya Smart Library: Your refund of ₹${payment.amount} has been processed (Ref: ${payment.refundReference}). Thank you.`,
+            templateType: 'RENEWAL_SUCCESS',
+          });
+        } catch (err: any) {
+          console.warn('Failed to send SMS:', err.message);
+        }
+      }
+
+      return sendSuccess(
+        res,
+        {
+          orderId: payment.orderId,
+          status: payment.status,
+          refundStatus: payment.refundStatus,
+          refundReference: payment.refundReference,
+          refundAmount: payment.refundAmount,
+          membershipStatus: student.membershipStatus,
+          currentCyclePaidAmount: student.currentCyclePaidAmount,
+        },
+        'Refund approved and processed successfully'
+      );
+    } else if (action === 'REJECT') {
+      payment.refundStatus = 'REFUND_REJECTED';
+      payment.refundAdminActionAt = now;
+      payment.refundAdminActionBy = new mongoose.Types.ObjectId(authUser.id);
+      payment.refundRejectionReason = rejectionReason
+        ? String(rejectionReason).trim()
+        : 'Refund request was rejected by library administration';
+      payment.lastStatusUpdatedAt = now;
+      await payment.save();
+
+      // Notify Student
+      try {
+        await StudentNotification.create({
+          studentId: student._id,
+          type: 'SYSTEM',
+          title: 'Refund Request Not Approved',
+          message: `Your refund request for ₹${payment.amount} (Ref: ${payment.orderId}) was not approved. Reason: ${payment.refundRejectionReason}`,
+        });
+      } catch (err: any) {
+        console.warn('Failed to notify student:', err.message);
+      }
+
+      return sendSuccess(
+        res,
+        {
+          orderId: payment.orderId,
+          refundStatus: payment.refundStatus,
+          refundRejectionReason: payment.refundRejectionReason,
+        },
+        'Refund request marked as rejected'
+      );
+    } else {
+      return sendError(res, 'Invalid action. Expected "APPROVE" or "REJECT"', 400);
+    }
   } catch (error) {
     next(error);
   }
@@ -1348,6 +1586,8 @@ export const getPaymentReceipt = async (req: Request, res: Response, next: NextF
       isCustomAmount: payment.isCustomAmount,
       isTestTransaction: payment.isTestTransaction,
       status: payment.status,
+      refundStatus: payment.refundStatus || null,
+      refundReference: payment.refundReference || null,
       planName: payment.planName,
       createdAt: payment.createdAt,
       verifiedAt: payment.verifiedAt || payment.updatedAt,
