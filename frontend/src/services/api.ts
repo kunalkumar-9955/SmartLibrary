@@ -178,11 +178,11 @@ export const adminNotificationService = {
 export const paymentService = {
   getPlans: () => api.get('/payments/plans'),
   getMyPayments: () => api.get('/payments/my-payments'),
-  createOrder: (data: { planId?: string; idempotencyKey?: string }) =>
+  createOrder: (data: { planId?: string; idempotencyKey?: string; amount?: number; isCustomAmount?: boolean }) =>
     api.post('/payments/create-order', data),
   submitUtr: (data: { orderId: string; utr: string; notes?: string }) =>
     api.post('/payments/submit-utr', data),
-  submitOfflineRequest: (data: FormData | { paymentMethod?: string; remarks?: string }) => {
+  submitOfflineRequest: (data: FormData | { paymentMethod?: string; remarks?: string; amount?: number; isCustomAmount?: boolean }) => {
     if (typeof FormData !== 'undefined' && data instanceof FormData) {
       return api.post('/payments/offline-request', data, {
         headers: { 'Content-Type': 'multipart/form-data' },

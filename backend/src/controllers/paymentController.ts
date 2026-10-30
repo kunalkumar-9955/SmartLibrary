@@ -38,11 +38,6 @@ export async function fulfillPaymentAndActivate(
     throw new Error(`User not found for payment: ${payment.userId}`);
   }
 
-  // Calculate 1 calendar month renewal + 5-day grace period
-  const { startDate, expiresAt, gracePeriodExpiresAt } = calculateNextMonthlyExpiry(
-    user.membershipExpiresAt
-  );
-
   // Update payment record
   payment.status = source === 'OFFLINE_ADMIN_APPROVAL' ? 'APPROVED' : 'SUCCESS';
   payment.verifiedAt = new Date();
@@ -55,64 +50,109 @@ export async function fulfillPaymentAndActivate(
   }
   await payment.save();
 
-  // Update user subscription state
-  user.membershipStatus = 'ACTIVE';
-  user.membershipPlan = 'Monthly Library Membership';
-  if (!user.membershipStartDate) {
-    user.membershipStartDate = startDate;
-  }
-  user.membershipExpiresAt = expiresAt;
-  user.gracePeriodExpiresAt = gracePeriodExpiresAt;
-  user.lastRenewalDate = new Date();
-  user.lastPaymentId = payment._id as mongoose.Types.ObjectId;
-  user.lastReminderType = undefined; // Reset reminder for next cycle
-  await user.save();
+  // Rule: Only standard ₹500 membership payments automatically renew 1-month subscription
+  const isMonthlyPass = payment.amount === 500 && !payment.isCustomAmount && payment.planId !== 'custom-amount';
 
-  const formattedExpiry = formatIndianDate(expiresAt);
+  if (isMonthlyPass) {
+    const { startDate, expiresAt, gracePeriodExpiresAt } = calculateNextMonthlyExpiry(
+      user.membershipExpiresAt
+    );
 
-  // 1. Notify Student via In-App Notification (Exact prompt text)
-  try {
-    const isOffline = source === 'OFFLINE_ADMIN_APPROVAL';
-    const notifTitle = isOffline ? 'Payment Approved' : 'Membership Renewed Successfully';
-    const notifMessage = isOffline
-      ? `Your offline payment has been approved and your membership has been renewed. Your next expiry date is ${formattedExpiry}.`
-      : `Your ₹500 online payment has been verified and your membership has been renewed. Your next expiry date is ${formattedExpiry}.`;
+    user.membershipStatus = 'ACTIVE';
+    user.membershipPlan = 'Monthly Library Membership';
+    if (!user.membershipStartDate) {
+      user.membershipStartDate = startDate;
+    }
+    user.membershipExpiresAt = expiresAt;
+    user.gracePeriodExpiresAt = gracePeriodExpiresAt;
+    user.lastRenewalDate = new Date();
+    user.lastPaymentId = payment._id as mongoose.Types.ObjectId;
+    user.lastReminderType = undefined;
+    await user.save();
 
-    await StudentNotification.create({
-      studentId: user._id,
-      type: 'SYSTEM',
-      title: notifTitle,
-      message: notifMessage,
-    });
-  } catch (err: any) {
-    console.warn('[Notification Error] Failed to create student confirmation notification:', err.message);
-  }
+    const formattedExpiry = formatIndianDate(expiresAt);
 
-  // 2. Send Real SMS to Student
-  if (user.phone) {
+    // 1. Notify Student via In-App Notification
     try {
-      await sendSms({
-        phoneNumber: user.phone,
-        message: `Lakshya Smart Library: Your membership has been renewed successfully. Your next expiry date is ${formattedExpiry}. Thank you.`,
-        templateType: 'RENEWAL_SUCCESS',
+      const isOffline = source === 'OFFLINE_ADMIN_APPROVAL';
+      const notifTitle = isOffline ? 'Payment Approved' : 'Membership Renewed Successfully';
+      const notifMessage = isOffline
+        ? `Your offline payment has been approved and your membership has been renewed. Your next expiry date is ${formattedExpiry}.`
+        : `Your ₹500 online payment has been verified and your membership has been renewed. Your next expiry date is ${formattedExpiry}.`;
+
+      await StudentNotification.create({
+        studentId: user._id,
+        type: 'SYSTEM',
+        title: notifTitle,
+        message: notifMessage,
       });
     } catch (err: any) {
-      console.warn('[SMS Error] Failed to send renewal confirmation SMS:', err.message);
+      console.warn('[Notification Error] Failed to create student confirmation notification:', err.message);
     }
-  }
 
-  // 3. Notify Admin in Real-Time
-  try {
-    await AdminNotification.create({
-      type: 'SYSTEM',
-      title: 'Membership Payment Confirmed',
-      message: `${user.name} (${user.studentIdNumber || user.email}) renewed ₹500 monthly membership via ${source} (Ref: ${payment.orderId}). Active until ${formattedExpiry}.`,
-      relatedStudentId: user._id,
-      studentName: user.name,
-      seatNumber: user.assignedSeatNumber || user.currentSeatNumber,
-    });
-  } catch (err: any) {
-    console.warn('[Notification Error] Failed to create admin notification:', err.message);
+    // 2. Send Real SMS to Student
+    if (user.phone) {
+      try {
+        await sendSms({
+          phoneNumber: user.phone,
+          message: `Lakshya Smart Library: Your membership has been renewed successfully. Your next expiry date is ${formattedExpiry}. Thank you.`,
+          templateType: 'RENEWAL_SUCCESS',
+        });
+      } catch (err: any) {
+        console.warn('[SMS Error] Failed to send renewal confirmation SMS:', err.message);
+      }
+    }
+
+    // 3. Notify Admin in Real-Time
+    try {
+      await AdminNotification.create({
+        type: 'SYSTEM',
+        title: 'Membership Payment Confirmed',
+        message: `${user.name} (${user.studentIdNumber || user.email}) renewed ₹500 monthly membership via ${source} (Ref: ${payment.orderId}). Active until ${formattedExpiry}.`,
+        relatedStudentId: user._id,
+        studentName: user.name,
+        seatNumber: user.assignedSeatNumber || user.currentSeatNumber,
+      });
+    } catch (err: any) {
+      console.warn('[Notification Error] Failed to create admin notification:', err.message);
+    }
+  } else {
+    // Custom Amount Payment: record actual paid amount, do not auto-extend 1-month pass
+    try {
+      await StudentNotification.create({
+        studentId: user._id,
+        type: 'SYSTEM',
+        title: 'Payment Received Successfully',
+        message: `Your payment of ₹${payment.amount} has been verified and recorded (Ref: ${payment.orderId}). Note: Standard 1-month membership renewal requires the ₹500 monthly pass.`,
+      });
+    } catch (err: any) {
+      console.warn('[Notification Error] Failed to create student custom payment notification:', err.message);
+    }
+
+    if (user.phone) {
+      try {
+        await sendSms({
+          phoneNumber: user.phone,
+          message: `Lakshya Smart Library: Your payment of ₹${payment.amount} has been verified successfully (Ref: ${payment.orderId}). Thank you.`,
+          templateType: 'RENEWAL_SUCCESS',
+        });
+      } catch (err: any) {
+        console.warn('[SMS Error] Failed to send custom payment SMS:', err.message);
+      }
+    }
+
+    try {
+      await AdminNotification.create({
+        type: 'SYSTEM',
+        title: 'Custom Payment Received',
+        message: `${user.name} (${user.studentIdNumber || user.email}) paid custom amount ₹${payment.amount} via ${source} (Ref: ${payment.orderId}). Verified successfully.`,
+        relatedStudentId: user._id,
+        studentName: user.name,
+        seatNumber: user.assignedSeatNumber || user.currentSeatNumber,
+      });
+    } catch (err: any) {
+      console.warn('[Notification Error] Failed to create admin custom payment notification:', err.message);
+    }
   }
 
   return { success: true, alreadyProcessed: false };
@@ -203,28 +243,46 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       return sendError(res, 'User not found', 404);
     }
 
-    const { idempotencyKey } = req.body;
-    const plan = getPlanById(); // Strictly ₹500 plan
-    const amount = 500;
-    const amountPaise = 50000;
+    const { idempotencyKey, amount: reqAmount, isCustomAmount } = req.body;
+    let amount = 500;
+    let isCustom = Boolean(isCustomAmount);
+
+    if (reqAmount !== undefined && reqAmount !== null && reqAmount !== '') {
+      const parsedAmount = Number(reqAmount);
+      if (!Number.isFinite(parsedAmount) || parsedAmount < 1) {
+        return sendError(res, 'Payment amount must be at least ₹1.00', 400);
+      }
+      if (parsedAmount > 50000) {
+        return sendError(res, 'Payment amount cannot exceed ₹50,000.00', 400);
+      }
+      amount = Math.round(parsedAmount * 100) / 100;
+      if (amount !== 500) {
+        isCustom = true;
+      }
+    }
+
+    const amountPaise = Math.round(amount * 100);
+    const plan = getPlanById();
+    const planId = isCustom ? 'custom-amount' : plan.id;
+    const planName = isCustom ? `Custom Payment (₹${amount})` : plan.name;
 
     const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
     const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
 
-    // Check for existing pending order with same idempotency key
+    // Check for existing pending order with same idempotency key and amount
     if (idempotencyKey) {
       const existing = await Payment.findOne({
         idempotencyKey,
         userId: user._id,
         paymentType: 'ONLINE',
       });
-      if (existing && existing.status !== 'FAILED' && existing.status !== 'CANCELLED') {
+      if (existing && existing.status !== 'FAILED' && existing.status !== 'CANCELLED' && existing.amount === amount) {
         const existingUpiString = buildCanonicalUpiUri({
           payeeVpa: upiId,
           payeeName: merchantName,
-          amountRupees: 500,
+          amountRupees: existing.amount,
           transactionRef: existing.orderId,
-          transactionNote: 'Lakshya Smart Library Membership',
+          transactionNote: isCustom ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership',
         });
         const existingQrSvg = generateQrSvg(existingUpiString, 240);
         return sendSuccess(
@@ -234,6 +292,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             paymentId: existing.gatewayPaymentId,
             amount: existing.amount,
             planName: existing.planName,
+            isCustomAmount: existing.isCustomAmount,
             checkoutUrl: existing.checkoutUrl,
             status: existing.status,
             isExisting: true,
@@ -254,11 +313,11 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       payeeName: merchantName,
       amountRupees: amount,
       transactionRef: orderId,
-      transactionNote: 'Lakshya Smart Library Membership',
+      transactionNote: isCustom ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership',
     });
     const qrSvg = generateQrSvg(upiString, 240);
 
-    // Call YouPI-PG Gateway (falls back to direct PhonePe UPI QR mode if daemon offline)
+    // Call YouPI-PG Gateway with EXACT validated amount
     const gatewayResult = await youpiPaymentService.createPayment({
       orderId,
       amount,
@@ -270,9 +329,10 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       },
       metadata: {
         userId: String(user._id),
-        planId: plan.id,
-        planName: plan.name,
-        monthlyFee: 500,
+        planId,
+        planName,
+        isCustomAmount: isCustom,
+        amount,
       },
       idempotencyKey,
     });
@@ -284,15 +344,16 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       studentEmail: user.email,
       studentPhone: user.phone,
       studentIdNumber: user.studentIdNumber,
-      planId: plan.id,
-      planName: plan.name,
+      planId,
+      planName,
       amount,
       amountPaise,
       currency: 'INR',
-      durationDays: 30,
+      durationDays: isCustom ? 0 : 30,
       paymentType: 'ONLINE',
       status: 'CREATED',
       paymentMethod: 'UPI',
+      isCustomAmount: isCustom,
       gatewayPaymentId: gatewayResult.paymentId,
       checkoutUrl: gatewayResult.checkoutUrl,
       idempotencyKey: idempotencyKey || undefined,
@@ -305,7 +366,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         paymentId: payment.gatewayPaymentId,
         amount: payment.amount,
         planName: payment.planName,
-        durationDays: 30,
+        durationDays: payment.durationDays,
+        isCustomAmount: payment.isCustomAmount,
         checkoutUrl: payment.checkoutUrl,
         status: payment.status,
         isGatewayOnline: gatewayResult.isGatewayOnline,
@@ -416,7 +478,24 @@ export const submitOfflineRequest = async (req: Request, res: Response, next: Ne
       return sendError(res, 'User not found', 404);
     }
 
-    const { paymentMethod, utr, paymentDate, remarks } = req.body;
+    const { paymentMethod, utr, paymentDate, remarks, amount: reqAmount, isCustomAmount } = req.body;
+
+    let amount = 500;
+    let isCustom = Boolean(isCustomAmount);
+
+    if (reqAmount !== undefined && reqAmount !== null && reqAmount !== '') {
+      const parsedAmount = Number(reqAmount);
+      if (!Number.isFinite(parsedAmount) || parsedAmount < 1) {
+        return sendError(res, 'Offline payment amount must be at least ₹1.00', 400);
+      }
+      if (parsedAmount > 50000) {
+        return sendError(res, 'Offline payment amount cannot exceed ₹50,000.00', 400);
+      }
+      amount = Math.round(parsedAmount * 100) / 100;
+      if (amount !== 500) {
+        isCustom = true;
+      }
+    }
 
     // Validate method
     const validMethods: OfflinePaymentMethod[] = ['CASH', 'UPI_DIRECT', 'BANK_TRANSFER', 'OTHER'];
@@ -456,16 +535,17 @@ export const submitOfflineRequest = async (req: Request, res: Response, next: Ne
       studentEmail: user.email,
       studentPhone: user.phone,
       studentIdNumber: user.studentIdNumber,
-      planId: 'monthly-membership',
-      planName: 'Monthly Library Membership',
-      amount: 500, // Strictly ₹500
-      amountPaise: 50000,
+      planId: isCustom ? 'custom-amount' : 'monthly-membership',
+      planName: isCustom ? `Custom Offline Payment (₹${amount})` : 'Monthly Library Membership',
+      amount,
+      amountPaise: Math.round(amount * 100),
       currency: 'INR',
-      durationDays: 30,
+      durationDays: isCustom ? 0 : 30,
       paymentType: 'OFFLINE',
       status: 'PENDING_APPROVAL', // CRITICAL: NEVER ACTIVATES MEMBERSHIP HERE
       paymentMethod: selectedMethod,
       offlineMethod: selectedMethod,
+      isCustomAmount: isCustom,
       paymentDate: effectivePaymentDate,
       utr: cleanUtr,
       receiptUrl,
@@ -489,7 +569,7 @@ export const submitOfflineRequest = async (req: Request, res: Response, next: Ne
       await AdminNotification.create({
         type: 'SYSTEM',
         title: 'New Offline Payment Submitted',
-        message: `${user.name} (${user.studentIdNumber || user.email}) submitted a ₹500 offline payment (${selectedMethod}, UTR: ${cleanUtr || 'N/A'}). Admin review and approval required.`,
+        message: `${user.name} (${user.studentIdNumber || user.email}) submitted a ₹${offlinePayment.amount} offline payment (${selectedMethod}, UTR: ${cleanUtr || 'N/A'}). Admin review and approval required.`,
         relatedStudentId: user._id,
         studentName: user.name,
         seatNumber: user.assignedSeatNumber || user.currentSeatNumber,
@@ -503,8 +583,9 @@ export const submitOfflineRequest = async (req: Request, res: Response, next: Ne
       {
         orderId: offlinePayment.orderId,
         status: offlinePayment.status,
-        amount: 500,
+        amount: offlinePayment.amount,
         offlineMethod: selectedMethod,
+        isCustomAmount: offlinePayment.isCustomAmount,
         message: 'Your offline payment request has been submitted for Admin approval. Your membership will be renewed only after approval.',
       },
       'Offline payment request submitted successfully'
@@ -556,47 +637,75 @@ export const adminOfflineAction = async (req: Request, res: Response, next: Next
       payment.verificationSource = 'OFFLINE_ADMIN_APPROVAL';
       await payment.save();
 
-      // Extend / Activate Student Membership by 1 Calendar Month + 5 Days Grace Period
-      const { startDate, expiresAt, gracePeriodExpiresAt } = calculateNextMonthlyExpiry(
-        student.membershipExpiresAt
-      );
+      const isMonthlyPass = payment.amount === 500 && !payment.isCustomAmount && payment.planId !== 'custom-amount';
 
-      student.membershipStatus = 'ACTIVE';
-      student.membershipPlan = 'Monthly Library Membership';
-      if (!student.membershipStartDate) {
-        student.membershipStartDate = startDate;
-      }
-      student.membershipExpiresAt = expiresAt;
-      student.gracePeriodExpiresAt = gracePeriodExpiresAt;
-      student.lastRenewalDate = new Date();
-      student.lastPaymentId = payment._id as mongoose.Types.ObjectId;
-      student.lastReminderType = undefined;
-      await student.save();
+      if (isMonthlyPass) {
+        // Extend / Activate Student Membership by 1 Calendar Month + 5 Days Grace Period
+        const { startDate, expiresAt, gracePeriodExpiresAt } = calculateNextMonthlyExpiry(
+          student.membershipExpiresAt
+        );
 
-      const formattedExpiry = formatIndianDate(expiresAt);
+        student.membershipStatus = 'ACTIVE';
+        student.membershipPlan = 'Monthly Library Membership';
+        if (!student.membershipStartDate) {
+          student.membershipStartDate = startDate;
+        }
+        student.membershipExpiresAt = expiresAt;
+        student.gracePeriodExpiresAt = gracePeriodExpiresAt;
+        student.lastRenewalDate = new Date();
+        student.lastPaymentId = payment._id as mongoose.Types.ObjectId;
+        student.lastReminderType = undefined;
+        await student.save();
 
-      // Student In-App Notification (Exact prompt text)
-      try {
-        await StudentNotification.create({
-          studentId: student._id,
-          type: 'SYSTEM',
-          title: 'Payment Approved',
-          message: `Your offline payment has been approved and your membership has been renewed. Your next expiry date is ${formattedExpiry}.`,
-        });
-      } catch (err: any) {
-        console.warn('Failed to notify student:', err.message);
-      }
+        const formattedExpiry = formatIndianDate(expiresAt);
 
-      // Real SMS to Student
-      if (student.phone) {
+        // Student In-App Notification
         try {
-          await sendSms({
-            phoneNumber: student.phone,
-            message: `Lakshya Smart Library: Your membership has been renewed successfully. Your next expiry date is ${formattedExpiry}. Thank you.`,
-            templateType: 'RENEWAL_SUCCESS',
+          await StudentNotification.create({
+            studentId: student._id,
+            type: 'SYSTEM',
+            title: 'Payment Approved',
+            message: `Your offline payment has been approved and your membership has been renewed. Your next expiry date is ${formattedExpiry}.`,
           });
         } catch (err: any) {
-          console.warn('Failed to send SMS to student:', err.message);
+          console.warn('Failed to notify student:', err.message);
+        }
+
+        // Real SMS to Student
+        if (student.phone) {
+          try {
+            await sendSms({
+              phoneNumber: student.phone,
+              message: `Lakshya Smart Library: Your membership has been renewed successfully. Your next expiry date is ${formattedExpiry}. Thank you.`,
+              templateType: 'RENEWAL_SUCCESS',
+            });
+          } catch (err: any) {
+            console.warn('Failed to send SMS to student:', err.message);
+          }
+        }
+      } else {
+        // Custom amount offline: marked approved without 1-month pass extension
+        try {
+          await StudentNotification.create({
+            studentId: student._id,
+            type: 'SYSTEM',
+            title: 'Payment Approved',
+            message: `Your offline payment of ₹${payment.amount} has been approved by library administration (Ref: ${payment.orderId}).`,
+          });
+        } catch (err: any) {
+          console.warn('Failed to notify student:', err.message);
+        }
+
+        if (student.phone) {
+          try {
+            await sendSms({
+              phoneNumber: student.phone,
+              message: `Lakshya Smart Library: Your offline payment of ₹${payment.amount} has been approved (Ref: ${payment.orderId}). Thank you.`,
+              templateType: 'RENEWAL_SUCCESS',
+            });
+          } catch (err: any) {
+            console.warn('Failed to send SMS to student:', err.message);
+          }
         }
       }
 
@@ -849,14 +958,29 @@ export const serveQrSvg = async (req: Request, res: Response) => {
   const orderId = typeof req.params.orderId === 'string' ? req.params.orderId : undefined;
   const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
   const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
-  const amount = 500;
+  let amount = 500;
+  let note = 'Lakshya Smart Library Membership';
+
+  if (orderId) {
+    const payment = await Payment.findOne({ orderId }).select('amount planName isCustomAmount');
+    if (payment) {
+      amount = payment.amount;
+      note = payment.isCustomAmount || payment.amount !== 500 ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership';
+    }
+  } else if (req.query.amount) {
+    const queryAmount = Number(req.query.amount);
+    if (Number.isFinite(queryAmount) && queryAmount >= 1 && queryAmount <= 50000) {
+      amount = Math.round(queryAmount * 100) / 100;
+      note = 'Lakshya Library Payment';
+    }
+  }
 
   const upiString = buildCanonicalUpiUri({
     payeeVpa: upiId,
     payeeName: merchantName,
     amountRupees: amount,
     transactionRef: orderId,
-    transactionNote: 'Lakshya Smart Library Membership',
+    transactionNote: note,
   });
 
   const svg = generateQrSvg(upiString, 240);

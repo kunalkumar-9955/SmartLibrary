@@ -393,4 +393,127 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
       expect(res.body.data).toHaveProperty('membershipsExpired');
     });
   });
+
+  describe('6. Custom Payment Amount (Flexible Student Payment & Admin Testing)', () => {
+    it('should create an online payment order for a custom amount (e.g. ₹200)', async () => {
+      const res = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 200, isCustomAmount: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.amount).toBe(200);
+      expect(res.body.data.isCustomAmount).toBe(true);
+      expect(res.body.data.planName).toBe('Custom Payment (₹200)');
+      expect(res.body.data.upiString).toContain('am=200.00');
+      expect(res.body.data.qrSvg).toContain('<svg');
+
+      const saved = await Payment.findOne({ orderId: res.body.data.orderId });
+      expect(saved?.amount).toBe(200);
+      expect(saved?.amountPaise).toBe(20000);
+      expect(saved?.isCustomAmount).toBe(true);
+    });
+
+    it('should allow admin to create a ₹1 or ₹2 gateway test order', async () => {
+      const res = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ amount: 1, isCustomAmount: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.amount).toBe(1);
+      expect(res.body.data.upiString).toContain('am=1.00');
+
+      const saved = await Payment.findOne({ orderId: res.body.data.orderId });
+      expect(saved?.amount).toBe(1);
+      expect(saved?.amountPaise).toBe(100);
+    });
+
+    it('should reject invalid, 0, or negative payment amounts', async () => {
+      const resZero = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 0 });
+
+      expect(resZero.status).toBe(400);
+      expect(resZero.body.message).toMatch(/at least ₹1/i);
+
+      const resNegative = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: -100 });
+
+      expect(resNegative.status).toBe(400);
+      expect(resNegative.body.message).toMatch(/at least ₹1/i);
+    });
+
+    it('should verify custom payment as SUCCESS without auto-renewing 1-month membership', async () => {
+      // 1. Create ₹200 custom order
+      const orderRes = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 200, isCustomAmount: true });
+
+      const orderId = orderRes.body.data.orderId;
+
+      // 2. Admin verifies the custom payment
+      const verifyRes = await request(app)
+        .post(`/api/payments/admin/verify/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE', notes: 'Verified ₹200 custom contribution' });
+
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.data.status).toBe('SUCCESS');
+
+      // 3. Verify user membership status remains INACTIVE (membership only renews on ₹500 standard pass)
+      const user = await User.findById(studentId);
+      expect(user?.membershipStatus).toBe('INACTIVE');
+
+      const payment = await Payment.findOne({ orderId });
+      expect(payment?.status).toBe('SUCCESS');
+      expect(payment?.amount).toBe(200);
+    });
+
+    it('should renew membership when standard ₹500 payment is verified', async () => {
+      // 1. Create standard ₹500 order
+      const orderRes = await request(app)
+        .post('/api/payments/create-order')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ amount: 500 });
+
+      const orderId = orderRes.body.data.orderId;
+
+      // 2. Admin verifies
+      const verifyRes = await request(app)
+        .post(`/api/payments/admin/verify/${orderId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ action: 'APPROVE' });
+
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.data.status).toBe('SUCCESS');
+
+      // 3. User membership becomes ACTIVE
+      const user = await User.findById(studentId);
+      expect(user?.membershipStatus).toBe('ACTIVE');
+      expect(user?.membershipExpiresAt).toBeDefined();
+    });
+
+    it('should allow student to submit offline request with custom amount', async () => {
+      const res = await request(app)
+        .post('/api/payments/offline-request')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send({ paymentMethod: 'CASH', amount: 350, remarks: 'Partial monthly fee' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.amount).toBe(350);
+
+      const saved = await Payment.findOne({ orderId: res.body.data.orderId });
+      expect(saved?.amount).toBe(350);
+      expect(saved?.amountPaise).toBe(35000);
+      expect(saved?.isCustomAmount).toBe(true);
+    });
+  });
 });

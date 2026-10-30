@@ -30,6 +30,9 @@ export const StudentMembershipPage: React.FC = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'ONLINE' | 'OFFLINE'>('ONLINE');
+  const [paymentMode, setPaymentMode] = useState<'MONTHLY_PLAN' | 'CUSTOM_AMOUNT'>('MONTHLY_PLAN');
+  const [customAmountInput, setCustomAmountInput] = useState<string>('200');
+  const [offlineAmountInput, setOfflineAmountInput] = useState<string>('500');
 
   // Option A (Online Payment) State
   const [creatingOrder, setCreatingOrder] = useState(false);
@@ -38,6 +41,7 @@ export const StudentMembershipPage: React.FC = () => {
     orderId: string;
     amount: number;
     planName: string;
+    isCustomAmount?: boolean;
     checkoutUrl?: string;
     upiString?: string;
     upiId?: string;
@@ -55,9 +59,13 @@ export const StudentMembershipPage: React.FC = () => {
   const DEFAULT_MERCHANT_NAME = 'Lakshya Smart Library';
   const activeUpiId = activeOrder?.upiId || DEFAULT_UPI_ID;
   const activeMerchant = activeOrder?.merchantName || DEFAULT_MERCHANT_NAME;
+  const effectiveAmount = activeOrder?.amount
+    ? Number(activeOrder.amount).toFixed(2)
+    : (paymentMode === 'CUSTOM_AMOUNT' ? (Number(customAmountInput) || 200).toFixed(2) : '500.00');
+
   const activeUpiString =
     activeOrder?.upiString ||
-    `upi://pay?pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(activeMerchant)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}${activeOrder?.orderId ? `&tr=${activeOrder.orderId}` : ''}`;
+    `upi://pay?pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(activeMerchant)}&am=${effectiveAmount}&cu=INR&tn=${encodeURIComponent(paymentMode === 'CUSTOM_AMOUNT' ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership')}${activeOrder?.orderId ? `&tr=${activeOrder.orderId}` : ''}`;
 
   const handleCopyUpi = () => {
     navigator.clipboard.writeText(activeUpiId);
@@ -67,7 +75,7 @@ export const StudentMembershipPage: React.FC = () => {
   };
 
   const getAppIntentUrl = (appScheme: string) => {
-    const params = `pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(activeMerchant)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}${activeOrder?.orderId ? `&tr=${activeOrder.orderId}` : ''}`;
+    const params = `pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(activeMerchant)}&am=${effectiveAmount}&cu=INR&tn=${encodeURIComponent(activeOrder?.isCustomAmount || paymentMode === 'CUSTOM_AMOUNT' ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership')}${activeOrder?.orderId ? `&tr=${activeOrder.orderId}` : ''}`;
     if (appScheme === 'upi') return `upi://pay?${params}`;
     if (appScheme === 'phonepe') return `phonepe://pay?${params}`;
     if (appScheme === 'gpay') return `gpay://upi/pay?${params}`;
@@ -125,34 +133,58 @@ export const StudentMembershipPage: React.FC = () => {
   }, []);
 
   // Open modal with instant UI rendering and async order preparation
-  const handleOpenPaymentModal = (tab: 'ONLINE' | 'OFFLINE' = 'ONLINE') => {
+  const handleOpenPaymentModal = (
+    tab: 'ONLINE' | 'OFFLINE' = 'ONLINE',
+    mode: 'MONTHLY_PLAN' | 'CUSTOM_AMOUNT' = 'MONTHLY_PLAN'
+  ) => {
     setActiveTab(tab);
+    setPaymentMode(mode);
     setIsModalOpen(true);
     setOrderError(null);
     setOnlineStatus('INITIAL');
     setOfflineSubmitted(false);
+    setActiveOrder(null);
 
-    if (tab === 'ONLINE' && !activeOrder) {
-      createOnlineOrder();
+    if (tab === 'ONLINE') {
+      const initialAmount = mode === 'CUSTOM_AMOUNT' ? (Number(customAmountInput) || 200) : 500;
+      createOnlineOrder(initialAmount, mode === 'CUSTOM_AMOUNT');
     }
   };
 
-  const createOnlineOrder = async () => {
+  const createOnlineOrder = async (targetAmount?: number, isCustom?: boolean) => {
     if (creatingOrder) return;
     try {
       setCreatingOrder(true);
       setOrderError(null);
-      const idempotencyKey = `idem_monthly_${Date.now()}`;
+
+      const amountToPay = targetAmount !== undefined
+        ? targetAmount
+        : (paymentMode === 'CUSTOM_AMOUNT' ? Number(customAmountInput) : 500);
+
+      if (!Number.isFinite(amountToPay) || amountToPay < 1) {
+        setOrderError('Please enter a valid payment amount of at least ₹1.00');
+        return;
+      }
+      if (amountToPay > 50000) {
+        setOrderError('Payment amount cannot exceed ₹50,000.00');
+        return;
+      }
+
+      const isCustomOrder = isCustom !== undefined ? isCustom : (amountToPay !== 500 || paymentMode === 'CUSTOM_AMOUNT');
+      const idempotencyKey = `idem_${isCustomOrder ? 'custom' : 'monthly'}_${Date.now()}_${amountToPay}`;
       const res = await paymentService.createOrder({
-        planId: 'monthly-membership',
+        planId: isCustomOrder ? 'custom-amount' : 'monthly-membership',
+        amount: amountToPay,
+        isCustomAmount: isCustomOrder,
         idempotencyKey,
       });
 
       if (res.data.success) {
         setActiveOrder({
           orderId: res.data.data.orderId,
-          amount: res.data.data.amount || 500,
-          planName: res.data.data.planName || 'Monthly Library Membership',
+          amount: res.data.data.amount || amountToPay,
+          planName: res.data.data.planName || (isCustomOrder ? `Custom Payment (₹${amountToPay})` : 'Monthly Library Membership'),
+          isCustomAmount: res.data.data.isCustomAmount ?? isCustomOrder,
           checkoutUrl: res.data.data.checkoutUrl,
           upiString: res.data.data.upiString,
           upiId: res.data.data.upiId || DEFAULT_UPI_ID,
@@ -180,7 +212,9 @@ export const StudentMembershipPage: React.FC = () => {
         const status = res.data.data.status;
         if (status === 'SUCCESS' || status === 'APPROVED') {
           setOnlineStatus('SUCCESS');
-          if (showToast) success('Payment Verified & Monthly Membership Renewed!');
+          if (showToast) {
+            success(activeOrder?.isCustomAmount ? 'Custom Payment Verified & Credited!' : 'Payment Verified & Monthly Membership Renewed!');
+          }
           fetchData();
         } else if (status === 'FAILED' || status === 'CANCELLED') {
           setOnlineStatus('FAILED');
@@ -222,8 +256,16 @@ export const StudentMembershipPage: React.FC = () => {
 
     try {
       setSubmittingOffline(true);
+      const offlineAmt = Number(offlineAmountInput);
+      if (!Number.isFinite(offlineAmt) || offlineAmt < 1) {
+        error('Please enter a valid offline amount of at least ₹1.00');
+        setSubmittingOffline(false);
+        return;
+      }
       const res = await paymentService.submitOfflineRequest({
         paymentMethod: 'CASH',
+        amount: offlineAmt,
+        isCustomAmount: offlineAmt !== 500,
         remarks: offlineRemarks.trim() || undefined,
       });
 
@@ -399,23 +441,31 @@ export const StudentMembershipPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Two Prominent Action Buttons: Online or Offline */}
-        <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        {/* Three Action Buttons: Monthly Pass, Custom Amount, Offline */}
+        <div className="pt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             type="button"
-            onClick={() => handleOpenPaymentModal('ONLINE')}
-            className="w-full py-3 px-4 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition cursor-pointer"
+            onClick={() => handleOpenPaymentModal('ONLINE', 'MONTHLY_PLAN')}
+            className="w-full py-3 px-3 rounded-xl font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 transition cursor-pointer"
           >
-            <QrCode className="w-4 h-4" />
-            <span>Option A: Pay Online (UPI)</span>
+            <QrCode className="w-4 h-4 shrink-0" />
+            <span>Pay ₹500 (Monthly Pass)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenPaymentModal('ONLINE', 'CUSTOM_AMOUNT')}
+            className="w-full py-3 px-3 rounded-xl font-bold text-xs sm:text-sm bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 shrink-0" />
+            <span>Pay Custom Amount</span>
           </button>
           <button
             type="button"
             onClick={() => handleOpenPaymentModal('OFFLINE')}
-            className="w-full py-3 px-4 rounded-xl font-bold text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 flex items-center justify-center gap-2 transition cursor-pointer"
+            className="w-full py-3 px-3 rounded-xl font-bold text-xs sm:text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
           >
-            <Building2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <span>Option B: Offline Payment (Cash)</span>
+            <Building2 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+            <span>Offline Cash (Desk)</span>
           </button>
         </div>
       </div>
@@ -467,10 +517,17 @@ export const StudentMembershipPage: React.FC = () => {
                         </abbr>
                       </td>
                       <td className="py-3 px-4 text-xs font-medium text-slate-600 dark:text-slate-400">
-                        {p.paymentType === 'OFFLINE' ? 'Offline (Cash)' : 'Online (UPI)'}
+                        {p.isCustomAmount || p.amount !== 500
+                          ? `Custom ${p.paymentType === 'OFFLINE' ? 'Cash' : 'Online'}`
+                          : (p.paymentType === 'OFFLINE' ? 'Offline (Cash)' : 'Online (UPI)')}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white tabular-nums">
                         ₹{p.amount}
+                        {p.isCustomAmount || p.amount !== 500 ? (
+                          <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+                            (Custom)
+                          </span>
+                        ) : null}
                       </td>
                       <td className="py-3 px-4 font-mono text-xs text-slate-500 dark:text-slate-400">
                         {p.utr || '—'}
@@ -585,14 +642,16 @@ export const StudentMembershipPage: React.FC = () => {
                   <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 block font-semibold">
                     Amount Due
                   </span>
-                  <span className="text-2xl font-black text-slate-900 dark:text-white">₹500</span>
+                  <span className="text-2xl font-black text-slate-900 dark:text-white">
+                    ₹{activeOrder?.amount ?? (paymentMode === 'CUSTOM_AMOUNT' ? (customAmountInput || '200') : '500')}
+                  </span>
                 </div>
                 <div className="text-right">
                   <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 block font-semibold">
-                    Plan Duration
+                    {activeOrder?.isCustomAmount || paymentMode === 'CUSTOM_AMOUNT' ? 'Payment Type' : 'Plan Duration'}
                   </span>
                   <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    1 Month Library Access
+                    {activeOrder?.isCustomAmount || paymentMode === 'CUSTOM_AMOUNT' ? 'Custom Amount Payment' : '1 Month Library Access'}
                   </span>
                 </div>
               </div>
@@ -600,6 +659,98 @@ export const StudentMembershipPage: React.FC = () => {
               {/* TAB 1: OPTION A — ONLINE PAYMENT */}
               {activeTab === 'ONLINE' && (
                 <div className="space-y-4">
+                  {/* Mode Selector within Online Tab */}
+                  <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMode('MONTHLY_PLAN');
+                        createOnlineOrder(500, false);
+                      }}
+                      className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        paymentMode === 'MONTHLY_PLAN'
+                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      ₹500 Monthly Pass
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMode('CUSTOM_AMOUNT');
+                        const amt = Number(customAmountInput) || 200;
+                        createOnlineOrder(amt, true);
+                      }}
+                      className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        paymentMode === 'CUSTOM_AMOUNT'
+                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      Pay Custom Amount
+                    </button>
+                  </div>
+
+                  {paymentMode === 'CUSTOM_AMOUNT' && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-2">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                        Enter Custom Amount (₹):
+                      </label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max="50000"
+                            value={customAmountInput}
+                            onChange={(e) => setCustomAmountInput(e.target.value)}
+                            placeholder="e.g. 200, 300..."
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-7 pr-3 py-1.5 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const amt = Number(customAmountInput);
+                            if (!Number.isFinite(amt) || amt < 1) {
+                              setOrderError('Please enter a valid amount of at least ₹1');
+                              return;
+                            }
+                            createOnlineOrder(amt, true);
+                          }}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition cursor-pointer"
+                        >
+                          Update QR
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">Quick options:</span>
+                        {[100, 200, 300, 500].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => {
+                              setCustomAmountInput(String(preset));
+                              createOnlineOrder(preset, preset !== 500);
+                            }}
+                            className={`px-2 py-0.5 rounded text-xs font-semibold border transition cursor-pointer ${
+                              Number(customAmountInput) === preset
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            ₹{preset}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-normal">
+                        Note: Custom payments are credited to your student ledger. Full 1-month membership extension requires the ₹500 monthly pass.
+                      </p>
+                    </div>
+                  )}
+
                   {onlineStatus === 'SUCCESS' ? (
                     <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-6 text-center space-y-3">
                       <div className="w-14 h-14 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto">
@@ -607,7 +758,9 @@ export const StudentMembershipPage: React.FC = () => {
                       </div>
                       <h4 className="text-lg font-bold text-slate-900 dark:text-white">Payment Confirmed!</h4>
                       <p className="text-xs text-slate-600 dark:text-slate-300">
-                        Your ₹500 online payment has been verified. Your membership has been renewed for 1 calendar month.
+                        {activeOrder?.isCustomAmount
+                          ? `Your payment of ₹${activeOrder?.amount} has been verified and recorded on your student account ledger.`
+                          : `Your ₹500 online payment has been verified. Your membership has been renewed for 1 calendar month.`}
                       </p>
                       <button
                         type="button"
@@ -654,7 +807,9 @@ export const StudentMembershipPage: React.FC = () => {
                           </div>
                           <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
                             <span>Amount:</span>
-                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">₹500.00</span>
+                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
+                              ₹{activeOrder?.amount ? Number(activeOrder.amount).toFixed(2) : effectiveAmount}
+                            </span>
                           </div>
                           <div className="flex justify-between items-center text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-100 dark:border-slate-800">
                             <span>UPI ID:</span>
@@ -717,7 +872,7 @@ export const StudentMembershipPage: React.FC = () => {
                           <span>{orderError}</span>
                           <button
                             type="button"
-                            onClick={createOnlineOrder}
+                            onClick={() => createOnlineOrder()}
                             className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-900 dark:text-white rounded font-bold text-[11px]"
                           >
                             Retry
@@ -802,6 +957,27 @@ export const StudentMembershipPage: React.FC = () => {
               {/* TAB 2: OPTION B — OFFLINE PAYMENT (SIMPLIFIED CASH AT DESK) */}
               {activeTab === 'OFFLINE' && (
                 <div className="space-y-4">
+                  <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 rounded-xl space-y-2">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      Offline Cash Amount (₹):
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50000"
+                        value={offlineAmountInput}
+                        onChange={(e) => setOfflineAmountInput(e.target.value)}
+                        placeholder="e.g. 500, 200, 300"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-7 pr-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Standard monthly pass is ₹500. Enter custom amount if paying partial fee or donation.
+                    </p>
+                  </div>
+
                   {offlineSubmitted ? (
                     <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-6 text-center space-y-3">
                       <div className="w-14 h-14 bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400 rounded-full flex items-center justify-center mx-auto">

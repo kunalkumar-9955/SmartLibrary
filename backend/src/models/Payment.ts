@@ -30,10 +30,11 @@ export interface IPayment extends Document {
   studentIdNumber?: string;
   planId: string;
   planName: string;
-  amount: number; // Strictly 500
-  amountPaise: number; // 50000
+  amount: number;
+  amountPaise: number;
   currency: string;
   durationDays: number;
+  isCustomAmount?: boolean;
   paymentType: PaymentType;
   status: PaymentStatus;
   paymentMethod: string;
@@ -84,6 +85,7 @@ const PaymentSchema = new Schema<IPayment>(
     amountPaise: { type: Number, default: 50000, required: true },
     currency: { type: String, default: 'INR', uppercase: true },
     durationDays: { type: Number, default: 30 },
+    isCustomAmount: { type: Boolean, default: false },
     paymentType: {
       type: String,
       enum: ['ONLINE', 'OFFLINE'],

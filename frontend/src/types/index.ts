@@ -180,6 +180,7 @@ export interface PaymentItem {
   amount: number;
   currency: string;
   durationDays: number;
+  isCustomAmount?: boolean;
   paymentType?: PaymentType;
   status: PaymentStatus;
   paymentMethod: string;
