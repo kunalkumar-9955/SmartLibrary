@@ -16,6 +16,7 @@ import {
 } from '../services/membershipExpiryService';
 import { sendSms } from '../services/smsService';
 import { sendSuccess, sendError } from '../utils/response';
+import { generateQrSvg, buildCanonicalUpiUri } from '../lib/youpi-qr';
 
 /**
  * Fulfills an online or approved payment and extends membership by exactly 1 calendar month.
@@ -218,7 +219,14 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         paymentType: 'ONLINE',
       });
       if (existing && existing.status !== 'FAILED' && existing.status !== 'CANCELLED') {
-        const existingUpiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}&tr=${existing.orderId}`;
+        const existingUpiString = buildCanonicalUpiUri({
+          payeeVpa: upiId,
+          payeeName: merchantName,
+          amountRupees: 500,
+          transactionRef: existing.orderId,
+          transactionNote: 'Lakshya Smart Library Membership',
+        });
+        const existingQrSvg = generateQrSvg(existingUpiString, 240);
         return sendSuccess(
           res,
           {
@@ -232,6 +240,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             upiId,
             merchantName,
             upiString: existingUpiString,
+            qrSvg: existingQrSvg,
+            qrSvgUrl: `/api/payments/qr.svg/${existing.orderId}`,
           },
           'Returning existing order session'
         );
@@ -239,7 +249,14 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     }
 
     const orderId = `LIB-ORD-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-    const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}&tr=${orderId}`;
+    const upiString = buildCanonicalUpiUri({
+      payeeVpa: upiId,
+      payeeName: merchantName,
+      amountRupees: amount,
+      transactionRef: orderId,
+      transactionNote: 'Lakshya Smart Library Membership',
+    });
+    const qrSvg = generateQrSvg(upiString, 240);
 
     // Call YouPI-PG Gateway (falls back to direct PhonePe UPI QR mode if daemon offline)
     const gatewayResult = await youpiPaymentService.createPayment({
@@ -295,6 +312,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         upiId,
         merchantName,
         upiString,
+        qrSvg,
+        qrSvgUrl: `/api/payments/qr.svg/${payment.orderId}`,
       },
       'Payment order created successfully'
     );
@@ -797,7 +816,13 @@ export const getQrPayload = (req: Request, res: Response) => {
   const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
   const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
   const amount = 500;
-  const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(merchantName)}&am=500.00&cu=INR&tn=${encodeURIComponent('Lakshya Smart Library Membership')}`;
+  const upiString = buildCanonicalUpiUri({
+    payeeVpa: upiId,
+    payeeName: merchantName,
+    amountRupees: amount,
+    transactionNote: 'Lakshya Smart Library Membership',
+  });
+  const qrSvg = generateQrSvg(upiString, 240);
 
   return sendSuccess(
     res,
@@ -808,9 +833,38 @@ export const getQrPayload = (req: Request, res: Response) => {
       currency: 'INR',
       note: 'Lakshya Smart Library Membership',
       upiString,
+      qrSvg,
+      qrSvgUrl: '/api/payments/qr.svg',
     },
     'UPI QR payload retrieved successfully'
   );
+};
+
+/**
+ * GET /api/payments/qr.svg
+ * GET /api/payments/qr.svg/:orderId
+ * Serves authentic YouPI-PG dynamic vector SVG QR code (pure vector, no poster, no center logo).
+ */
+export const serveQrSvg = async (req: Request, res: Response) => {
+  const orderId = typeof req.params.orderId === 'string' ? req.params.orderId : undefined;
+  const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
+  const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
+  const amount = 500;
+
+  const upiString = buildCanonicalUpiUri({
+    payeeVpa: upiId,
+    payeeName: merchantName,
+    amountRupees: amount,
+    transactionRef: orderId,
+    transactionNote: 'Lakshya Smart Library Membership',
+  });
+
+  const svg = generateQrSvg(upiString, 240);
+
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.send(svg);
 };
 
 /**

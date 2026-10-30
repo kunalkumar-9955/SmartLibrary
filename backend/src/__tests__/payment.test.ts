@@ -108,6 +108,34 @@ describe('YouPI-PG Payment Gateway Integration Test Suite', () => {
         expect(res.headers['content-type']).toMatch(/image/);
       }
     });
+
+    it('should serve authentic YouPI-PG dynamic vector SVG QR code', async () => {
+      const res = await request(app).get('/api/payments/qr.svg');
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/image\/svg\+xml/);
+      const svgText = res.text || res.body.toString('utf8');
+      expect(svgText).toContain('<svg');
+      expect(svgText).toContain('shape-rendering="crispEdges"');
+      expect(svgText).toContain('</svg>');
+    });
+
+    it('should serve dynamic order-linked SVG QR code for specific order', async () => {
+      const res = await request(app).get('/api/payments/qr.svg/LIB-ORD-TEST123');
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/image\/svg\+xml/);
+      const svgText = res.text || res.body.toString('utf8');
+      expect(svgText).toContain('<svg');
+      expect(svgText).toContain('shape-rendering="crispEdges"');
+    });
+
+    it('should return raw UPI payload and YouPI-PG SVG from /qr-payload endpoint', async () => {
+      const res = await request(app).get('/api/payments/qr-payload');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.amount).toBe(500);
+      expect(res.body.data.upiString).toContain('pa=');
+      expect(res.body.data.qrSvg).toContain('<svg');
+    });
   });
 
   describe('2. Option A: Online Payment Flow (Strictly ₹500)', () => {

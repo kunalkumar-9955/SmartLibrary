@@ -192,6 +192,7 @@ export const paymentService = {
   },
   getQrImageUrl: () => `${API_BASE_URL}/payments/qr-image`,
   getQrPayload: () => api.get('/payments/qr-payload'),
+  getQrSvgUrl: (orderId?: string) => orderId ? `${API_BASE_URL}/payments/qr.svg/${orderId}` : `${API_BASE_URL}/payments/qr.svg`,
   getOrderStatus: (orderId: string) => api.get(`/payments/status/${orderId}`),
   getAdminPayments: (params?: { status?: string; type?: string; search?: string; page?: number; limit?: number }) =>
     api.get('/payments/admin/all', { params }),

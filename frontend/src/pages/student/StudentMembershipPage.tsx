@@ -42,6 +42,7 @@ export const StudentMembershipPage: React.FC = () => {
     upiString?: string;
     upiId?: string;
     merchantName?: string;
+    qrSvg?: string;
   } | null>(null);
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [showManualUtrFallback, setShowManualUtrFallback] = useState(false);
@@ -156,6 +157,7 @@ export const StudentMembershipPage: React.FC = () => {
           upiString: res.data.data.upiString,
           upiId: res.data.data.upiId || DEFAULT_UPI_ID,
           merchantName: res.data.data.merchantName || DEFAULT_MERCHANT_NAME,
+          qrSvg: res.data.data.qrSvg,
         });
         setOnlineStatus('PENDING');
       }
@@ -622,13 +624,20 @@ export const StudentMembershipPage: React.FC = () => {
                     <>
                       {/* Clean Square QR Display without full PhonePe poster */}
                       <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 text-center">
-                        <div className="p-3.5 bg-white rounded-2xl shadow-sm border border-slate-200 inline-flex items-center justify-center mx-auto">
-                          <QRCodeSVG
-                            value={activeUpiString}
-                            size={200}
-                            level="M"
-                            includeMargin={false}
-                          />
+                        <div className="p-3.5 bg-white rounded-2xl shadow-sm border border-slate-200 inline-flex items-center justify-center mx-auto overflow-hidden">
+                          {activeOrder?.qrSvg ? (
+                            <div
+                              className="w-[200px] h-[200px] flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
+                              dangerouslySetInnerHTML={{ __html: activeOrder.qrSvg }}
+                            />
+                          ) : (
+                            <QRCodeSVG
+                              value={activeUpiString}
+                              size={200}
+                              level="M"
+                              includeMargin={false}
+                            />
+                          )}
                         </div>
 
                         {/* Scannable Badge */}

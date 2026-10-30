@@ -7,6 +7,7 @@ import {
   getOrderStatus,
   serveQrImage,
   getQrPayload,
+  serveQrSvg,
   handleWebhook,
   getAdminPayments,
   verifyPaymentAdmin,
@@ -24,6 +25,8 @@ const router = Router();
 router.get('/plans', getPlans);
 router.get('/qr-image', serveQrImage);
 router.get('/qr-payload', getQrPayload);
+router.get('/qr.svg', serveQrSvg);
+router.get('/qr.svg/:orderId', serveQrSvg);
 router.post('/webhook', handleWebhook);
 router.post('/cron/check-expiries', checkExpiriesEndpoint);
 
