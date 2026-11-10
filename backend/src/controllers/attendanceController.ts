@@ -3,11 +3,11 @@ import { Attendance } from '../models/Attendance';
 import { Seat } from '../models/Seat';
 import { User } from '../models/User';
 import { QrSession } from '../models/QrSession';
-import { rotateQRSession } from './qrController';
 import { validateDynamicQR } from '../utils/qrCrypto';
 import { sendSuccess, sendError } from '../utils/response';
 import { deriveFixedSeatNumber } from '../utils/seatHelper';
 import { getISTDateString, formatISTDateDisplay } from '../utils/timeHelper';
+import { rotateQRSession } from './qrController';
 
 export const markEntryAttendance = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -136,9 +136,9 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
         lastEntryTime: now,
       });
 
-      // Trigger automatic QR rotation in the background (non-blocking)
-      rotateQRSession('ENTRY', qrPayload.token, 'SUCCESSFUL_ENTRY').catch((rotErr) => {
-        console.warn('[QR Rotation] Non-blocking entry rotation error:', rotErr);
+      // Background rotation of dynamic live QR session (legacy compatibility)
+      rotateQRSession(qrPayload.qrType || 'ENTRY', qrPayload.token, 'SUCCESSFUL_ENTRY').catch((err) => {
+        console.error('[QR] Background rotation failed after entry:', err);
       });
 
       return sendSuccess(
@@ -262,9 +262,9 @@ export const markExitAttendance = async (req: Request, res: Response, next: Next
       lastExitTime: exitTime,
     });
 
-    // Trigger automatic EXIT QR rotation in the background (non-blocking)
-    rotateQRSession('EXIT', qrPayload.token, 'SUCCESSFUL_EXIT').catch((rotErr) => {
-      console.warn('[QR Rotation] Non-blocking exit rotation error:', rotErr);
+    // Background rotation of dynamic live QR session (legacy compatibility)
+    rotateQRSession(qrPayload.qrType || 'EXIT', qrPayload.token, 'SUCCESSFUL_EXIT').catch((err) => {
+      console.error('[QR] Background rotation failed after exit:', err);
     });
 
     return sendSuccess(

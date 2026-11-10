@@ -432,10 +432,40 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
 
     try {
       const cleanText = text.trim();
-      const payload: any = JSON.parse(cleanText);
+      let payload: any;
+
+      try {
+        payload = JSON.parse(cleanText);
+      } catch {
+        // If scanned text is raw token or token string (e.g. 32-64 hex chars)
+        if (/^[a-fA-F0-9]{32,64}$/.test(cleanText)) {
+          payload = { qrType: 'PERSONAL', token: cleanText };
+        } else {
+          setStatusNotice('The scanned QR code is not a valid Lakshya Smart Library Attendance QR.');
+          isProcessingRef.current = false;
+          return;
+        }
+      }
+
+      // Handle Permanent Student Personal QR Code
+      if (
+        payload.qrType === 'PERSONAL' ||
+        payload.type === 'LAKSHYA_PERSONAL_QR' ||
+        (payload.token && !payload.signature)
+      ) {
+        await stopScanner();
+        setScannedResult(payload);
+        confetti({ particleCount: 65, spread: 60, origin: { y: 0.7 } });
+        onScanSuccess({
+          qrType: 'PERSONAL',
+          token: payload.token,
+          lib: payload.lib,
+        });
+        return;
+      }
 
       if (!payload.qrType || !payload.token || !payload.signature) {
-        setStatusNotice('Invalid QR code format. Please scan the official Lakshya Smart Library QR screen.');
+        setStatusNotice('Invalid QR code format. Please scan your official Lakshya Smart Library table QR.');
         isProcessingRef.current = false;
         return;
       }

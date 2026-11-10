@@ -129,7 +129,63 @@ export interface DailyQRPayload {
   signature: string;
 }
 
-export type AnyQRPayload = QRPayload | DailyQRPayload;
+export interface PersonalQRPayload {
+  qrType: 'PERSONAL';
+  token: string;
+  lib?: string;
+  studentId?: string;
+}
+
+export type AnyQRPayload = QRPayload | DailyQRPayload | PersonalQRPayload;
+
+export interface StudentPersonalQrItem {
+  _id: string;
+  qrToken: string;
+  qrPayloadString: string;
+  status: 'ACTIVE' | 'REVOKED';
+  generationCount: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface StudentWithQr {
+  _id: string;
+  name: string;
+  email: string;
+  phone: string;
+  studentIdNumber: string;
+  course?: string;
+  avatar?: string;
+  status: UserStatus;
+  isCurrentlyInside: boolean;
+  currentSeatNumber?: string;
+  assignedSeatNumber: string;
+  hasActiveQr: boolean;
+  qr: StudentPersonalQrItem | null;
+}
+
+export interface PersonalQrListResponse {
+  students: StudentWithQr[];
+  summary: {
+    totalStudents: number;
+    activeQrsCount: number;
+    missingQrsCount: number;
+  };
+}
+
+export interface PersonalQrScanResult {
+  type: 'ENTRY' | 'EXIT';
+  attendanceId: string;
+  studentName: string;
+  studentIdNumber: string;
+  seatNumber?: string;
+  date: string;
+  entryTime: string;
+  exitTime?: string;
+  durationMinutes?: number;
+  durationString?: string;
+  status?: string;
+}
 
 export interface NotificationItem {
   _id: string;

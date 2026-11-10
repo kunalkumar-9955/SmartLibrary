@@ -95,6 +95,24 @@ export const dailyQrService = {
     api.post('/daily-qr/scan', { qrPayload, mode, preferredSeatNumber }),
 };
 
+// Personal QR Services (Permanent Individual Student QR)
+export const personalQrService = {
+  getStudents: (params?: { search?: string; filter?: string }) =>
+    api.get('/personal-qr/students', { params }),
+  generate: (studentId: string) =>
+    api.post(`/personal-qr/generate/${studentId}`),
+  generateBulk: () =>
+    api.post('/personal-qr/generate-bulk'),
+  regenerate: (studentId: string) =>
+    api.post(`/personal-qr/regenerate/${studentId}`),
+  getStudentQr: (studentId: string) =>
+    api.get(`/personal-qr/student/${studentId}`),
+  scanPersonalQR: (tokenOrPayload: string | { token: string }) => {
+    const payload = typeof tokenOrPayload === 'string' ? { token: tokenOrPayload } : tokenOrPayload;
+    return api.post('/personal-qr/scan', payload);
+  },
+};
+
 // Attendance Services
 export const attendanceService = {
   markEntry: (qrPayload: QRPayload, preferredSeatNumber?: string) =>

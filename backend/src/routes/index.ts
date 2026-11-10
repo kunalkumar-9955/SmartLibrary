@@ -13,6 +13,7 @@ import notificationRoutes from './notificationRoutes';
 import adminNotificationRoutes from './adminNotificationRoutes';
 import dailyQrRoutes from './dailyQrRoutes';
 import paymentRoutes from './paymentRoutes';
+import personalQrRoutes from './personalQrRoutes';
 import { apiLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
@@ -34,5 +35,6 @@ router.use('/settings', settingsRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/admin-notifications', adminNotificationRoutes);
 router.use('/payments', paymentRoutes);
+router.use('/personal-qr', personalQrRoutes);
 
 export default router;

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { StudentQRScanner } from '../../components/StudentQRScanner';
 import { Modal } from '../../components/Modal';
-import { attendanceService, dailyQrService } from '../../services/api';
+import { attendanceService, dailyQrService, personalQrService } from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { QRPayload, AnyQRPayload } from '../../types';
@@ -64,7 +64,24 @@ export const StudentScanPage: React.FC = () => {
     setIsLoading(true);
     setScanError(null);
     try {
-      if (payload.qrType === 'DAILY') {
+      if (payload.qrType === 'PERSONAL') {
+        const res = await personalQrService.scanPersonalQR(payload.token);
+        if (res.data.success) {
+          confetti({ particleCount: 70, spread: 65, origin: { y: 0.7 } });
+          const resType = res.data.data?.type || 'ENTRY';
+          setSuccessResult({
+            type: resType,
+            data: res.data.data,
+            isPersonal: true,
+          });
+          success(
+            resType === 'ENTRY'
+              ? 'Entry Marked Successfully!'
+              : 'Exit Marked Successfully!'
+          );
+          await refreshUser();
+        }
+      } else if (payload.qrType === 'DAILY') {
         // Send requested scanner mode ('ENTRY' or 'EXIT')
         const res = await dailyQrService.scanQR(payload, activeType);
         if (res.data.success) {
@@ -108,7 +125,21 @@ export const StudentScanPage: React.FC = () => {
       const msg = err.response?.data?.message || 'Attendance verification failed. Please try again.';
       setScanError(msg);
 
-      if (errCode === 'ENTRY_REQUIRED_FIRST' || errCode === 'NO_ACTIVE_ATTENDANCE') {
+      if (errCode === 'QR_OWNERSHIP_MISMATCH') {
+        setErrorModal({
+          isOpen: true,
+          title: 'Incorrect QR Code',
+          message:
+            'This QR code does not belong to your account. Please scan your own library table QR.',
+        });
+      } else if (errCode === 'QR_REVOKED') {
+        setErrorModal({
+          isOpen: true,
+          title: 'QR Code Revoked',
+          message:
+            'This QR code has been revoked or replaced. Please contact library admin for a new table QR.',
+        });
+      } else if (errCode === 'ENTRY_REQUIRED_FIRST' || errCode === 'NO_ACTIVE_ATTENDANCE') {
         setErrorModal({
           isOpen: true,
           title: 'Entry Required First',
@@ -146,17 +177,17 @@ export const StudentScanPage: React.FC = () => {
           Cancel
         </button>
         <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-          Smart Library QR Gate • {activeType}
+          Smart Library Attendance • Personal Table QR
         </span>
       </div>
 
       {!successResult ? (
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-xl text-center">
-          <h2 className="text-2xl font-black text-slate-900 dark:white mb-1">
-            Scan {activeType === 'ENTRY' ? 'Entry' : 'Exit'} QR
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-1">
+            Scan Your Table QR
           </h2>
           <p className="text-xs text-slate-500 mb-4">
-            Point your camera at the attendance QR code to mark {activeType.toLowerCase()}.
+            Point your camera at the personal QR code on your library desk to automatically mark Entry or Exit.
           </p>
 
           {scanError && (

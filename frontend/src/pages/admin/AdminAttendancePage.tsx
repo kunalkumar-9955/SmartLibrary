@@ -234,6 +234,7 @@ export const AdminAttendancePage: React.FC = () => {
                     <th className="px-5 py-3.5">Entry Time</th>
                     <th className="px-5 py-3.5">Exit Time</th>
                     <th className="px-5 py-3.5">Duration</th>
+                    <th className="px-5 py-3.5 text-center">Source</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -249,6 +250,12 @@ export const AdminAttendancePage: React.FC = () => {
                     const durationStr = att.durationMinutes
                       ? `${Math.floor(att.durationMinutes / 60)}h ${att.durationMinutes % 60}m`
                       : '--';
+
+                    const sourceBadge = att.attendanceSource === 'DAILY_QR'
+                      ? 'Daily QR'
+                      : att.attendanceSource === 'LIVE_QR'
+                      ? 'Live QR'
+                      : 'Personal QR';
 
                     return (
                       <tr key={att._id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
@@ -274,6 +281,15 @@ export const AdminAttendancePage: React.FC = () => {
                         </td>
                         <td className="px-5 py-4 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
                           {durationStr}
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            att.attendanceSource === 'PERSONAL_QR' || !att.attendanceSource
+                              ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}>
+                            {sourceBadge}
+                          </span>
                         </td>
                       </tr>
                     );

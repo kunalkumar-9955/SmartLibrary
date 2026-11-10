@@ -8,6 +8,7 @@ import {
   forceCheckout,
 } from '../controllers/attendanceController';
 import { exportAttendancePDF } from '../controllers/pdfController';
+import { scanPersonalQr } from '../controllers/personalQrController';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../middleware/role';
 import { attendanceLimiter } from '../middleware/rateLimiter';
@@ -17,6 +18,7 @@ const router = Router();
 router.use(authenticate);
 
 // Student actions
+router.post('/scan-personal', requireRole('STUDENT'), attendanceLimiter, scanPersonalQr);
 router.post('/entry', requireRole('STUDENT'), attendanceLimiter, markEntryAttendance);
 router.post('/exit', requireRole('STUDENT'), attendanceLimiter, markExitAttendance);
 router.get('/my', requireRole('STUDENT'), getMyAttendanceHistory);

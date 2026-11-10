@@ -217,23 +217,22 @@ export const StudentDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Main Buttons: [SCAN ENTRY] [SCAN EXIT] */}
-        <div className="grid grid-cols-2 gap-3 mt-5">
+        {/* Main Action: Single Unified Scan Table QR Button */}
+        <div className="mt-5">
           <Link
-            to="/student/scan?type=ENTRY"
-            className="py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-indigo-600/25 transition flex items-center justify-center gap-2"
+            to={`/student/scan${isInside ? '?type=EXIT' : '?type=ENTRY'}`}
+            className={`w-full py-4 px-5 rounded-2xl text-xs font-extrabold tracking-wide text-white shadow-lg transition flex items-center justify-center gap-2.5 ${
+              isInside
+                ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/30'
+                : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/30'
+            }`}
           >
-            <QrCode className="w-4 h-4" />
-            SCAN ENTRY
+            <QrCode className="w-5 h-5" />
+            <span>{isInside ? 'SCAN TABLE QR TO EXIT' : 'SCAN TABLE QR TO ENTER'}</span>
           </Link>
-
-          <Link
-            to="/student/scan?type=EXIT"
-            className="py-3.5 px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl text-xs font-bold shadow transition flex items-center justify-center gap-2"
-          >
-            <QrCode className="w-4 h-4" />
-            SCAN EXIT
-          </Link>
+          <p className="text-[11px] text-center text-slate-400 mt-2">
+            Scan your personal desk QR code to automatically mark attendance
+          </p>
         </div>
       </div>
 
