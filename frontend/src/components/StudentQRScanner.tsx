@@ -451,6 +451,9 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
       if (
         payload.qrType === 'PERSONAL' ||
         payload.type === 'LAKSHYA_PERSONAL_QR' ||
+        payload.type === 'PERSONAL_QR' ||
+        payload.type === 'PERSONAL' ||
+        payload.lib === 'LAKSHYA_SMART_LIBRARY' ||
         (payload.token && !payload.signature)
       ) {
         await stopScanner();
@@ -706,7 +709,7 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
       )}
 
       <p className="text-[11px] text-slate-400 text-center mt-3 max-w-xs">
-        Point your camera at the live attendance QR displayed on the Admin's screen.
+        Point your camera at your personal library table QR to mark Entry or Exit.
       </p>
 
       {/* Device Instruction Modal */}

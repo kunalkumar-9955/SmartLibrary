@@ -21,7 +21,9 @@ export const generateSecureQrToken = (): string => {
 export const buildPersonalQrPayloadString = (token: string): string => {
   return JSON.stringify({
     qrType: 'PERSONAL',
+    type: 'PERSONAL_QR',
     token,
+    signature: 'PERMANENT_TABLE_QR',
     lib: 'LAKSHYA_SMART_LIBRARY',
   });
 };

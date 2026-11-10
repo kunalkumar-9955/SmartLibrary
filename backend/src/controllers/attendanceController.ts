@@ -3,11 +3,13 @@ import { Attendance } from '../models/Attendance';
 import { Seat } from '../models/Seat';
 import { User } from '../models/User';
 import { QrSession } from '../models/QrSession';
+import { StudentPersonalQr } from '../models/StudentPersonalQr';
 import { validateDynamicQR } from '../utils/qrCrypto';
 import { sendSuccess, sendError } from '../utils/response';
 import { deriveFixedSeatNumber } from '../utils/seatHelper';
 import { getISTDateString, formatISTDateDisplay } from '../utils/timeHelper';
 import { rotateQRSession } from './qrController';
+import { scanPersonalQr } from './personalQrController';
 
 export const markEntryAttendance = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -20,6 +22,21 @@ export const markEntryAttendance = async (req: Request, res: Response, next: Nex
 
     if (!qrPayload) {
       return sendError(res, 'QR Code payload is required', 400);
+    }
+
+    // Compatibility Fallback: If scanned QR is a Personal Table QR
+    const rawToken = typeof qrPayload === 'string' ? qrPayload : qrPayload.token;
+    if (
+      qrPayload.qrType === 'PERSONAL' ||
+      qrPayload.type === 'PERSONAL_QR' ||
+      qrPayload.lib === 'LAKSHYA_SMART_LIBRARY' ||
+      !qrPayload.signature
+    ) {
+      const personalQr = await StudentPersonalQr.findOne({ qrToken: rawToken });
+      if (personalQr) {
+        req.body.token = rawToken;
+        return scanPersonalQr(req, res, next);
+      }
     }
 
     // 1. Validate QR structure, signature, expiry, and type
@@ -188,6 +205,21 @@ export const markExitAttendance = async (req: Request, res: Response, next: Next
 
     if (!qrPayload) {
       return sendError(res, 'QR Code payload is required', 400);
+    }
+
+    // Compatibility Fallback: If scanned QR is a Personal Table QR
+    const rawToken = typeof qrPayload === 'string' ? qrPayload : qrPayload.token;
+    if (
+      qrPayload.qrType === 'PERSONAL' ||
+      qrPayload.type === 'PERSONAL_QR' ||
+      qrPayload.lib === 'LAKSHYA_SMART_LIBRARY' ||
+      !qrPayload.signature
+    ) {
+      const personalQr = await StudentPersonalQr.findOne({ qrToken: rawToken });
+      if (personalQr) {
+        req.body.token = rawToken;
+        return scanPersonalQr(req, res, next);
+      }
     }
 
     // 1. Validate EXIT QR payload
