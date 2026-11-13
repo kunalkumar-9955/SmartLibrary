@@ -1224,32 +1224,20 @@ export const AdminPaymentsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 1-Tap App Intent Buttons */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <a
-                    href={`intent://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}#Intent;scheme=upi;package=com.phonepe.app;end`}
-                    className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer"
-                  >
-                    PhonePe
-                  </a>
-                  <a
-                    href={`intent://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`}
-                    className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer"
-                  >
-                    Google Pay
-                  </a>
-                  <a
-                    href={`intent://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}#Intent;scheme=upi;package=net.one97.paytm;end`}
-                    className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer"
-                  >
-                    Paytm
-                  </a>
-                  <a
-                    href={`upi://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
-                    className="py-2 px-2 text-center text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-800 cursor-pointer"
-                  >
-                    Any UPI
-                  </a>
+                {/* Supported UPI Apps Informational Badges */}
+                <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    <span className="w-2 h-2 rounded-full bg-[#4285F4]" /> Google Pay
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    <span className="w-2 h-2 rounded-full bg-[#5f259f]" /> PhonePe
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    <span className="w-2 h-2 rounded-full bg-[#00baf2]" /> Paytm
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    <span className="w-2 h-2 rounded-full bg-[#097937]" /> BHIM / Any UPI
+                  </span>
                 </div>
 
                 {/* Real-time Status Banner */}
