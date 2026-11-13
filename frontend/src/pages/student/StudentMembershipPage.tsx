@@ -20,7 +20,6 @@ import {
   Check,
   Lock,
   ExternalLink,
-  Image as ImageIcon,
 } from 'lucide-react';
 import { paymentService } from '../../services/api';
 import { PaymentItem, PaymentReceipt, StudentMembershipOverview } from '../../types';
@@ -75,7 +74,6 @@ export const StudentMembershipPage: React.FC = () => {
   const [onlineStatus, setOnlineStatus] = useState<'INITIAL' | 'PENDING' | 'SUCCESS' | 'FAILED'>('INITIAL');
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [paymentSuccessData, setPaymentSuccessData] = useState<PaymentSuccessDetails | null>(null);
-  const [qrDisplayMode, setQrDisplayMode] = useState<'PHOTO' | 'DYNAMIC'>('PHOTO');
 
   // Countdown / session expiry state
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -1109,57 +1107,28 @@ export const StudentMembershipPage: React.FC = () => {
                     <>
                       {(onlineStatus !== 'INITIAL' || paymentMode !== 'CUSTOM_AMOUNT') ? (
                         <>
-                          {/* QR Code Container with Toggle */}
+                          {/* Pure Dynamic Vector UPI QR Container */}
                           <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center">
-                            {/* QR Mode Switcher */}
-                            <div className="flex items-center justify-center gap-1.5 mb-3 p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                              <button
-                                type="button"
-                                onClick={() => setQrDisplayMode('PHOTO')}
-                                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition flex items-center gap-1 cursor-pointer ${
-                                  qrDisplayMode === 'PHOTO'
-                                    ? 'bg-emerald-600 text-white shadow-xs'
-                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                }`}
-                              >
-                                <ImageIcon className="w-3 h-3" />
-                                <span>Official GPay QR</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setQrDisplayMode('DYNAMIC')}
-                                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition flex items-center gap-1 cursor-pointer ${
-                                  qrDisplayMode === 'DYNAMIC'
-                                    ? 'bg-emerald-600 text-white shadow-xs'
-                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                                }`}
-                              >
-                                <QrCode className="w-3 h-3" />
-                                <span>Dynamic UPI QR</span>
-                              </button>
+                            <div className="flex items-center justify-center gap-1.5 mb-2.5 px-3 py-1 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-800 shadow-xs">
+                              <QrCode className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Dynamic UPI QR Code</span>
                             </div>
 
-                            {/* QR Code Image / SVG Display */}
-                            <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-200 inline-flex items-center justify-center mx-auto overflow-hidden">
+                            {/* Dynamic Vector SVG QR Display */}
+                            <div className="p-3.5 bg-white rounded-2xl shadow-sm border border-slate-200 inline-flex items-center justify-center mx-auto overflow-hidden">
                               {creatingOrder ? (
-                                <div className="w-[190px] h-[190px] flex items-center justify-center">
+                                <div className="w-[200px] h-[200px] flex items-center justify-center">
                                   <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                                 </div>
-                              ) : qrDisplayMode === 'PHOTO' ? (
-                                <img
-                                  src="/QR.jpeg"
-                                  alt="Sonu Kumar Google Pay QR"
-                                  className="w-[190px] h-[190px] object-contain rounded-lg"
-                                />
                               ) : activeOrder?.qrSvg ? (
                                 <div
-                                  className="w-[190px] h-[190px] flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
+                                  className="w-[200px] h-[200px] flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
                                   dangerouslySetInnerHTML={{ __html: activeOrder.qrSvg }}
                                 />
                               ) : (
                                 <QRCodeSVG
                                   value={activeUpiString}
-                                  size={190}
+                                  size={200}
                                   level="M"
                                   includeMargin={false}
                                 />
@@ -1169,7 +1138,7 @@ export const StudentMembershipPage: React.FC = () => {
                             {/* Scannable Badge */}
                             <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                               <ShieldCheck className="w-3.5 h-3.5" />
-                              <span>Scan with Google Pay, PhonePe, Paytm, or any UPI</span>
+                              <span>Scan with PhonePe, Google Pay, Paytm, or any UPI</span>
                             </div>
 
                             {/* Countdown Timer */}
@@ -1181,7 +1150,7 @@ export const StudentMembershipPage: React.FC = () => {
                               </div>
                             )}
 
-                            {/* Verified Payment Details */}
+                            {/* Verified Beneficiary Details */}
                             <div className="mt-3 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs space-y-1.5 text-left">
                               <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
                                 <span>Payee / Beneficiary:</span>
@@ -1216,40 +1185,57 @@ export const StudentMembershipPage: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* 1-Tap Direct UPI App Buttons */}
-                          <div className="space-y-1.5">
+                          {/* 1-Tap Direct UPI App Payment for Mobile Users */}
+                          <div className="space-y-2">
                             <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-center">
-                              Or Pay Directly Via Installed App
+                              Paying From This Mobile Phone?
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                              <a
-                                href={getAppIntentUrl('gpay')}
-                                className="py-2.5 px-2 text-center bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1.5 shadow-xs"
-                              >
-                                <span className="text-base">🟢</span>
-                                <span>Google Pay</span>
-                              </a>
+
+                            {/* Primary Mobile Action: Open UPI Intent Directly */}
+                            <a
+                              href={getAppIntentUrl('upi')}
+                              className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <span>⚡</span>
+                              <span>Pay Directly with Installed UPI App</span>
+                              <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                            </a>
+
+                            <div className="grid grid-cols-3 gap-2">
                               <a
                                 href={getAppIntentUrl('phonepe')}
-                                className="py-2.5 px-2 text-center bg-[#5f259f] hover:bg-[#4e1d85] text-white text-xs font-bold rounded-xl border border-[#5f259f] transition flex items-center justify-center gap-1.5 shadow-xs"
+                                className="py-2 px-2 text-center bg-[#5f259f] hover:bg-[#4e1d85] text-white text-xs font-bold rounded-xl border border-[#5f259f] transition flex items-center justify-center gap-1.5 shadow-xs"
                               >
-                                <span className="text-base">💜</span>
+                                <span className="text-sm">💜</span>
                                 <span>PhonePe</span>
                               </a>
                               <a
-                                href={getAppIntentUrl('paytm')}
-                                className="py-2.5 px-2 text-center bg-[#00baf2] hover:bg-[#009fd8] text-white text-xs font-bold rounded-xl border border-[#00baf2] transition flex items-center justify-center gap-1.5 shadow-xs"
+                                href={getAppIntentUrl('gpay')}
+                                className="py-2 px-2 text-center bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1.5 shadow-xs"
                               >
-                                <span className="text-base">💙</span>
-                                <span>Paytm</span>
+                                <span className="text-sm">🟢</span>
+                                <span>GPay</span>
                               </a>
                               <a
-                                href={getAppIntentUrl('upi')}
-                                className="py-2.5 px-2 text-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border border-emerald-600 transition flex items-center justify-center gap-1.5 shadow-xs"
+                                href={getAppIntentUrl('paytm')}
+                                className="py-2 px-2 text-center bg-[#00baf2] hover:bg-[#009fd8] text-white text-xs font-bold rounded-xl border border-[#00baf2] transition flex items-center justify-center gap-1.5 shadow-xs"
                               >
-                                <span className="text-base">⚡</span>
-                                <span>Any UPI</span>
+                                <span className="text-sm">💙</span>
+                                <span>Paytm</span>
                               </a>
+                            </div>
+
+                            {/* Help Box Explaining the PhonePe Gallery Screenshot Notice */}
+                            <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-xl text-left space-y-1">
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900 dark:text-blue-200">
+                                <Info className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                                <span>Mobile Payment Guide</span>
+                              </div>
+                              <p className="text-[11px] text-blue-800/90 dark:text-blue-300/90 leading-relaxed">
+                                • <strong>Fastest on Phone:</strong> Tap <strong>Pay Directly with Installed UPI App</strong> above to open PhonePe or Google Pay automatically without taking screenshots.
+                                <br />
+                                • <strong>Gallery Scan in PhonePe:</strong> If you scan a screenshot in PhonePe and it displays <em>&quot;You can pay up to ₹2,000 with QR codes via gallery&quot;</em>, this is standard NPCI security guidance, not an error. Simply tap <strong>DISMISS</strong> in PhonePe to proceed with your ₹{effectiveAmount} payment.
+                              </p>
                             </div>
                           </div>
 
