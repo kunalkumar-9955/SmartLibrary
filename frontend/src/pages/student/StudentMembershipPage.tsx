@@ -99,8 +99,8 @@ export const StudentMembershipPage: React.FC = () => {
 
   const { success, error, info } = useToast();
 
-  const DEFAULT_UPI_ID = 'sonusingh03298-1@okicici';
-  const DEFAULT_MERCHANT_NAME = 'Sonu Kumar';
+  const DEFAULT_UPI_ID = 'chhotu6826-1@oksbi';
+  const DEFAULT_MERCHANT_NAME = 'Chhotu Kumar';
   const activeUpiId = activeOrder?.upiId || DEFAULT_UPI_ID;
   const activeMerchant = activeOrder?.merchantName || DEFAULT_MERCHANT_NAME;
   const effectiveAmount = activeOrder?.amount

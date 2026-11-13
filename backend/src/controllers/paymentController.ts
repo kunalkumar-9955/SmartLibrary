@@ -322,8 +322,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       planName = `Admin Gateway Test (₹${amount})`;
     }
 
-    const upiId = process.env.MERCHANT_UPI_ID || 'sonusingh03298-1@okicici';
-    const merchantName = process.env.MERCHANT_NAME || 'Sonu Kumar';
+    const upiId = process.env.MERCHANT_UPI_ID || 'chhotu6826-1@oksbi';
+    const merchantName = process.env.MERCHANT_NAME || 'Chhotu Kumar';
 
     // Check for existing pending order with same idempotency key and amount
     if (idempotencyKey) {
@@ -1076,8 +1076,8 @@ export const serveQrImage = (req: Request, res: Response) => {
  * Returns raw UPI payload and details for generating clean vector QR code directly without full poster.
  */
 export const getQrPayload = (req: Request, res: Response) => {
-  const upiId = process.env.MERCHANT_UPI_ID || 'sonusingh03298-1@okicici';
-  const merchantName = process.env.MERCHANT_NAME || 'Sonu Kumar';
+  const upiId = process.env.MERCHANT_UPI_ID || 'chhotu6826-1@oksbi';
+  const merchantName = process.env.MERCHANT_NAME || 'Chhotu Kumar';
   const amount = 500;
   const upiString = buildCanonicalUpiUri({
     payeeVpa: upiId,
@@ -1110,8 +1110,8 @@ export const getQrPayload = (req: Request, res: Response) => {
  */
 export const serveQrSvg = async (req: Request, res: Response) => {
   const orderId = typeof req.params.orderId === 'string' ? req.params.orderId : undefined;
-  const upiId = process.env.MERCHANT_UPI_ID || 'sonusingh03298-1@okicici';
-  const merchantName = process.env.MERCHANT_NAME || 'Sonu Kumar';
+  const upiId = process.env.MERCHANT_UPI_ID || 'chhotu6826-1@oksbi';
+  const merchantName = process.env.MERCHANT_NAME || 'Chhotu Kumar';
   let amount = 500;
   let note = 'Lakshya Smart Library Membership';
 

@@ -1227,25 +1227,25 @@ export const AdminPaymentsPage: React.FC = () => {
                 {/* 1-Tap App Intent Buttons */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <a
-                    href={`phonepe://pay?pa=sonusingh03298-1@okicici&pn=Sonu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
+                    href={`phonepe://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
                     className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
                   >
                     PhonePe
                   </a>
                   <a
-                    href={`gpay://upi/pay?pa=sonusingh03298-1@okicici&pn=Sonu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
+                    href={`gpay://upi/pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
                     className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
                   >
                     Google Pay
                   </a>
                   <a
-                    href={`paytmmp://pay?pa=sonusingh03298-1@okicici&pn=Sonu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
+                    href={`paytmmp://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
                     className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
                   >
                     Paytm
                   </a>
                   <a
-                    href={`upi://pay?pa=sonusingh03298-1@okicici&pn=Sonu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
+                    href={`upi://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
                     className="py-2 px-2 text-center text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-800"
                   >
                     Any UPI
