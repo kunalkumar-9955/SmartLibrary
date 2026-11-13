@@ -220,7 +220,7 @@ export const StudentDashboard: React.FC = () => {
         {/* Main Action: Single Unified Scan Table QR Button */}
         <div className="mt-5">
           <Link
-            to={`/student/scan${isInside ? '?type=EXIT' : '?type=ENTRY'}`}
+            to="/student/scan"
             className={`w-full py-4 px-5 rounded-2xl text-xs font-extrabold tracking-wide text-white shadow-lg transition flex items-center justify-center gap-2.5 ${
               isInside
                 ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/30'

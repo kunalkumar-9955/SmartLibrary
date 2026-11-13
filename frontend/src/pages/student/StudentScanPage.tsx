@@ -197,8 +197,7 @@ export const StudentScanPage: React.FC = () => {
           )}
 
           <StudentQRScanner
-            key={`${activeType}-${scannerKey}`}
-            expectedType={activeType}
+            key={scannerKey}
             onScanSuccess={handleScanSuccess}
             isLoading={isLoading}
           />

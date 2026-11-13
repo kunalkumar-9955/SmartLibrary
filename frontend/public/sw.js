@@ -1,12 +1,22 @@
 // Lakshya Smart Library — Service Worker for Web Push & PWA
-const CACHE_NAME = 'lakshya-smart-library-v1';
+const CACHE_NAME = 'lakshya-smart-library-v2-personal-qr';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
 // Handle incoming Web Push notification

@@ -3,10 +3,12 @@ import { DailyQrSession } from '../models/DailyQrSession';
 import { Attendance } from '../models/Attendance';
 import { Seat } from '../models/Seat';
 import { User } from '../models/User';
+import { StudentPersonalQr } from '../models/StudentPersonalQr';
 import { generateDailyQRPayload, validateDailyQRPayload } from '../utils/dailyQrCrypto';
 import { sendSuccess, sendError } from '../utils/response';
 import { deriveFixedSeatNumber } from '../utils/seatHelper';
 import { getISTDateString } from '../utils/timeHelper';
+import { scanPersonalQr } from './personalQrController';
 
 // Helper: Get today's authoritative server date in YYYY-MM-DD (Asia/Kolkata timezone)
 export const getServerDateString = (d: Date = new Date()): string => {
@@ -170,6 +172,21 @@ export const scanDailyQR = async (req: Request, res: Response, next: NextFunctio
 
     if (!qrPayload) {
       return sendError(res, 'Daily QR Code payload is required', 400);
+    }
+
+    // Compatibility Fallback: If scanned QR is a Personal Table QR
+    const rawToken = typeof qrPayload === 'string' ? qrPayload : qrPayload.token;
+    if (
+      qrPayload.type === 'PERSONAL_QR' ||
+      qrPayload.qrType === 'PERSONAL' ||
+      qrPayload.lib === 'LAKSHYA_SMART_LIBRARY' ||
+      !qrPayload.dailyQrId
+    ) {
+      const personalQr = await StudentPersonalQr.findOne({ qrToken: rawToken });
+      if (personalQr) {
+        req.body.token = rawToken;
+        return scanPersonalQr(req, res, next);
+      }
     }
 
     // 1. Validate requested scanner mode

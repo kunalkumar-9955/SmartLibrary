@@ -449,11 +449,11 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
 
       // Handle Permanent Student Personal QR Code
       if (
+        payload.type === 'PERSONAL_QR' ||
+        payload.lib === 'LAKSHYA_SMART_LIBRARY' ||
         payload.qrType === 'PERSONAL' ||
         payload.type === 'LAKSHYA_PERSONAL_QR' ||
-        payload.type === 'PERSONAL_QR' ||
         payload.type === 'PERSONAL' ||
-        payload.lib === 'LAKSHYA_SMART_LIBRARY' ||
         (payload.token && !payload.signature)
       ) {
         await stopScanner();
@@ -482,7 +482,14 @@ export const StudentQRScanner: React.FC<StudentQRScannerProps> = ({
       }
 
       // Live QR logic: verify expected gate type
-      if (expectedType && payload.qrType !== expectedType) {
+      if (
+        expectedType &&
+        payload.qrType !== expectedType &&
+        payload.qrType !== 'DAILY' &&
+        payload.qrType !== 'PERSONAL' &&
+        payload.type !== 'PERSONAL_QR' &&
+        payload.lib !== 'LAKSHYA_SMART_LIBRARY'
+      ) {
         setStatusNotice(`Scanned ${payload.qrType} QR code, but this gate requires an ${expectedType} QR code.`);
         isProcessingRef.current = false;
         return;
