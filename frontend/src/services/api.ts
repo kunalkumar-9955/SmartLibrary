@@ -74,6 +74,11 @@ export const studentService = {
   getStudentById: (id: string) => api.get(`/students/${id}`),
   updateStudent: (id: string, data: any) => api.put(`/students/${id}`, data),
   updateStatus: (id: string, status: string) => api.patch(`/students/${id}/status`, { status }),
+  deactivateStudent: (id: string) => api.post(`/students/${id}/deactivate`),
+  reactivateStudent: (id: string, data?: { assignedSeatNumber?: string }) =>
+    api.post(`/students/${id}/reactivate`, data || {}),
+  replaceStudent: (id: string, data: { newStudent: any }) =>
+    api.post(`/students/${id}/replace`, data),
   resetPassword: (id: string, newPassword: string) =>
     api.post(`/students/${id}/reset-password`, { newPassword }),
   deleteStudent: (id: string) => api.delete(`/students/${id}`),
@@ -103,6 +108,8 @@ export const personalQrService = {
     api.post(`/personal-qr/generate/${studentId}`),
   generateBulk: () =>
     api.post('/personal-qr/generate-bulk'),
+  activateBulk: () =>
+    api.post('/personal-qr/activate-bulk'),
   regenerate: (studentId: string) =>
     api.post(`/personal-qr/regenerate/${studentId}`),
   getStudentQr: (studentId: string) =>
@@ -139,6 +146,17 @@ export const seatService = {
   getSeats: (params?: any) => api.get('/seats', { params }),
   updateStatus: (id: string, status: string, notes?: string) =>
     api.patch(`/seats/${id}/status`, { status, notes }),
+  assignSeat: (data: { studentId: string; seatNumber: string }) =>
+    api.post('/seats/assign', data),
+  releaseSeat: (data: { seatNumber: string }) =>
+    api.post('/seats/release', data),
+};
+
+// Maintenance & Fresh Start Services
+export const maintenanceService = {
+  runFreshStart: () => api.post('/maintenance/fresh-start'),
+  getSnapshots: () => api.get('/maintenance/snapshots'),
+  getAuditLogs: (params?: any) => api.get('/maintenance/audit-logs', { params }),
 };
 
 // Ticket / Complaint Services

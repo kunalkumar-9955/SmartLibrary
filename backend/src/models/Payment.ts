@@ -213,4 +213,10 @@ const PaymentSchema = new Schema<IPayment>(
   { timestamps: true }
 );
 
+// High-performance compound indexes for payment queries & dashboard history
+PaymentSchema.index({ userId: 1, createdAt: -1 });
+PaymentSchema.index({ status: 1, createdAt: -1 });
+PaymentSchema.index({ paymentType: 1, status: 1, createdAt: -1 });
+PaymentSchema.index({ isTestTransaction: 1, createdAt: -1 });
+
 export const Payment = mongoose.model<IPayment>('Payment', PaymentSchema);

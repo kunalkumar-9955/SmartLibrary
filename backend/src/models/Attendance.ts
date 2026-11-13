@@ -51,6 +51,9 @@ const AttendanceSchema = new Schema<IAttendance>(
 
 AttendanceSchema.index({ studentId: 1, status: 1 });
 AttendanceSchema.index({ attendanceDate: 1, status: 1 });
+AttendanceSchema.index({ studentId: 1, entryTime: -1 });
+AttendanceSchema.index({ attendanceDate: 1, entryTime: -1 });
+AttendanceSchema.index({ status: 1, entryTime: -1 });
 // Concurrency guarantee: strictly only ONE ACTIVE attendance session per student
 AttendanceSchema.index(
   { studentId: 1 },

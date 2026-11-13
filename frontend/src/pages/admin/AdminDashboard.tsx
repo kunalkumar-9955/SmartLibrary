@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { adminService, attendanceService, reportService, adminNotificationService } from '../../services/api';
+import { adminService, attendanceService, reportService, adminNotificationService, maintenanceService } from '../../services/api';
 import { StatCard } from '../../components/StatCard';
 import { Badge } from '../../components/Badge';
+import { Modal } from '../../components/Modal';
 import { useToast } from '../../contexts/ToastContext';
 import {
   Users,
@@ -16,6 +17,11 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
+  Sparkles,
+  ShieldCheck,
+  RotateCcw,
+  UserX,
+  FileText,
 } from 'lucide-react';
 import { formatISTTime } from '../../utils/timeHelper';
 
@@ -24,6 +30,12 @@ export const AdminDashboard: React.FC = () => {
   const [statsData, setStatsData] = useState<any>(null);
   const [unreadComplaints, setUnreadComplaints] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+
+  // Fresh Start Modal state
+  const [isFreshStartOpen, setIsFreshStartOpen] = useState(false);
+  const [isRunningFreshStart, setIsRunningFreshStart] = useState(false);
+  const [freshStartResult, setFreshStartResult] = useState<any>(null);
+
   const { success, error } = useToast();
 
   const loadDashboard = async () => {
@@ -65,6 +77,22 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleExecuteFreshStart = async () => {
+    try {
+      setIsRunningFreshStart(true);
+      const res = await maintenanceService.runFreshStart();
+      if (res.data.success) {
+        setFreshStartResult(res.data.data);
+        success('Safe Fresh Start completed! Demo data cleaned & snapshot created.');
+        await loadDashboard();
+      }
+    } catch (err: any) {
+      error(err.response?.data?.message || 'Failed to execute fresh start');
+    } finally {
+      setIsRunningFreshStart(false);
+    }
+  };
+
   const metrics = dashboardData?.metrics || statsData?.metrics || {};
   const liveOccupancy = dashboardData?.liveOccupancy || [];
   const recentTickets = dashboardData?.recentTickets || statsData?.recentTickets || [];
@@ -86,7 +114,17 @@ export const AdminDashboard: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => {
+              setFreshStartResult(null);
+              setIsFreshStartOpen(true);
+            }}
+            className="px-3.5 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Sparkles className="w-4 h-4 text-amber-600" />
+            Safe Fresh Start
+          </button>
           <Link
             to="/admin/qr"
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-2"
@@ -166,6 +204,53 @@ export const AdminDashboard: React.FC = () => {
           color="rose"
           subtitle={unreadComplaints > 0 ? `${unreadComplaints} new unread` : 'Pending action'}
         />
+      </div>
+
+      {/* Student & QR Lifecycle Management Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Active Students</p>
+            <p className="text-2xl font-black text-emerald-900 dark:text-emerald-100 mt-0.5">{metrics.activeStudents ?? '--'}</p>
+            <p className="text-[10px] text-emerald-600 dark:text-emerald-400">Regular members</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
+            <Users className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Inactive Students</p>
+            <p className="text-2xl font-black text-slate-800 dark:text-slate-200 mt-0.5">{metrics.inactiveStudents ?? '--'}</p>
+            <p className="text-[10px] text-slate-400">Archived / Left</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-slate-600 text-white flex items-center justify-center font-bold">
+            <UserX className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="p-4 bg-indigo-50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Active Attendance QRs</p>
+            <p className="text-2xl font-black text-indigo-900 dark:text-indigo-100 mt-0.5">{metrics.activeQrs ?? '--'}</p>
+            <p className="text-[10px] text-indigo-600 dark:text-indigo-400">Valid scan cards</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="p-4 bg-rose-50 dark:bg-rose-950/20 rounded-2xl border border-rose-200 dark:border-rose-800/60 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wider">Revoked QR Codes</p>
+            <p className="text-2xl font-black text-rose-900 dark:text-rose-100 mt-0.5">{metrics.revokedQrs ?? '--'}</p>
+            <p className="text-[10px] text-rose-600 dark:text-rose-400">Permanently blocked</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold">
+            <RotateCcw className="w-5 h-5" />
+          </div>
+        </div>
       </div>
 
       {/* CURRENTLY INSIDE Section */}
@@ -394,6 +479,127 @@ export const AdminDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Safe Fresh Start & Demo Cleanup Modal */}
+      {isFreshStartOpen && (
+        <Modal
+          isOpen={isFreshStartOpen}
+          onClose={() => setIsFreshStartOpen(false)}
+          title="Safe Fresh Start & Demo Data Cleanup"
+          maxWidth="md"
+        >
+          <div className="space-y-4 text-xs font-sans">
+            {freshStartResult ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100 flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-black text-sm">Fresh Start Cleanup Completed Successfully!</p>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                      Demo data has been safely purged and a pre-cleanup snapshot was recorded.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Test Payments Purged</p>
+                    <p className="text-xl font-black text-rose-600 mt-0.5">
+                      {freshStartResult.purgedTestPaymentsCount}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Demo QR Tokens Revoked</p>
+                    <p className="text-xl font-black text-amber-600 mt-0.5">
+                      {freshStartResult.revokedDemoTokensCount}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Genuine Payments Preserved</p>
+                    <p className="text-xl font-black text-emerald-600 mt-0.5">
+                      {freshStartResult.preservedGenuinePaymentsCount}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Active Students Retained</p>
+                    <p className="text-xl font-black text-indigo-600 mt-0.5">
+                      {freshStartResult.activeStudentsRetainedCount}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-100 dark:bg-slate-850 rounded-xl text-[11px] text-slate-600 dark:text-slate-400">
+                  <p>
+                    <span className="font-bold">Snapshot ID:</span>{' '}
+                    <span className="font-mono">{freshStartResult.snapshotId}</span>
+                  </p>
+                  <p className="mt-1">
+                    <span className="font-bold">Total Physical Seats:</span>{' '}
+                    {freshStartResult.totalSeatsAvailable} (01 to 50)
+                  </p>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFreshStartOpen(false)}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100">
+                  <div className="flex items-center gap-2 mb-2 font-black text-sm">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    Controlled, Non-Destructive Fresh Start
+                  </div>
+                  <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                    This maintenance operation prepares the library for a real-world launch by cleaning only demo data:
+                  </p>
+                  <ul className="list-disc pl-4 mt-2 space-y-1 text-[11px] text-amber-800 dark:text-amber-300">
+                    <li>Purges only dummy gateway test transactions and test payment records.</li>
+                    <li>Revokes all existing demo/testing attendance QR tokens so old printed codes can never mark attendance again.</li>
+                    <li>Resets QR activation state so you can generate and activate fresh QRs for students.</li>
+                    <li>Takes a recoverable snapshot (<span className="font-mono font-bold">MaintenanceSnapshot</span>) before cleanup.</li>
+                    <li>
+                      <span className="font-bold">Strictly Preserved:</span> Real student accounts, genuine payments, attendance history, seat assignments, and gateway configuration.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[11px]">
+                  <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">Audit Record:</p>
+                  <p>
+                    This action will be permanently recorded in the system audit logs under your administrator credentials.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFreshStartOpen(false)}
+                    className="px-4 py-2 rounded-xl border font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExecuteFreshStart}
+                    disabled={isRunningFreshStart}
+                    className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {isRunningFreshStart ? 'Executing Cleanup...' : 'Confirm & Run Fresh Start'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

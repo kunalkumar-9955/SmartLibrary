@@ -44,6 +44,15 @@ export interface Seat {
   status: SeatStatus;
   currentStudentId?: any;
   currentStudentName?: string;
+  assignedStudent?: {
+    _id: string;
+    name: string;
+    studentIdNumber?: string;
+    email?: string;
+    phone?: string;
+    status?: string;
+    isCurrentlyInside?: boolean;
+  } | null;
   currentAttendanceId?: any;
   notes?: string;
 }
@@ -336,4 +345,35 @@ export interface StudentMembershipOverview {
     pendingOfflineOrderId?: string | null;
   };
   payments: PaymentItem[];
+}
+
+export interface AuditLogItem {
+  _id: string;
+  adminId?: string;
+  adminEmail: string;
+  adminName: string;
+  action: string;
+  targetId?: string;
+  targetName?: string;
+  targetType: 'STUDENT' | 'SEAT' | 'QR' | 'SYSTEM' | 'ATTENDANCE';
+  details?: Record<string, any>;
+  ipAddress?: string;
+  createdAt: string;
+}
+
+export interface FreshStartSummary {
+  success: boolean;
+  message: string;
+  snapshotId: string;
+  summary: {
+    paymentsCleanedCount: number;
+    paymentsPreservedCount: number;
+    qrsRevokedCount: number;
+    studentsPreservedCount: number;
+    attendancePreservedCount: number;
+    ambiguousRecordsPreservedCount: number;
+    timestamp: string;
+  };
+  cleanedPaymentOrderIds: string[];
+  revokedQrTokens: string[];
 }

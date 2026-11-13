@@ -3,6 +3,7 @@ import {
   listStudentsWithQr,
   generatePersonalQr,
   generateBulkPersonalQrs,
+  activateBulkPersonalQrs,
   regeneratePersonalQr,
   getStudentPersonalQr,
   scanPersonalQr,
@@ -18,6 +19,7 @@ router.use(authenticate);
 // Admin: Student Personal QR Management
 router.get('/students', requireRole('ADMIN'), listStudentsWithQr);
 router.post('/generate-bulk', requireRole('ADMIN'), generateBulkPersonalQrs);
+router.post('/activate-bulk', requireRole('ADMIN'), activateBulkPersonalQrs);
 router.post('/generate/:studentId', requireRole('ADMIN'), generatePersonalQr);
 router.post('/regenerate/:studentId', requireRole('ADMIN'), regeneratePersonalQr);
 router.get('/student/:studentId', getStudentPersonalQr);

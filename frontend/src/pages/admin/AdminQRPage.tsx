@@ -33,6 +33,7 @@ export const AdminQRPage: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'active' | 'missing'>('all');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [isBulkGenerating, setIsBulkGenerating] = useState<boolean>(false);
+  const [isBulkActivating, setIsBulkActivating] = useState<boolean>(false);
   const [isZipping, setIsZipping] = useState<boolean>(false);
 
   // Modals
@@ -135,6 +136,27 @@ export const AdminQRPage: React.FC = () => {
       error(err.response?.data?.message || 'Bulk QR generation failed');
     } finally {
       setIsBulkGenerating(false);
+    }
+  };
+
+  // 3b. Bulk Activate QRs
+  const handleBulkActivate = async () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to BULK ACTIVATE personal QR codes for all active students?'
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsBulkActivating(true);
+      const res = await personalQrService.activateBulk();
+      if (res.data.success) {
+        success(res.data.message || 'Bulk QR activation completed!');
+        await fetchStudents();
+      }
+    } catch (err: any) {
+      error(err.response?.data?.message || 'Bulk QR activation failed');
+    } finally {
+      setIsBulkActivating(false);
     }
   };
 
@@ -460,6 +482,15 @@ export const AdminQRPage: React.FC = () => {
               <span>{isBulkGenerating ? 'Generating...' : `Generate All Missing (${summary.missingQrsCount})`}</span>
             </button>
           )}
+
+          <button
+            onClick={handleBulkActivate}
+            disabled={isBulkActivating}
+            className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-emerald-600/30 cursor-pointer disabled:opacity-50"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>{isBulkActivating ? 'Activating...' : 'Bulk Activate QRs'}</span>
+          </button>
 
           <button
             onClick={() => setIsPrintSheetOpen(true)}

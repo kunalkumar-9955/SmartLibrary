@@ -3,6 +3,7 @@ import { Attendance } from '../models/Attendance';
 import { Seat } from '../models/Seat';
 import { Ticket } from '../models/Ticket';
 import { User } from '../models/User';
+import { StudentPersonalQr } from '../models/StudentPersonalQr';
 import { sendSuccess } from '../utils/response';
 
 export const getLibraryAdminDashboard = async (req: Request, res: Response, next: NextFunction) => {
@@ -17,6 +18,10 @@ export const getLibraryAdminDashboard = async (req: Request, res: Response, next
       occupiedSeats,
       openTickets,
       totalStudents,
+      activeStudents,
+      inactiveStudents,
+      activeQrs,
+      revokedQrs,
     ] = await Promise.all([
       Attendance.countDocuments({ entryTime: { $gte: todayStart } }),
       Attendance.countDocuments({ status: 'ACTIVE' }),
@@ -24,6 +29,10 @@ export const getLibraryAdminDashboard = async (req: Request, res: Response, next
       Seat.countDocuments({ status: 'OCCUPIED' }),
       Ticket.countDocuments({ status: { $in: ['OPEN', 'IN_PROGRESS'] } }),
       User.countDocuments({ role: 'STUDENT' }),
+      User.countDocuments({ role: 'STUDENT', status: 'ACTIVE' }),
+      User.countDocuments({ role: 'STUDENT', status: 'INACTIVE' }),
+      StudentPersonalQr.countDocuments({ status: 'ACTIVE' }),
+      StudentPersonalQr.countDocuments({ status: 'REVOKED' }),
     ]);
 
     // Live currently inside students (all active sessions)
@@ -64,6 +73,10 @@ export const getLibraryAdminDashboard = async (req: Request, res: Response, next
         occupiedSeats,
         openTickets,
         totalStudents,
+        activeStudents,
+        inactiveStudents,
+        activeQrs,
+        revokedQrs,
       },
       liveOccupancy: formattedActive,
       recentTickets,

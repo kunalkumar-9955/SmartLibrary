@@ -53,6 +53,9 @@ StudentPersonalQrSchema.index(
   { unique: true, partialFilterExpression: { status: 'ACTIVE' } }
 );
 
+StudentPersonalQrSchema.index({ studentId: 1, status: 1 });
+StudentPersonalQrSchema.index({ status: 1, createdAt: -1 });
+
 export const StudentPersonalQr = mongoose.model<IStudentPersonalQr>(
   'StudentPersonalQr',
   StudentPersonalQrSchema

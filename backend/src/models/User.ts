@@ -80,6 +80,10 @@ const UserSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
+// High-performance compound indexes for user management & seat lookups
+UserSchema.index({ role: 1, status: 1, createdAt: -1 });
+UserSchema.index({ assignedSeatNumber: 1 });
+
 UserSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   try {

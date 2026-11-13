@@ -108,15 +108,21 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                   {getStatusIcon(seat.status)}
                 </div>
 
-                <span className="my-1.5 text-base font-black tracking-tight">
+                <span className="my-1 text-base font-black tracking-tight">
                   {seat.seatNumber}
                 </span>
 
-                <span className="text-[9px] font-bold tracking-wider uppercase truncate w-full text-center">
-                  {seat.status}
-                </span>
+                {isAdminView && seat.assignedStudent ? (
+                  <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 truncate w-full text-center">
+                    {seat.assignedStudent.name.split(' ')[0]}
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-bold tracking-wider uppercase truncate w-full text-center">
+                    {seat.status}
+                  </span>
+                )}
 
-                {occupantName && (
+                {(occupantName || (isAdminView && seat.assignedStudent)) && (
                   <div
                     className={`absolute hidden group-hover:flex flex-col items-center z-[100] pointer-events-none left-1/2 -translate-x-1/2 ${
                       isTopRow ? 'top-full mt-2' : 'bottom-full mb-2'
@@ -124,8 +130,18 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                   >
                     {!isTopRow && (
                       <div className="bg-slate-900 text-white text-[11px] font-semibold py-1.5 px-3 rounded-lg shadow-2xl border border-slate-700/80 whitespace-nowrap text-center">
-                        <div className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Occupant</div>
-                        <div className="text-white font-black">{occupantName}</div>
+                        {seat.assignedStudent && (
+                          <div className="mb-1">
+                            <div className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Assigned Student</div>
+                            <div className="text-white font-black">{seat.assignedStudent.name} ({seat.assignedStudent.studentIdNumber || 'ID'})</div>
+                          </div>
+                        )}
+                        {occupantName && (
+                          <div className={seat.assignedStudent ? 'pt-1 border-t border-slate-800' : ''}>
+                            <div className="text-[9px] text-emerald-400 uppercase tracking-wider font-bold">Live Occupant</div>
+                            <div className="text-emerald-200 font-bold">{occupantName}</div>
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Tooltip Arrow */}
@@ -136,8 +152,18 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                     />
                     {isTopRow && (
                       <div className="bg-slate-900 text-white text-[11px] font-semibold py-1.5 px-3 rounded-lg shadow-2xl border border-slate-700/80 whitespace-nowrap text-center">
-                        <div className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Occupant</div>
-                        <div className="text-white font-black">{occupantName}</div>
+                        {seat.assignedStudent && (
+                          <div className="mb-1">
+                            <div className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Assigned Student</div>
+                            <div className="text-white font-black">{seat.assignedStudent.name} ({seat.assignedStudent.studentIdNumber || 'ID'})</div>
+                          </div>
+                        )}
+                        {occupantName && (
+                          <div className={seat.assignedStudent ? 'pt-1 border-t border-slate-800' : ''}>
+                            <div className="text-[9px] text-emerald-400 uppercase tracking-wider font-bold">Live Occupant</div>
+                            <div className="text-emerald-200 font-bold">{occupantName}</div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

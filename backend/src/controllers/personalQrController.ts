@@ -7,6 +7,7 @@ import { Seat } from '../models/Seat';
 import { sendSuccess, sendError } from '../utils/response';
 import { deriveFixedSeatNumber } from '../utils/seatHelper';
 import { getISTDateString, formatISTDateDisplay } from '../utils/timeHelper';
+import { logAdminAction } from '../services/auditService';
 
 /**
  * Generate a cryptographically secure 64-character hex token
@@ -158,6 +159,21 @@ export const generatePersonalQr = async (req: Request, res: Response, next: Next
       generationCount: 1,
     });
 
+    await logAdminAction({
+      adminId: req.user?.id,
+      adminEmail: req.user?.email,
+      adminName: req.user?.name,
+      action: 'QR_GENERATED',
+      targetId: student._id,
+      targetName: student.name,
+      targetType: 'QR',
+      details: {
+        studentIdNumber: student.studentIdNumber,
+        assignedSeat,
+        generationCount: 1,
+      },
+    });
+
     return sendSuccess(
       res,
       {
@@ -189,7 +205,7 @@ export const generateBulkPersonalQrs = async (req: Request, res: Response, next:
       return sendSuccess(
         res,
         { generatedCount: 0, totalActive: existingActiveQrs.length },
-        'All registered students already possess active Personal QR codes'
+        'All registered active students already possess active Personal QR codes'
       );
     }
 
@@ -207,6 +223,18 @@ export const generateBulkPersonalQrs = async (req: Request, res: Response, next:
 
     const totalActive = existingActiveQrs.length + docsToInsert.length;
 
+    await logAdminAction({
+      adminId: req.user?.id,
+      adminEmail: req.user?.email,
+      adminName: req.user?.name,
+      action: 'BULK_QR_GENERATED',
+      targetType: 'QR',
+      details: {
+        generatedCount: docsToInsert.length,
+        totalActive,
+      },
+    });
+
     return sendSuccess(
       res,
       {
@@ -215,6 +243,64 @@ export const generateBulkPersonalQrs = async (req: Request, res: Response, next:
       },
       `Successfully generated Personal QR codes for ${docsToInsert.length} students`,
       201
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin: Bulk activate Personal QRs for all eligible active students
+ * POST /api/personal-qr/activate-bulk
+ */
+export const activateBulkPersonalQrs = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Calls bulk generator to ensure all students have an active QR
+    const students = await User.find({ role: 'STUDENT', status: 'ACTIVE' });
+    const existingActiveQrs = await StudentPersonalQr.find({ status: 'ACTIVE' });
+    const existingStudentIds = new Set(existingActiveQrs.map((q) => q.studentId.toString()));
+
+    const studentsNeedingQr = students.filter((s) => !existingStudentIds.has(s._id.toString()));
+
+    let generatedCount = 0;
+    if (studentsNeedingQr.length > 0) {
+      const docsToInsert = studentsNeedingQr.map((s) => ({
+        studentId: s._id,
+        studentName: s.name,
+        studentIdNumber: s.studentIdNumber || '',
+        assignedSeatNumber: s.assignedSeatNumber || deriveFixedSeatNumber(s) || '',
+        qrToken: generateSecureQrToken(),
+        status: 'ACTIVE' as const,
+        generationCount: 1,
+      }));
+      await StudentPersonalQr.insertMany(docsToInsert);
+      generatedCount = docsToInsert.length;
+    }
+
+    const totalActive = existingActiveQrs.length + generatedCount;
+
+    await logAdminAction({
+      adminId: req.user?.id,
+      adminEmail: req.user?.email,
+      adminName: req.user?.name,
+      action: 'BULK_QR_ACTIVATED',
+      targetType: 'QR',
+      details: {
+        newlyGenerated: generatedCount,
+        alreadyActive: existingActiveQrs.length,
+        totalActive,
+      },
+    });
+
+    return sendSuccess(
+      res,
+      {
+        totalActive,
+        newlyActivatedCount: generatedCount,
+        alreadyActiveCount: existingActiveQrs.length,
+      },
+      `All ${totalActive} active students now have active Personal QR codes.`,
+      200
     );
   } catch (error) {
     next(error);
@@ -266,6 +352,21 @@ export const regeneratePersonalQr = async (req: Request, res: Response, next: Ne
     });
 
     console.log(`[Personal QR] Regenerated QR for student ${student.name} (${student.studentIdNumber}). Generation: ${nextGenerationCount}`);
+
+    await logAdminAction({
+      adminId,
+      adminEmail: req.user?.email,
+      adminName: req.user?.name,
+      action: 'QR_GENERATED',
+      targetId: student._id,
+      targetName: student.name,
+      targetType: 'QR',
+      details: {
+        previousActiveId: previousActive?._id,
+        nextGenerationCount,
+        assignedSeat,
+      },
+    });
 
     return sendSuccess(
       res,
