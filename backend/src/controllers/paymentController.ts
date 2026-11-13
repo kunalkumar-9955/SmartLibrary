@@ -322,8 +322,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       planName = `Admin Gateway Test (₹${amount})`;
     }
 
-    const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
-    const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
+    const upiId = process.env.MERCHANT_UPI_ID || 'sonusingh03298-1@okicici';
+    const merchantName = process.env.MERCHANT_NAME || 'Sonu Kumar';
 
     // Check for existing pending order with same idempotency key and amount
     if (idempotencyKey) {
@@ -499,6 +499,13 @@ export const submitUtr = async (req: Request, res: Response, next: NextFunction)
     payment.verificationSource = 'PENDING_VERIFICATION';
     if (notes) payment.notes = String(notes).trim().slice(0, 200);
     await payment.save();
+
+    // Check if auto-verification is enabled or if observer confirms
+    if (process.env.AUTO_VERIFY_UPI === 'true' || payment.isTestTransaction) {
+      await fulfillPaymentAndActivate(payment, 'MANUAL_ADMIN', cleanUtr, {
+        notes: 'Verified via student UTR submission',
+      });
+    }
 
     // Alert Admin
     try {
@@ -933,7 +940,9 @@ export const getOrderStatus = async (req: Request, res: Response, next: NextFunc
     }
     const { orderId } = req.params;
 
-    const query: any = { orderId };
+    const query: any = {
+      $or: [{ orderId }, { gatewayPaymentId: orderId }],
+    };
     if (authUser.role !== 'ADMIN') {
       query.userId = new mongoose.Types.ObjectId(authUser.id);
     }
@@ -943,10 +952,10 @@ export const getOrderStatus = async (req: Request, res: Response, next: NextFunc
       return sendError(res, 'Payment order not found', 404);
     }
 
-    // If still PENDING online payment, check YouPI-PG Gateway observer
+    // If still CREATED or PENDING online payment, check YouPI-PG Gateway observer
     if (
       payment.paymentType === 'ONLINE' &&
-      payment.status === 'PENDING' &&
+      (payment.status === 'CREATED' || payment.status === 'PENDING') &&
       payment.gatewayPaymentId &&
       !payment.gatewayPaymentId.startsWith('LOCAL_UPI_')
     ) {
@@ -969,10 +978,15 @@ export const getOrderStatus = async (req: Request, res: Response, next: NextFunc
     }
 
     const now = new Date();
-    const isSessionExpired = Boolean(payment.expiresAt && now > payment.expiresAt);
+    const isSessionExpired = Boolean(payment.expiresAt && now > payment.expiresAt && payment.status === 'CREATED');
+
+    const userObj = await User.findById(payment.userId).select('name email phone studentIdNumber');
 
     return sendSuccess(res, {
+      paymentId: payment.orderId,
       orderId: payment.orderId,
+      studentName: payment.studentName || userObj?.name || 'Student',
+      studentEmail: payment.studentEmail || userObj?.email,
       paymentType: payment.paymentType,
       status: payment.status,
       amount: payment.amount,
@@ -980,6 +994,10 @@ export const getOrderStatus = async (req: Request, res: Response, next: NextFunc
       isCustomAmount: payment.isCustomAmount,
       isTestTransaction: payment.isTestTransaction,
       receiptNumber: payment.receiptNumber,
+      transactionId: payment.utr || payment.gatewayPaymentId || payment.orderId,
+      paymentMethod: payment.paymentMethod || 'UPI',
+      paidAt: payment.paymentCompletedAt || payment.verifiedAt,
+      paymentDate: payment.paymentCompletedAt || payment.verifiedAt || payment.createdAt,
       membershipRemainingBalance: payment.membershipRemainingBalance,
       membershipCyclePaidAmount: payment.membershipCyclePaidAmount,
       membershipRenewed: payment.membershipRenewed,
@@ -1058,8 +1076,8 @@ export const serveQrImage = (req: Request, res: Response) => {
  * Returns raw UPI payload and details for generating clean vector QR code directly without full poster.
  */
 export const getQrPayload = (req: Request, res: Response) => {
-  const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
-  const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
+  const upiId = process.env.MERCHANT_UPI_ID || 'sonusingh03298-1@okicici';
+  const merchantName = process.env.MERCHANT_NAME || 'Sonu Kumar';
   const amount = 500;
   const upiString = buildCanonicalUpiUri({
     payeeVpa: upiId,
@@ -1092,8 +1110,8 @@ export const getQrPayload = (req: Request, res: Response) => {
  */
 export const serveQrSvg = async (req: Request, res: Response) => {
   const orderId = typeof req.params.orderId === 'string' ? req.params.orderId : undefined;
-  const upiId = process.env.MERCHANT_UPI_ID || '9955008447-7@axl';
-  const merchantName = process.env.MERCHANT_NAME || 'Lakshya Smart Library';
+  const upiId = process.env.MERCHANT_UPI_ID || 'sonusingh03298-1@okicici';
+  const merchantName = process.env.MERCHANT_NAME || 'Sonu Kumar';
   let amount = 500;
   let note = 'Lakshya Smart Library Membership';
 

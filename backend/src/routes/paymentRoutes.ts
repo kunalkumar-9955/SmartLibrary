@@ -39,6 +39,7 @@ router.post('/create-order', authenticate, createOrder);
 router.post('/submit-utr', authenticate, submitUtr);
 router.post('/offline-request', authenticate, upload.single('receipt'), submitOfflineRequest);
 router.get('/status/:orderId', authenticate, getOrderStatus);
+router.get('/:orderId/status', authenticate, getOrderStatus);
 router.get('/receipt/:orderId', authenticate, getPaymentReceipt);
 router.post('/refund-request/:orderId', authenticate, requestRefund);
 

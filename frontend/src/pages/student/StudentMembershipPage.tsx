@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CheckCircle2,
@@ -19,14 +20,29 @@ import {
   Check,
   Lock,
   ExternalLink,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { paymentService } from '../../services/api';
 import { PaymentItem, PaymentReceipt, StudentMembershipOverview } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Modal } from '../../components/Modal';
 import { formatISTDateTime } from '../../utils/timeHelper';
 
+interface PaymentSuccessDetails {
+  studentName: string;
+  paymentId: string;
+  transactionId: string;
+  amountPaid: number;
+  paymentDate: string;
+  paymentMethod: string;
+  planName: string;
+  membershipRenewed?: boolean;
+}
+
 export const StudentMembershipPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, refreshUser } = useAuth();
   const [membershipData, setMembershipData] = useState<StudentMembershipOverview | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -58,6 +74,8 @@ export const StudentMembershipPage: React.FC = () => {
   const [submittingUtr, setSubmittingUtr] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState<'INITIAL' | 'PENDING' | 'SUCCESS' | 'FAILED'>('INITIAL');
   const [checkingStatus, setCheckingStatus] = useState(false);
+  const [paymentSuccessData, setPaymentSuccessData] = useState<PaymentSuccessDetails | null>(null);
+  const [qrDisplayMode, setQrDisplayMode] = useState<'PHOTO' | 'DYNAMIC'>('PHOTO');
 
   // Countdown / session expiry state
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -83,8 +101,8 @@ export const StudentMembershipPage: React.FC = () => {
 
   const { success, error, info } = useToast();
 
-  const DEFAULT_UPI_ID = '9955008447-7@axl';
-  const DEFAULT_MERCHANT_NAME = 'Lakshya Smart Library';
+  const DEFAULT_UPI_ID = 'sonusingh03298-1@okicici';
+  const DEFAULT_MERCHANT_NAME = 'Sonu Kumar';
   const activeUpiId = activeOrder?.upiId || DEFAULT_UPI_ID;
   const activeMerchant = activeOrder?.merchantName || DEFAULT_MERCHANT_NAME;
   const effectiveAmount = activeOrder?.amount
@@ -227,20 +245,36 @@ export const StudentMembershipPage: React.FC = () => {
       setCheckingStatus(true);
       const res = await paymentService.getOrderStatus(orderId);
       if (res.data.success) {
-        const status = res.data.data.status;
+        const orderData = res.data.data;
+        const status = orderData.status;
+
         if (status === 'SUCCESS' || status === 'APPROVED') {
           setOnlineStatus('SUCCESS');
+          setPaymentSuccessData({
+            studentName: orderData.studentName || user?.name || 'Student',
+            paymentId: orderData.orderId,
+            transactionId: orderData.transactionId || orderData.utr || orderData.orderId,
+            amountPaid: orderData.amount,
+            paymentDate: orderData.paymentDate || orderData.paymentCompletedAt || orderData.verifiedAt || new Date().toISOString(),
+            paymentMethod: orderData.paymentMethod || 'Online UPI',
+            planName: orderData.planName || 'Monthly Library Membership',
+            membershipRenewed: orderData.membershipRenewed,
+          });
+
           if (showToast) {
             success(
-              res.data.data.membershipRenewed
+              orderData.membershipRenewed
                 ? 'Payment Verified & Monthly Membership Renewed!'
-                : `Payment of ₹${res.data.data.amount} Verified & Credited to Balance!`
+                : `Payment of ₹${orderData.amount} Verified & Credited to Balance!`
             );
           }
-          fetchData();
-        } else if (status === 'FAILED' || status === 'CANCELLED') {
+          await fetchData();
+          if (refreshUser) await refreshUser();
+        } else if (status === 'FAILED' || status === 'CANCELLED' || status === 'REJECTED') {
           setOnlineStatus('FAILED');
           if (showToast) error('Payment was marked as failed or cancelled.');
+        } else if (orderData.isSessionExpired) {
+          setSessionExpired(true);
         } else {
           if (showToast) info('Payment is being verified. Please wait a moment.');
         }
@@ -259,16 +293,18 @@ export const StudentMembershipPage: React.FC = () => {
       activeTab === 'ONLINE' &&
       activeOrder?.orderId &&
       onlineStatus !== 'SUCCESS' &&
-      onlineStatus !== 'FAILED'
+      onlineStatus !== 'FAILED' &&
+      !sessionExpired
     ) {
+      // Fast polling (3 seconds) for instant payment status detection
       interval = setInterval(() => {
         pollStatus(activeOrder.orderId, false);
-      }, 15000);
+      }, 3000);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isModalOpen, activeTab, activeOrder, onlineStatus]);
+  }, [isModalOpen, activeTab, activeOrder, onlineStatus, sessionExpired]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -905,49 +941,147 @@ export const StudentMembershipPage: React.FC = () => {
                   )}
 
                   {onlineStatus === 'SUCCESS' ? (
-                    <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-6 text-center space-y-3">
-                      <div className="w-14 h-14 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto">
-                        <CheckCircle2 className="w-8 h-8" />
+                    /* REQUIREMENT 4: BEAUTIFUL PAYMENT SUCCESS SCREEN */
+                    <div className="bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-6 sm:p-7 text-center space-y-4 animate-fade-in shadow-sm">
+                      {/* Green Success Animation / Icon */}
+                      <div className="w-16 h-16 bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-md shadow-emerald-500/20 animate-bounce">
+                        <CheckCircle2 className="w-10 h-10" />
                       </div>
-                      <h4 className="text-lg font-bold text-slate-900 dark:text-white">Payment Confirmed!</h4>
-                      <p className="text-xs text-slate-600 dark:text-slate-300">
-                        {activeOrder?.isCustomAmount
-                          ? `Your partial payment of ₹${activeOrder?.amount} has been verified and credited towards your membership balance.`
-                          : `Your ₹500 payment has been verified. Your membership has been renewed for 1 calendar month.`}
-                      </p>
-                      <div className="flex gap-2 pt-2">
-                        {activeOrder?.orderId && (
-                          <button
-                            type="button"
-                            onClick={() => handleViewReceipt(activeOrder.orderId)}
-                            className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
-                          >
-                            <Receipt className="w-4 h-4" />
-                            <span>View Receipt</span>
-                          </button>
-                        )}
+
+                      <div>
+                        <h4 className="text-2xl font-black text-slate-900 dark:text-white">
+                          Payment Successful!
+                        </h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                          Your payment has been received successfully.
+                        </p>
+                      </div>
+
+                      {/* Payment Details Card */}
+                      <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/60 rounded-xl p-4 text-left text-xs space-y-2 shadow-xs">
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                          <span className="font-medium">Student Name:</span>
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {paymentSuccessData?.studentName || user?.name || 'Student'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                          <span className="font-medium">Payment ID:</span>
+                          <span className="font-mono font-bold text-slate-900 dark:text-white">
+                            {paymentSuccessData?.paymentId || activeOrder?.orderId || '—'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                          <span className="font-medium">Transaction ID / UTR:</span>
+                          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            {paymentSuccessData?.transactionId || manualUtr || activeOrder?.orderId || 'CONFIRMED'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                          <span className="font-medium">Amount Paid:</span>
+                          <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                            ₹{paymentSuccessData?.amountPaid ?? (activeOrder?.amount || 500)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                          <span className="font-medium">Payment Date:</span>
+                          <span className="font-medium text-slate-800 dark:text-slate-200">
+                            {formatISTDateTime(paymentSuccessData?.paymentDate || new Date().toISOString())}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                          <span className="font-medium">Payment Method:</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">
+                            Online UPI (Google Pay / PhonePe / Paytm)
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <span className="font-medium">Membership Plan:</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            {paymentSuccessData?.planName || activeOrder?.planName || 'Monthly Library Membership'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Display: Your Lakshya Smart Library membership has been activated successfully */}
+                      <div className="p-3 bg-emerald-100/70 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+                        🎉 Your Lakshya Smart Library membership has been activated successfully.
+                      </div>
+
+                      {/* Buttons: [Go to My Membership] & [Go to Dashboard] */}
+                      <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
                         <button
                           type="button"
                           onClick={() => {
                             setIsModalOpen(false);
                             fetchData();
                           }}
+                          className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 transition cursor-pointer"
+                        >
+                          Go to My Membership
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsModalOpen(false);
+                            navigate('/student/dashboard');
+                          }}
+                          className="flex-1 py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                        >
+                          Go to Dashboard
+                        </button>
+                      </div>
+                    </div>
+                  ) : onlineStatus === 'FAILED' ? (
+                    /* REQUIREMENT 8: PAYMENT FAILURE SCREEN */
+                    <div className="bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-2xl p-6 text-center space-y-4 animate-fade-in shadow-sm">
+                      <div className="w-16 h-16 bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto shadow-md">
+                        <AlertCircle className="w-10 h-10" />
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-black text-slate-900 dark:text-white">
+                          Payment Failed!
+                        </h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                          Your payment could not be verified. Please try again.
+                        </p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOnlineStatus('INITIAL');
+                            setSessionExpired(false);
+                            createOnlineOrder(paymentMode === 'CUSTOM_AMOUNT' ? Number(customAmountInput) : 500);
+                          }}
                           className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
                         >
-                          Done
+                          Retry Payment
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('OFFLINE')}
+                          className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl border border-slate-300 dark:border-slate-700 transition cursor-pointer"
+                        >
+                          Choose Another Payment Method
                         </button>
                       </div>
                     </div>
                   ) : sessionExpired ? (
-                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-center space-y-3">
-                      <div className="w-14 h-14 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto">
-                        <Clock className="w-8 h-8" />
+                    /* REQUIREMENT 9: PAYMENT EXPIRY */
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-6 text-center space-y-4 animate-fade-in shadow-sm">
+                      <div className="w-16 h-16 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto shadow-md">
+                        <Clock className="w-10 h-10" />
                       </div>
-                      <h4 className="text-lg font-bold text-slate-900 dark:text-white">Payment Session Expired</h4>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                        This payment QR session has expired (5 minutes). If you already paid, the payment will still be verified automatically. Generate a new QR only if you haven't paid yet.
-                      </p>
-                      <div className="flex gap-2 pt-2">
+                      <div>
+                        <h4 className="text-xl font-black text-slate-900 dark:text-white">
+                          Payment Session Expired.
+                        </h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                          Your payment was not confirmed within the 5-minute session window.
+                        </p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
                         <button
                           type="button"
                           onClick={() => pollStatus(activeOrder!.orderId, true)}
@@ -955,7 +1089,7 @@ export const StudentMembershipPage: React.FC = () => {
                           className="flex-1 py-2.5 bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${checkingStatus ? 'animate-spin' : ''}`} />
-                          <span>Check If Paid</span>
+                          <span>Check If Already Paid</span>
                         </button>
                         <button
                           type="button"
@@ -975,13 +1109,48 @@ export const StudentMembershipPage: React.FC = () => {
                     <>
                       {(onlineStatus !== 'INITIAL' || paymentMode !== 'CUSTOM_AMOUNT') ? (
                         <>
-                          {/* Dynamic Vector QR Display */}
+                          {/* QR Code Container with Toggle */}
                           <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center">
+                            {/* QR Mode Switcher */}
+                            <div className="flex items-center justify-center gap-1.5 mb-3 p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                              <button
+                                type="button"
+                                onClick={() => setQrDisplayMode('PHOTO')}
+                                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition flex items-center gap-1 cursor-pointer ${
+                                  qrDisplayMode === 'PHOTO'
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                }`}
+                              >
+                                <ImageIcon className="w-3 h-3" />
+                                <span>Official GPay QR</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setQrDisplayMode('DYNAMIC')}
+                                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition flex items-center gap-1 cursor-pointer ${
+                                  qrDisplayMode === 'DYNAMIC'
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                }`}
+                              >
+                                <QrCode className="w-3 h-3" />
+                                <span>Dynamic UPI QR</span>
+                              </button>
+                            </div>
+
+                            {/* QR Code Image / SVG Display */}
                             <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-200 inline-flex items-center justify-center mx-auto overflow-hidden">
                               {creatingOrder ? (
                                 <div className="w-[190px] h-[190px] flex items-center justify-center">
                                   <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                                 </div>
+                              ) : qrDisplayMode === 'PHOTO' ? (
+                                <img
+                                  src="/QR.jpeg"
+                                  alt="Sonu Kumar Google Pay QR"
+                                  className="w-[190px] h-[190px] object-contain rounded-lg"
+                                />
                               ) : activeOrder?.qrSvg ? (
                                 <div
                                   className="w-[190px] h-[190px] flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
@@ -1000,7 +1169,7 @@ export const StudentMembershipPage: React.FC = () => {
                             {/* Scannable Badge */}
                             <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                               <ShieldCheck className="w-3.5 h-3.5" />
-                              <span>Scan with PhonePe, GPay, Paytm, or BHIM</span>
+                              <span>Scan with Google Pay, PhonePe, Paytm, or any UPI</span>
                             </div>
 
                             {/* Countdown Timer */}
@@ -1015,8 +1184,8 @@ export const StudentMembershipPage: React.FC = () => {
                             {/* Verified Payment Details */}
                             <div className="mt-3 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs space-y-1.5 text-left">
                               <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
-                                <span>Library / Payee:</span>
-                                <span className="font-semibold text-slate-900 dark:text-white">{activeMerchant}</span>
+                                <span>Payee / Beneficiary:</span>
+                                <span className="font-bold text-slate-900 dark:text-white">{activeMerchant}</span>
                               </div>
                               <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
                                 <span>Payable Amount:</span>
@@ -1027,7 +1196,7 @@ export const StudentMembershipPage: React.FC = () => {
                               <div className="flex justify-between items-center text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
                                 <span>UPI ID:</span>
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-mono font-medium text-slate-900 dark:text-white text-[11px]">
+                                  <span className="font-mono font-bold text-slate-900 dark:text-white text-[11px]">
                                     {activeUpiId}
                                   </span>
                                   <button
@@ -1054,29 +1223,29 @@ export const StudentMembershipPage: React.FC = () => {
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                               <a
-                                href={getAppIntentUrl('phonepe')}
-                                className="py-2.5 px-2 text-center bg-[#5f259f] hover:bg-[#4e1d85] text-white text-xs font-bold rounded-xl border border-[#5f259f] transition flex items-center justify-center gap-1.5"
-                              >
-                                <span className="text-base">💜</span>
-                                <span>PhonePe</span>
-                              </a>
-                              <a
                                 href={getAppIntentUrl('gpay')}
-                                className="py-2.5 px-2 text-center bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1.5"
+                                className="py-2.5 px-2 text-center bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1.5 shadow-xs"
                               >
                                 <span className="text-base">🟢</span>
                                 <span>Google Pay</span>
                               </a>
                               <a
+                                href={getAppIntentUrl('phonepe')}
+                                className="py-2.5 px-2 text-center bg-[#5f259f] hover:bg-[#4e1d85] text-white text-xs font-bold rounded-xl border border-[#5f259f] transition flex items-center justify-center gap-1.5 shadow-xs"
+                              >
+                                <span className="text-base">💜</span>
+                                <span>PhonePe</span>
+                              </a>
+                              <a
                                 href={getAppIntentUrl('paytm')}
-                                className="py-2.5 px-2 text-center bg-[#00baf2] hover:bg-[#009fd8] text-white text-xs font-bold rounded-xl border border-[#00baf2] transition flex items-center justify-center gap-1.5"
+                                className="py-2.5 px-2 text-center bg-[#00baf2] hover:bg-[#009fd8] text-white text-xs font-bold rounded-xl border border-[#00baf2] transition flex items-center justify-center gap-1.5 shadow-xs"
                               >
                                 <span className="text-base">💙</span>
                                 <span>Paytm</span>
                               </a>
                               <a
                                 href={getAppIntentUrl('upi')}
-                                className="py-2.5 px-2 text-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border border-emerald-600 transition flex items-center justify-center gap-1.5"
+                                className="py-2.5 px-2 text-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border border-emerald-600 transition flex items-center justify-center gap-1.5 shadow-xs"
                               >
                                 <span className="text-base">⚡</span>
                                 <span>Any UPI</span>
@@ -1097,50 +1266,44 @@ export const StudentMembershipPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Real-time Settlement Polling Notice */}
+                          {/* Live Settlement Status Notice */}
                           <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1">
                             <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
                               <Clock className={`w-4 h-4 text-emerald-500 ${checkingStatus ? 'animate-spin' : ''}`} />
-                              <span>Live Settlement Verification Active</span>
+                              <span>Live Verification Active (Checking every 3s)</span>
                             </div>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                              Our system detects the incoming bank settlement and automatically confirms your payment.
+                              {submittingUtr || checkingStatus
+                                ? 'Payment is being verified. Please wait...'
+                                : 'Our system checks for payment confirmation and automatically updates your membership.'}
                             </p>
                           </div>
 
-                          {/* Fallback UTR Entry */}
-                          <div className="pt-1 text-center">
-                            <button
-                              type="button"
-                              onClick={() => setShowManualUtrFallback(!showManualUtrFallback)}
-                              className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline cursor-pointer"
-                            >
-                              {showManualUtrFallback ? 'Hide Reference Input' : 'Having trouble? Enter UPI reference manually'}
-                            </button>
-                            {showManualUtrFallback && (
-                              <form onSubmit={handleManualUtrSubmit} className="mt-2.5 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2 text-left">
-                                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                                  12-Digit UPI Transaction Reference (UTR)
-                                </label>
-                                <div className="flex gap-2">
-                                  <input
-                                    type="text"
-                                    maxLength={30}
-                                    placeholder="e.g. 123456789012"
-                                    value={manualUtr}
-                                    onChange={(e) => setManualUtr(e.target.value)}
-                                    className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white"
-                                  />
-                                  <button
-                                    type="submit"
-                                    disabled={submittingUtr || !manualUtr.trim()}
-                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg disabled:opacity-50 transition"
-                                  >
-                                    {submittingUtr ? 'Submitting...' : 'Submit'}
-                                  </button>
-                                </div>
-                              </form>
-                            )}
+                          {/* Fast 12-Digit UTR Submission Form */}
+                          <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 space-y-2 text-left">
+                            <label className="block text-xs font-bold text-slate-900 dark:text-white">
+                              Already Paid? Enter 12-Digit UPI Reference (UTR)
+                            </label>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Found in your Google Pay, PhonePe, or Paytm payment receipt details.
+                            </p>
+                            <form onSubmit={handleManualUtrSubmit} className="flex gap-2 pt-1">
+                              <input
+                                type="text"
+                                maxLength={30}
+                                placeholder="e.g. 531829103921"
+                                value={manualUtr}
+                                onChange={(e) => setManualUtr(e.target.value)}
+                                className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                              />
+                              <button
+                                type="submit"
+                                disabled={submittingUtr || !manualUtr.trim()}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm shadow-emerald-600/20"
+                              >
+                                {submittingUtr ? 'Verifying...' : 'Verify Now'}
+                              </button>
+                            </form>
                           </div>
                         </>
                       ) : (
