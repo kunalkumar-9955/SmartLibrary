@@ -1227,26 +1227,26 @@ export const AdminPaymentsPage: React.FC = () => {
                 {/* 1-Tap App Intent Buttons */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <a
-                    href={`phonepe://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
-                    className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                    href={`intent://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}#Intent;scheme=upi;package=com.phonepe.app;end`}
+                    className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer"
                   >
                     PhonePe
                   </a>
                   <a
-                    href={`gpay://upi/pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
-                    className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                    href={`intent://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`}
+                    className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer"
                   >
                     Google Pay
                   </a>
                   <a
-                    href={`paytmmp://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
-                    className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                    href={`intent://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}#Intent;scheme=upi;package=net.one97.paytm;end`}
+                    className="py-2 px-2 text-center text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer"
                   >
                     Paytm
                   </a>
                   <a
                     href={`upi://pay?pa=chhotu6826-1@oksbi&pn=Chhotu%20Kumar&am=${testOrder.amount}&cu=INR&tn=Gateway%20Test&tr=${testOrder.orderId}`}
-                    className="py-2 px-2 text-center text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-800"
+                    className="py-2 px-2 text-center text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-800 cursor-pointer"
                   >
                     Any UPI
                   </a>

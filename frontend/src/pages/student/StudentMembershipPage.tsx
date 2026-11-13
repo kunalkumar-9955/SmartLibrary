@@ -118,13 +118,57 @@ export const StudentMembershipPage: React.FC = () => {
     setTimeout(() => setCopiedUpi(false), 2500);
   };
 
-  const getAppIntentUrl = (appScheme: string) => {
-    const params = `pa=${encodeURIComponent(activeUpiId)}&pn=${encodeURIComponent(activeMerchant)}&am=${effectiveAmount}&cu=INR&tn=${encodeURIComponent(activeOrder?.isCustomAmount || paymentMode === 'CUSTOM_AMOUNT' ? 'Lakshya Library Payment' : 'Lakshya Smart Library Membership')}${activeOrder?.orderId ? `&tr=${activeOrder.orderId}` : ''}`;
-    if (appScheme === 'upi') return `upi://pay?${params}`;
-    if (appScheme === 'phonepe') return `phonepe://pay?${params}`;
-    if (appScheme === 'gpay') return `gpay://upi/pay?${params}`;
-    if (appScheme === 'paytm') return `paytmmp://pay?${params}`;
-    return `upi://pay?${params}`;
+  const getAppIntentUrl = (appScheme: 'phonepe' | 'gpay' | 'paytm' | 'upi') => {
+    const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+    const amt = activeOrder?.amount ? Number(activeOrder.amount).toFixed(2) : effectiveAmount;
+    const payeeVpa = activeOrder?.upiId || DEFAULT_UPI_ID;
+    const payeeName = activeOrder?.merchantName || DEFAULT_MERCHANT_NAME;
+    const note = activeOrder?.isCustomAmount || paymentMode === 'CUSTOM_AMOUNT'
+      ? 'Lakshya Library Payment'
+      : 'Lakshya Smart Library Membership';
+    const orderRef = activeOrder?.orderId || '';
+
+    const params = `pa=${encodeURIComponent(payeeVpa)}&pn=${encodeURIComponent(payeeName)}&am=${amt}&cu=INR&tn=${encodeURIComponent(note)}${orderRef ? `&tr=${encodeURIComponent(orderRef)}` : ''}`;
+
+    if (!isAndroid) {
+      // Universal standard UPI scheme for iOS & other environments
+      return `upi://pay?${params}`;
+    }
+
+    // Official Android Intent URI with verified package targets
+    switch (appScheme) {
+      case 'phonepe':
+        return `intent://pay?${params}#Intent;scheme=upi;package=com.phonepe.app;end`;
+      case 'gpay':
+        return `intent://pay?${params}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
+      case 'paytm':
+        return `intent://pay?${params}#Intent;scheme=upi;package=net.one97.paytm;end`;
+      case 'upi':
+      default:
+        return `upi://pay?${params}`;
+    }
+  };
+
+  const handleAppClick = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    appName: string,
+    appScheme: 'phonepe' | 'gpay' | 'paytm' | 'upi'
+  ) => {
+    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!isMobile) {
+      e.preventDefault();
+      info(`Direct ${appName} launch is only available on mobile phones. Please scan the QR code above using your UPI app.`);
+      return;
+    }
+
+    if (!activeOrder?.orderId) {
+      e.preventDefault();
+      createOnlineOrder();
+      return;
+    }
+
+    info(`Launching ${appName}... Please complete the payment of ₹${effectiveAmount} and return here.`);
+    pollStatus(activeOrder.orderId, false);
   };
 
   const handleManualUtrSubmit = async (e: React.FormEvent) => {
@@ -303,6 +347,27 @@ export const StudentMembershipPage: React.FC = () => {
       if (interval) clearInterval(interval);
     };
   }, [isModalOpen, activeTab, activeOrder, onlineStatus, sessionExpired]);
+
+  // Immediate payment re-verification when returning to tab from UPI app
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        isModalOpen &&
+        activeTab === 'ONLINE' &&
+        activeOrder?.orderId &&
+        onlineStatus === 'PENDING'
+      ) {
+        pollStatus(activeOrder.orderId, false);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [isModalOpen, activeTab, activeOrder, onlineStatus]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -1194,6 +1259,7 @@ export const StudentMembershipPage: React.FC = () => {
                             {/* Primary Mobile Action: Open UPI Intent Directly */}
                             <a
                               href={getAppIntentUrl('upi')}
+                              onClick={(e) => handleAppClick(e, 'UPI App', 'upi')}
                               className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer"
                             >
                               <span>⚡</span>
@@ -1204,37 +1270,40 @@ export const StudentMembershipPage: React.FC = () => {
                             <div className="grid grid-cols-3 gap-2">
                               <a
                                 href={getAppIntentUrl('phonepe')}
-                                className="py-2 px-2 text-center bg-[#5f259f] hover:bg-[#4e1d85] text-white text-xs font-bold rounded-xl border border-[#5f259f] transition flex items-center justify-center gap-1.5 shadow-xs"
+                                onClick={(e) => handleAppClick(e, 'PhonePe', 'phonepe')}
+                                className="py-2.5 px-2 text-center bg-[#5f259f] hover:bg-[#4e1d85] text-white text-xs font-bold rounded-xl border border-[#5f259f] transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                               >
                                 <span className="text-sm">💜</span>
                                 <span>PhonePe</span>
                               </a>
                               <a
                                 href={getAppIntentUrl('gpay')}
-                                className="py-2 px-2 text-center bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1.5 shadow-xs"
+                                onClick={(e) => handleAppClick(e, 'Google Pay', 'gpay')}
+                                className="py-2.5 px-2 text-center bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                               >
                                 <span className="text-sm">🟢</span>
                                 <span>GPay</span>
                               </a>
                               <a
                                 href={getAppIntentUrl('paytm')}
-                                className="py-2 px-2 text-center bg-[#00baf2] hover:bg-[#009fd8] text-white text-xs font-bold rounded-xl border border-[#00baf2] transition flex items-center justify-center gap-1.5 shadow-xs"
+                                onClick={(e) => handleAppClick(e, 'Paytm', 'paytm')}
+                                className="py-2.5 px-2 text-center bg-[#00baf2] hover:bg-[#009fd8] text-white text-xs font-bold rounded-xl border border-[#00baf2] transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                               >
                                 <span className="text-sm">💙</span>
                                 <span>Paytm</span>
                               </a>
                             </div>
 
-                            {/* Help Box Explaining the PhonePe Gallery Screenshot Notice */}
+                            {/* Help Box with Clear Guidance */}
                             <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-xl text-left space-y-1">
                               <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900 dark:text-blue-200">
                                 <Info className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                                <span>Mobile Payment Guide</span>
+                                <span>Direct Mobile Payment &amp; Scanner</span>
                               </div>
                               <p className="text-[11px] text-blue-800/90 dark:text-blue-300/90 leading-relaxed">
-                                • <strong>Fastest on Phone:</strong> Tap <strong>Pay Directly with Installed UPI App</strong> above to open PhonePe or Google Pay automatically without taking screenshots.
+                                • <strong>Direct App Launch:</strong> Tap PhonePe, GPay, or Paytm to open your UPI app directly with ₹{effectiveAmount} prefilled.
                                 <br />
-                                • <strong>Gallery Scan in PhonePe:</strong> If you scan a screenshot in PhonePe and it displays <em>&quot;You can pay up to ₹2,000 with QR codes via gallery&quot;</em>, this is standard NPCI security guidance, not an error. Simply tap <strong>DISMISS</strong> in PhonePe to proceed with your ₹{effectiveAmount} payment.
+                                • <strong>QR Scanner Fallback:</strong> You can also scan the Dynamic QR code above using PhonePe / GPay scanner.
                               </p>
                             </div>
                           </div>
