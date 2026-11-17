@@ -294,7 +294,7 @@ describe('Student Management, Seat Release, QR Revocation & Safe Fresh Start', (
 
   describe('5. Safe Fresh Start Maintenance & Demo Data Cleanup', () => {
     it('purges only demo transactions, revokes active demo QRs, and preserves genuine records', async () => {
-      // 1. Insert a dummy test payment
+      // 1. Insert dummy test payments (both LIB-ORD-TEST and LIB-TEST formats)
       const testPayment = await Payment.create({
         userId: studentAId,
         studentName: 'Rohan Sharma',
@@ -306,6 +306,22 @@ describe('Student Management, Seat Release, QR Revocation & Safe Fresh Start', (
         status: 'PENDING',
         paymentType: 'ONLINE',
         planId: 'test-gateway',
+        planName: 'Gateway Test',
+        planDurationMonths: 1,
+        isTestTransaction: true,
+      });
+
+      const testPayment2 = await Payment.create({
+        userId: studentAId,
+        studentName: 'Rohan Sharma',
+        studentEmail: 'rohan@example.com',
+        orderId: 'LIB-TEST-789012',
+        amount: 1,
+        amountPaise: 100,
+        currency: 'INR',
+        status: 'PENDING',
+        paymentType: 'ONLINE',
+        planId: 'gateway-test',
         planName: 'Gateway Test',
         planDurationMonths: 1,
         isTestTransaction: true,
@@ -339,7 +355,7 @@ describe('Student Management, Seat Release, QR Revocation & Safe Fresh Start', (
 
       const data = res.body.data;
       expect(data.snapshotId).toBeDefined();
-      expect(data.summary.paymentsCleanedCount).toBe(1);
+      expect(data.summary.paymentsCleanedCount).toBe(2);
       expect(data.summary.paymentsPreservedCount).toBe(1);
       expect(data.summary.qrsRevokedCount).toBeGreaterThanOrEqual(1);
       expect(data.summary.studentsPreservedCount).toBe(1);

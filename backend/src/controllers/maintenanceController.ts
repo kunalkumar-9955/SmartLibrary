@@ -1,7 +1,25 @@
 import { Request, Response, NextFunction } from 'express';
-import { executeSafeFreshStart, getCleanupHistory } from '../services/maintenanceService';
+import { executeSafeFreshStart, getCleanupHistory, previewFreshStart } from '../services/maintenanceService';
 import { AuditLog } from '../models/AuditLog';
 import { sendSuccess, sendError } from '../utils/response';
+
+/**
+ * Admin: Get preview of records that will be cleaned vs preserved
+ * GET /api/maintenance/fresh-start/preview
+ */
+export const getFreshStartPreview = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const admin = req.user;
+    if (!admin || admin.role !== 'ADMIN') {
+      return sendError(res, 'Access denied. Administrator privileges required.', 403);
+    }
+
+    const preview = await previewFreshStart();
+    return sendSuccess(res, preview);
+  } catch (error) {
+    next(error);
+  }
+};
 
 /**
  * Admin: Execute safe fresh start cleanup
@@ -86,3 +104,4 @@ export const getAuditLogs = async (req: Request, res: Response, next: NextFuncti
     next(error);
   }
 };
+

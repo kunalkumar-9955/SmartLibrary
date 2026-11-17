@@ -60,3 +60,4 @@ AuditLogSchema.index({ action: 1, createdAt: -1 });
 AuditLogSchema.index({ targetId: 1, createdAt: -1 });
 
 export const AuditLog = mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
+

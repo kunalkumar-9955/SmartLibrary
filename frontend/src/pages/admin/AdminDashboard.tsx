@@ -35,8 +35,24 @@ export const AdminDashboard: React.FC = () => {
   const [isFreshStartOpen, setIsFreshStartOpen] = useState(false);
   const [isRunningFreshStart, setIsRunningFreshStart] = useState(false);
   const [freshStartResult, setFreshStartResult] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   const { success, error } = useToast();
+
+  const loadFreshStartPreview = async () => {
+    try {
+      setLoadingPreview(true);
+      const res = await maintenanceService.getPreview();
+      if (res.data.success) {
+        setPreviewData(res.data.data);
+      }
+    } catch (err: any) {
+      console.error('Failed to load fresh start preview', err);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
 
   const loadDashboard = async () => {
     try {
@@ -118,7 +134,9 @@ export const AdminDashboard: React.FC = () => {
           <button
             onClick={() => {
               setFreshStartResult(null);
+              setPreviewData(null);
               setIsFreshStartOpen(true);
+              loadFreshStartPreview();
             }}
             className="px-3.5 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
@@ -569,6 +587,37 @@ export const AdminDashboard: React.FC = () => {
                     </li>
                   </ul>
                 </div>
+
+                {loadingPreview ? (
+                  <div className="p-4 text-center text-slate-400 text-xs font-semibold">
+                    Scanning database for test transactions and active QR tokens...
+                  </div>
+                ) : previewData ? (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                    <p className="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">
+                      Live Database Impact Preview:
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 bg-rose-50 dark:bg-rose-950/30 rounded-lg border border-rose-200 dark:border-rose-800">
+                        <p className="text-[10px] text-rose-600 font-bold uppercase">Test Payments to Remove</p>
+                        <p className="text-lg font-black text-rose-700 dark:text-rose-300">
+                          {previewData.paymentsToClean.length}
+                        </p>
+                      </div>
+                      <div className="p-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                        <p className="text-[10px] text-amber-600 font-bold uppercase">Active QRs to Revoke</p>
+                        <p className="text-lg font-black text-amber-700 dark:text-amber-300">
+                          {previewData.qrsToRevoke.length}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+                      <p>✅ <span className="font-bold">Genuine Payments Preserved:</span> {previewData.preservedCounts?.genuinePayments}</p>
+                      <p>✅ <span className="font-bold">Registered Students Preserved:</span> {previewData.preservedCounts?.students}</p>
+                      <p>✅ <span className="font-bold">Attendance Records Preserved:</span> {previewData.preservedCounts?.attendanceRecords}</p>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[11px]">
                   <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">Audit Record:</p>

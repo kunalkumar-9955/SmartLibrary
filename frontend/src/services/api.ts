@@ -154,6 +154,7 @@ export const seatService = {
 
 // Maintenance & Fresh Start Services
 export const maintenanceService = {
+  getPreview: () => api.get('/maintenance/fresh-start/preview'),
   runFreshStart: () => api.post('/maintenance/fresh-start'),
   getSnapshots: () => api.get('/maintenance/snapshots'),
   getAuditLogs: (params?: any) => api.get('/maintenance/audit-logs', { params }),

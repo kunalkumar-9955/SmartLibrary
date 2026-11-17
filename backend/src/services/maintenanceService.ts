@@ -30,6 +30,55 @@ export interface FreshStartResult {
   revokedQrTokens: string[];
 }
 
+export const getTestPaymentFilter = () => ({
+  $or: [
+    { isTestTransaction: true },
+    { planId: { $in: ['test-gateway', 'gateway-test'] } },
+    { orderId: { $regex: /^(LIB-TEST|LIB-ORD-TEST-)/i } },
+    { idempotencyKey: { $regex: /_test_/i } },
+    { studentEmail: { $in: ['admin@example.com', 'student@example.com'] } },
+    { notes: 'Gateway Test' },
+  ],
+});
+
+export const previewFreshStart = async () => {
+  const testPaymentFilter = getTestPaymentFilter();
+  const demoPayments = await Payment.find(testPaymentFilter).lean();
+  const genuinePaymentsCount = await Payment.countDocuments({
+    _id: { $nin: demoPayments.map((p) => p._id) },
+  });
+
+  const activeQrs = await StudentPersonalQr.find({ status: 'ACTIVE' }).lean();
+  const studentsCount = await User.countDocuments({ role: 'STUDENT' });
+  const attendanceCount = await Attendance.countDocuments();
+
+  return {
+    paymentsToClean: demoPayments.map((p) => ({
+      _id: p._id,
+      orderId: p.orderId,
+      amount: p.amount,
+      planName: p.planName,
+      studentName: p.studentName,
+      studentEmail: p.studentEmail,
+      isTestTransaction: p.isTestTransaction,
+      createdAt: p.createdAt,
+    })),
+    qrsToRevoke: activeQrs.map((q) => ({
+      _id: q._id,
+      studentName: q.studentName,
+      studentIdNumber: q.studentIdNumber,
+      assignedSeatNumber: q.assignedSeatNumber,
+      generationCount: q.generationCount,
+      qrToken: q.qrToken,
+    })),
+    preservedCounts: {
+      genuinePayments: genuinePaymentsCount,
+      students: studentsCount,
+      attendanceRecords: attendanceCount,
+    },
+  };
+};
+
 export const executeSafeFreshStart = async (
   options: FreshStartOptions
 ): Promise<FreshStartResult> => {
@@ -38,16 +87,7 @@ export const executeSafeFreshStart = async (
   const adminIdObj = options.adminId ? new mongoose.Types.ObjectId(String(options.adminId)) : undefined;
 
   // 1. Identify confidently-known demo & test payments
-  const testPaymentFilter = {
-    $or: [
-      { isTestTransaction: true },
-      { planId: 'test-gateway' },
-      { orderId: { $regex: /^LIB-ORD-TEST-/i } },
-      { idempotencyKey: { $regex: /_test_/i } },
-      { studentEmail: { $in: ['admin@example.com', 'student@example.com'] } },
-      { notes: 'Gateway Test' },
-    ],
-  };
+  const testPaymentFilter = getTestPaymentFilter();
 
   const demoPayments = await Payment.find(testPaymentFilter);
   const demoPaymentIds = demoPayments.map((p) => p._id.toString());
@@ -162,3 +202,4 @@ export const executeSafeFreshStart = async (
 export const getCleanupHistory = async () => {
   return MaintenanceSnapshot.find().sort({ createdAt: -1 }).limit(20);
 };
+

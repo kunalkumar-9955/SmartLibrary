@@ -49,3 +49,4 @@ export const MaintenanceSnapshot = mongoose.model<IMaintenanceSnapshot>(
   'MaintenanceSnapshot',
   MaintenanceSnapshotSchema
 );
+
