@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import confetti from 'canvas-confetti';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CheckCircle2,
@@ -129,10 +130,35 @@ export const StudentMembershipPage: React.FC = () => {
         notes: 'Submitted via student dashboard',
       });
       if (res.data.success) {
-        success('Reference submitted. Verification is in progress.');
-        setManualUtr('');
-        setShowManualUtrFallback(false);
-        pollStatus(activeOrder.orderId, false);
+        const orderData = res.data.data;
+        if (orderData.status === 'SUCCESS' || orderData.status === 'APPROVED') {
+          setOnlineStatus('SUCCESS');
+          setPaymentSuccessData({
+            studentName: orderData.studentName || user?.name || 'Student',
+            paymentId: orderData.orderId,
+            transactionId: orderData.utr || orderData.orderId,
+            amountPaid: orderData.amount,
+            paymentDate: orderData.paymentCompletedAt || new Date().toISOString(),
+            paymentMethod: 'UPI QR Scan',
+            planName: orderData.planName || 'Monthly Library Membership',
+            membershipRenewed: orderData.membershipRenewed ?? true,
+          });
+          confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
+          success(
+            orderData.membershipRenewed
+              ? 'Payment Verified & Monthly Membership Renewed!'
+              : `Payment of ₹${orderData.amount} Verified & Credited to Balance!`
+          );
+          setManualUtr('');
+          setShowManualUtrFallback(false);
+          await fetchData();
+          if (refreshUser) await refreshUser();
+        } else {
+          success('Reference submitted. Verification is in progress.');
+          setManualUtr('');
+          setShowManualUtrFallback(false);
+          await pollStatus(activeOrder.orderId, false);
+        }
       }
     } catch (err: any) {
       error(err.response?.data?.message || 'Failed to submit UPI reference.');
@@ -1276,29 +1302,48 @@ export const StudentMembershipPage: React.FC = () => {
                               Open PhonePe, Google Pay, or Paytm &bull; Tap <strong>Scan QR</strong> &bull; Point at this screen to pay ₹{activeOrder?.amount ? Number(activeOrder.amount).toFixed(2) : effectiveAmount}
                             </p>
 
-                            {/* Unobtrusive UTR Fallback */}
-                            <details className="mt-3 w-full text-left">
-                              <summary className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer font-medium text-center">
-                                Screen not updating? Enter 12-digit UTR manually
-                              </summary>
-                              <form onSubmit={handleManualUtrSubmit} className="mt-2 flex gap-2">
+                            {/* Instant Verification via UPI Reference (UTR) */}
+                            <div className="mt-4 w-full p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl text-left shadow-xs">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                  <span>Paid using PhonePe, GPay, or Paytm?</span>
+                                </span>
+                                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded-full">
+                                  Instant Activation
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-600 dark:text-slate-300 mb-2.5 leading-relaxed">
+                                Enter the 12-digit UPI Reference Number / UTR from your payment receipt to instantly confirm payment and activate your membership:
+                              </p>
+                              <form onSubmit={handleManualUtrSubmit} className="flex gap-2">
                                 <input
                                   type="text"
                                   maxLength={30}
-                                  placeholder="12-digit UPI Reference (UTR)"
+                                  placeholder="e.g. 432109876543 (12-digit UTR)"
                                   value={manualUtr}
-                                  onChange={(e) => setManualUtr(e.target.value)}
-                                  className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                                  onChange={(e) => setManualUtr(e.target.value.replace(/[^0-9a-zA-Z]/g, ''))}
+                                  className="flex-1 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700/80 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                                 />
                                 <button
                                   type="submit"
                                   disabled={submittingUtr || !manualUtr.trim()}
-                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition cursor-pointer"
+                                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm shadow-emerald-600/30 shrink-0"
                                 >
-                                  {submittingUtr ? 'Verifying...' : 'Verify'}
+                                  {submittingUtr ? (
+                                    <>
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                      <span>Verifying...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>Confirm &amp; Activate</span>
+                                    </>
+                                  )}
                                 </button>
                               </form>
-                            </details>
+                            </div>
                           </div>
                         </div>
                       ) : (

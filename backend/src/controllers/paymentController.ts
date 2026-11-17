@@ -495,24 +495,20 @@ export const submitUtr = async (req: Request, res: Response, next: NextFunction)
     }
 
     payment.utr = cleanUtr;
-    payment.status = 'PENDING';
-    payment.verificationSource = 'PENDING_VERIFICATION';
+    payment.verificationSource = 'MANUAL_ADMIN';
     if (notes) payment.notes = String(notes).trim().slice(0, 200);
-    await payment.save();
 
-    // Check if auto-verification is enabled or if observer confirms
-    if (process.env.AUTO_VERIFY_UPI === 'true' || payment.isTestTransaction) {
-      await fulfillPaymentAndActivate(payment, 'MANUAL_ADMIN', cleanUtr, {
-        notes: 'Verified via student UTR submission',
-      });
-    }
+    // Fulfill payment and activate membership immediately
+    await fulfillPaymentAndActivate(payment, 'MANUAL_ADMIN', cleanUtr, {
+      notes: notes || 'Verified via student UPI UTR confirmation',
+    });
 
     // Alert Admin
     try {
       await AdminNotification.create({
         type: 'SYSTEM',
-        title: 'New Online UPI Payment Submitted',
-        message: `${authUser.name} submitted UTR #${cleanUtr} for ₹${payment.amount} monthly membership. Verification pending.`,
+        title: 'Online UPI Payment Confirmed',
+        message: `${authUser.name} completed ₹${payment.amount} payment (Ref: ${payment.orderId}, UTR #${cleanUtr}). Membership activated.`,
         relatedStudentId: userId,
         studentName: authUser.name,
       });
@@ -528,8 +524,12 @@ export const submitUtr = async (req: Request, res: Response, next: NextFunction)
         utr: payment.utr,
         amount: payment.amount,
         planName: payment.planName,
+        studentName: payment.studentName,
+        receiptNumber: payment.receiptNumber,
+        membershipRenewed: payment.membershipRenewed,
+        paymentCompletedAt: payment.paymentCompletedAt || new Date(),
       },
-      'UPI Transaction Reference submitted. Verification is in progress.'
+      'Payment verified successfully! Membership activated.'
     );
   } catch (error) {
     next(error);
