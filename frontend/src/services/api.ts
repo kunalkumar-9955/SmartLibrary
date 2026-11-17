@@ -110,6 +110,8 @@ export const personalQrService = {
     api.post('/personal-qr/generate-bulk'),
   activateBulk: () =>
     api.post('/personal-qr/activate-bulk'),
+  resetAll: () =>
+    api.post('/personal-qr/reset-all'),
   regenerate: (studentId: string) =>
     api.post(`/personal-qr/regenerate/${studentId}`),
   getStudentQr: (studentId: string) =>

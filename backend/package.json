@@ -13,6 +13,7 @@
     "seed": "tsx src/seed/seedData.ts",
     "fresh-start": "node scripts/executeFreshStart.js",
     "clear-payments": "node scripts/clearPayments.js",
+    "reset-qrs": "node scripts/resetQrs.js",
     "test": "jest --detectOpenHandles --forceExit"
   },
   "dependencies": {

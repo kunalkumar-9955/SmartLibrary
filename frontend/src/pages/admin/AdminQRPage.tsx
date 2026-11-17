@@ -23,6 +23,8 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react';
 
 export const AdminQRPage: React.FC = () => {
@@ -40,6 +42,8 @@ export const AdminQRPage: React.FC = () => {
   const [selectedStudent, setSelectedStudent] = useState<StudentWithQr | null>(null);
   const [isCardModalOpen, setIsCardModalOpen] = useState<boolean>(false);
   const [isPrintSheetOpen, setIsPrintSheetOpen] = useState<boolean>(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
+  const [isResetting, setIsResetting] = useState<boolean>(false);
 
   // Hidden container for offscreen rendering & canvas conversion
   const hiddenQrRef = useRef<HTMLDivElement>(null);
@@ -157,6 +161,23 @@ export const AdminQRPage: React.FC = () => {
       error(err.response?.data?.message || 'Bulk QR activation failed');
     } finally {
       setIsBulkActivating(false);
+    }
+  };
+
+  // 3c. Reset All QRs to Initial "Not Generated" Starting Phase
+  const handleResetAll = async () => {
+    try {
+      setIsResetting(true);
+      const res = await personalQrService.resetAll();
+      if (res.data.success) {
+        success(res.data.message || 'All personal QR codes have been reset to starting phase (Not Generated)!');
+        setIsResetModalOpen(false);
+        await fetchStudents();
+      }
+    } catch (err: any) {
+      error(err.response?.data?.message || 'Failed to reset QR codes');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -491,6 +512,17 @@ export const AdminQRPage: React.FC = () => {
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>{isBulkActivating ? 'Activating...' : 'Bulk Activate QRs'}</span>
           </button>
+
+          {summary.activeQrsCount > 0 && (
+            <button
+              onClick={() => setIsResetModalOpen(true)}
+              className="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-rose-600/30 cursor-pointer"
+              title="Reset all generated QRs back to starting phase (Not generated)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset QRs to Starting Phase</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsPrintSheetOpen(true)}
@@ -843,6 +875,56 @@ export const AdminQRPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Reset All QRs Confirmation Modal */}
+      {isResetModalOpen && (
+        <Modal
+          isOpen={isResetModalOpen}
+          onClose={() => setIsResetModalOpen(false)}
+          title="Reset All QRs to Starting Phase"
+          maxWidth="md"
+        >
+          <div className="space-y-4 text-xs font-sans">
+            <div className="p-4 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-200 dark:border-rose-900 text-rose-900 dark:text-rose-100 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-black text-sm">Reset All Student QRs to Initial "Not Generated" State?</p>
+                <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-1 leading-relaxed">
+                  This will remove all existing test QR codes (such as Gen #5 and Gen #1) and return all {summary.totalStudents} students back to the initial <strong>Missing QR (Not generated)</strong> starting phase.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5 text-slate-700 dark:text-slate-300 text-[11px]">
+              <p className="font-bold text-slate-900 dark:text-white">Safety Protections:</p>
+              <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400">
+                <li>A complete recoverable backup snapshot (<span className="font-mono font-bold">MaintenanceSnapshot</span>) is automatically saved.</li>
+                <li>Student accounts, registered IDs, login passwords, attendance logs, and table seat assignments remain <strong>100% intact</strong>.</li>
+                <li>After resetting, you can click <strong>"Generate All Missing ({summary.totalStudents})"</strong> and <strong>"Bulk Activate QRs"</strong> whenever you are ready to issue fresh Gen #1 QR codes for production.</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isResetting}
+                onClick={handleResetAll}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {isResetting ? 'Resetting QRs...' : 'Confirm & Reset to Starting Phase'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Global CSS for Clean Vector Printing */}
       <style>{`

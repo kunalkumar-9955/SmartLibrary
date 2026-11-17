@@ -4,6 +4,7 @@ import {
   generatePersonalQr,
   generateBulkPersonalQrs,
   activateBulkPersonalQrs,
+  resetAllPersonalQrs,
   regeneratePersonalQr,
   getStudentPersonalQr,
   scanPersonalQr,
@@ -20,6 +21,7 @@ router.use(authenticate);
 router.get('/students', requireRole('ADMIN'), listStudentsWithQr);
 router.post('/generate-bulk', requireRole('ADMIN'), generateBulkPersonalQrs);
 router.post('/activate-bulk', requireRole('ADMIN'), activateBulkPersonalQrs);
+router.post('/reset-all', requireRole('ADMIN'), resetAllPersonalQrs);
 router.post('/generate/:studentId', requireRole('ADMIN'), generatePersonalQr);
 router.post('/regenerate/:studentId', requireRole('ADMIN'), regeneratePersonalQr);
 router.get('/student/:studentId', getStudentPersonalQr);

@@ -715,3 +715,74 @@ export const scanPersonalQr = async (req: Request, res: Response, next: NextFunc
     next(error);
   }
 };
+
+/**
+ * Admin: Reset all student personal QR codes back to the initial "Not Generated" starting phase
+ * POST /api/personal-qr/reset-all
+ */
+export const resetAllPersonalQrs = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const admin = req.user;
+    if (!admin || admin.role !== 'ADMIN') {
+      return sendError(res, 'Access denied. Administrator privileges required.', 403);
+    }
+
+    const existingQrs = await StudentPersonalQr.find({}).lean();
+    const count = existingQrs.length;
+
+    // Create a safety snapshot in MaintenanceSnapshot
+    const { MaintenanceSnapshot } = await import('../models/MaintenanceSnapshot');
+    const snapshot = await MaintenanceSnapshot.create({
+      snapshotType: 'PRE_CLEANUP_DEMO_DATA',
+      adminId: admin.id,
+      adminEmail: admin.email,
+      summary: {
+        paymentsCleanedCount: 0,
+        paymentsPreservedCount: 0,
+        qrsRevokedCount: count,
+        studentsPreservedCount: await User.countDocuments({ role: 'STUDENT' }),
+        attendancePreservedCount: await Attendance.countDocuments(),
+        notes: `All student personal QR codes reset to initial 'Not Generated' starting phase by ${admin.email}. Total ${count} QR record(s) removed.`,
+      },
+      revokedQrIds: existingQrs.map((q) => q.qrToken),
+      rawSnapshotData: {
+        revokedQrs: existingQrs.map((q) => ({
+          studentId: q.studentId,
+          studentName: q.studentName,
+          studentIdNumber: q.studentIdNumber,
+          assignedSeatNumber: q.assignedSeatNumber,
+          generationCount: q.generationCount,
+          qrToken: q.qrToken,
+        })),
+      },
+    });
+
+    // Delete all records from StudentPersonalQr so all students return to "Not generated" / "Missing QR" starting phase
+    await StudentPersonalQr.deleteMany({});
+
+    // Log admin audit action
+    await logAdminAction({
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.name,
+      action: 'QR_REVOKED',
+      targetType: 'QR',
+      details: {
+        action: 'RESET_ALL_QRS_TO_STARTING_PHASE',
+        resetCount: count,
+        snapshotId: snapshot._id.toString(),
+      },
+    });
+
+    return sendSuccess(
+      res,
+      {
+        resetCount: count,
+        snapshotId: snapshot._id.toString(),
+      },
+      `Successfully reset all ${count} student QR codes back to starting phase (Not Generated). You can now generate fresh Gen #1 QR codes.`
+    );
+  } catch (error) {
+    next(error);
+  }
+};
