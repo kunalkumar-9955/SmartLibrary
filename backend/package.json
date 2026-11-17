@@ -12,6 +12,7 @@
     "start": "node dist/server.js",
     "seed": "tsx src/seed/seedData.ts",
     "fresh-start": "node scripts/executeFreshStart.js",
+    "clear-payments": "node scripts/clearPayments.js",
     "test": "jest --detectOpenHandles --forceExit"
   },
   "dependencies": {

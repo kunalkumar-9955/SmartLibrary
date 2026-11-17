@@ -11,6 +11,7 @@ export interface FreshStartOptions {
   adminEmail?: string;
   adminName?: string;
   ipAddress?: string;
+  clearAllPayments?: boolean;
 }
 
 export interface FreshStartResult {
@@ -41,18 +42,22 @@ export const getTestPaymentFilter = () => ({
   ],
 });
 
-export const previewFreshStart = async () => {
-  const testPaymentFilter = getTestPaymentFilter();
-  const demoPayments = await Payment.find(testPaymentFilter).lean();
-  const genuinePaymentsCount = await Payment.countDocuments({
-    _id: { $nin: demoPayments.map((p) => p._id) },
-  });
+export const previewFreshStart = async (options?: { clearAllPayments?: boolean }) => {
+  const clearAll = options?.clearAllPayments === true;
+  const testPaymentFilter = clearAll ? {} : getTestPaymentFilter();
+  const demoPayments = await Payment.find(testPaymentFilter).sort({ createdAt: -1 }).lean();
+  const genuinePaymentsCount = clearAll
+    ? 0
+    : await Payment.countDocuments({
+        _id: { $nin: demoPayments.map((p) => p._id) },
+      });
 
   const activeQrs = await StudentPersonalQr.find({ status: 'ACTIVE' }).lean();
   const studentsCount = await User.countDocuments({ role: 'STUDENT' });
   const attendanceCount = await Attendance.countDocuments();
 
   return {
+    clearAllPayments: clearAll,
     paymentsToClean: demoPayments.map((p) => ({
       _id: p._id,
       orderId: p.orderId,
@@ -85,18 +90,21 @@ export const executeSafeFreshStart = async (
   const adminEmail = options.adminEmail || 'admin@lakshyalibrary.com';
   const adminName = options.adminName || 'Library Admin';
   const adminIdObj = options.adminId ? new mongoose.Types.ObjectId(String(options.adminId)) : undefined;
+  const clearAll = options.clearAllPayments === true;
 
-  // 1. Identify confidently-known demo & test payments
-  const testPaymentFilter = getTestPaymentFilter();
+  // 1. Identify demo & test payments (or all payments if clearAllPayments is requested)
+  const testPaymentFilter = clearAll ? {} : getTestPaymentFilter();
 
   const demoPayments = await Payment.find(testPaymentFilter);
   const demoPaymentIds = demoPayments.map((p) => p._id.toString());
   const demoPaymentOrderIds = demoPayments.map((p) => p.orderId);
 
   // Genuine payments to preserve:
-  const genuinePaymentsCount = await Payment.countDocuments({
-    _id: { $nin: demoPayments.map((p) => p._id) },
-  });
+  const genuinePaymentsCount = clearAll
+    ? 0
+    : await Payment.countDocuments({
+        _id: { $nin: demoPayments.map((p) => p._id) },
+      });
 
   // 2. Identify existing active QR codes to revoke
   const activeQrs = await StudentPersonalQr.find({ status: 'ACTIVE' });
@@ -118,7 +126,7 @@ export const executeSafeFreshStart = async (
       qrsRevokedCount: activeQrs.length,
       studentsPreservedCount,
       attendancePreservedCount,
-      notes: `Fresh start cleanup initiated by ${adminEmail}. Revoked ${activeQrs.length} active QR tokens. Removed ${demoPayments.length} demo/test payment records.`,
+      notes: `Fresh start cleanup initiated by ${adminEmail}. Revoked ${activeQrs.length} active QR tokens. Removed ${demoPayments.length} payment records (${clearAll ? 'ALL test payment history' : 'filtered demo payments'}).`,
     },
     cleanedPaymentIds: demoPaymentOrderIds,
     revokedQrIds: activeQrTokens,
@@ -142,9 +150,20 @@ export const executeSafeFreshStart = async (
     },
   });
 
-  // 4. Clean only demo/test payments
+  // 4. Clean payments
   if (demoPayments.length > 0) {
     await Payment.deleteMany({ _id: { $in: demoPayments.map((p) => p._id) } });
+  }
+
+  // If all payments were cleared, reset student payment cycle pointers
+  if (clearAll) {
+    await User.updateMany(
+      { role: 'STUDENT' },
+      {
+        $unset: { lastPaymentId: 1 },
+        $set: { currentCyclePaidAmount: 0 },
+      }
+    );
   }
 
   // 5. Revoke all existing demo/testing attendance QR tokens
@@ -177,13 +196,14 @@ export const executeSafeFreshStart = async (
       qrsRevokedCount: activeQrs.length,
       studentsPreservedCount,
       attendancePreservedCount,
+      clearAllPayments: clearAll,
     },
     ipAddress: options.ipAddress,
   });
 
   return {
     success: true,
-    message: `Safe fresh start executed successfully. Revoked ${activeQrs.length} active QR token(s) and cleaned ${demoPayments.length} test payment(s). Genuine data preserved.`,
+    message: `Safe fresh start executed successfully. Revoked ${activeQrs.length} active QR token(s) and cleaned ${demoPayments.length} payment(s).`,
     snapshotId: snapshot._id.toString(),
     summary: {
       paymentsCleanedCount: demoPayments.length,
@@ -196,6 +216,80 @@ export const executeSafeFreshStart = async (
     },
     cleanedPaymentOrderIds: demoPaymentOrderIds,
     revokedQrTokens: activeQrTokens,
+  };
+};
+
+/**
+ * Dedicated helper to clear all test/checking payment history
+ */
+export const clearAllPaymentHistory = async (
+  options: FreshStartOptions
+): Promise<{ success: boolean; message: string; deletedCount: number; snapshotId: string }> => {
+  const adminEmail = options.adminEmail || 'admin@lakshyalibrary.com';
+  const adminName = options.adminName || 'Library Admin';
+  const adminIdObj = options.adminId ? new mongoose.Types.ObjectId(String(options.adminId)) : undefined;
+
+  const allPayments = await Payment.find({}).sort({ createdAt: -1 });
+  const paymentCount = allPayments.length;
+
+  // Snapshot before deletion
+  const snapshot = await MaintenanceSnapshot.create({
+    snapshotType: 'PRE_CLEANUP_DEMO_DATA',
+    adminId: adminIdObj,
+    adminEmail,
+    summary: {
+      paymentsCleanedCount: paymentCount,
+      paymentsPreservedCount: 0,
+      qrsRevokedCount: 0,
+      studentsPreservedCount: await User.countDocuments({ role: 'STUDENT' }),
+      attendancePreservedCount: await Attendance.countDocuments(),
+      notes: `All test/checking payment history cleared by ${adminEmail}. Total ${paymentCount} payment record(s) removed.`,
+    },
+    cleanedPaymentIds: allPayments.map((p) => p.orderId),
+    rawSnapshotData: {
+      demoPayments: allPayments.map((p) => ({
+        orderId: p.orderId,
+        amount: p.amount,
+        status: p.status,
+        studentName: p.studentName,
+        studentEmail: p.studentEmail,
+        createdAt: p.createdAt,
+      })),
+    },
+  });
+
+  // Delete all payments
+  await Payment.deleteMany({});
+
+  // Reset student payment cycle pointers
+  await User.updateMany(
+    { role: 'STUDENT' },
+    {
+      $unset: { lastPaymentId: 1 },
+      $set: { currentCyclePaidAmount: 0 },
+    }
+  );
+
+  // Audit log
+  await logAdminAction({
+    adminId: adminIdObj,
+    adminEmail,
+    adminName,
+    action: 'DEMO_DATA_CLEANUP',
+    targetType: 'SYSTEM',
+    details: {
+      snapshotId: snapshot._id.toString(),
+      paymentsDeletedCount: paymentCount,
+      clearAllPayments: true,
+    },
+    ipAddress: options.ipAddress,
+  });
+
+  return {
+    success: true,
+    message: `Successfully deleted all ${paymentCount} test payment record(s). Payment ledger reset to fresh state.`,
+    deletedCount: paymentCount,
+    snapshotId: snapshot._id.toString(),
   };
 };
 

@@ -1,5 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { executeSafeFreshStart, getCleanupHistory, previewFreshStart } from '../services/maintenanceService';
+import {
+  executeSafeFreshStart,
+  getCleanupHistory,
+  previewFreshStart,
+  clearAllPaymentHistory,
+} from '../services/maintenanceService';
 import { AuditLog } from '../models/AuditLog';
 import { sendSuccess, sendError } from '../utils/response';
 
@@ -14,7 +19,8 @@ export const getFreshStartPreview = async (req: Request, res: Response, next: Ne
       return sendError(res, 'Access denied. Administrator privileges required.', 403);
     }
 
-    const preview = await previewFreshStart();
+    const clearAllPayments = req.query.clearAllPayments === 'true';
+    const preview = await previewFreshStart({ clearAllPayments });
     return sendSuccess(res, preview);
   } catch (error) {
     next(error);
@@ -23,7 +29,7 @@ export const getFreshStartPreview = async (req: Request, res: Response, next: Ne
 
 /**
  * Admin: Execute safe fresh start cleanup
- * POST /api/admin/maintenance/fresh-start
+ * POST /api/maintenance/fresh-start
  */
 export const runFreshStart = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -33,8 +39,36 @@ export const runFreshStart = async (req: Request, res: Response, next: NextFunct
     }
 
     const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress;
+    const clearAllPayments = req.body?.clearAllPayments === true;
 
     const result = await executeSafeFreshStart({
+      adminId: admin.id,
+      adminEmail: admin.email,
+      adminName: admin.name,
+      ipAddress,
+      clearAllPayments,
+    });
+
+    return sendSuccess(res, result, result.message);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin: Dedicated endpoint to clear all test/checking payment history
+ * POST /api/maintenance/clear-payments
+ */
+export const clearPaymentsController = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const admin = req.user;
+    if (!admin || admin.role !== 'ADMIN') {
+      return sendError(res, 'Access denied. Administrator privileges required.', 403);
+    }
+
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress;
+
+    const result = await clearAllPaymentHistory({
       adminId: admin.id,
       adminEmail: admin.email,
       adminName: admin.name,

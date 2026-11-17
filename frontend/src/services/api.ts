@@ -154,8 +154,9 @@ export const seatService = {
 
 // Maintenance & Fresh Start Services
 export const maintenanceService = {
-  getPreview: () => api.get('/maintenance/fresh-start/preview'),
-  runFreshStart: () => api.post('/maintenance/fresh-start'),
+  getPreview: (params?: { clearAllPayments?: boolean }) => api.get('/maintenance/fresh-start/preview', { params }),
+  runFreshStart: (data?: { clearAllPayments?: boolean }) => api.post('/maintenance/fresh-start', data),
+  clearAllPayments: () => api.post('/maintenance/clear-payments'),
   getSnapshots: () => api.get('/maintenance/snapshots'),
   getAuditLogs: (params?: any) => api.get('/maintenance/audit-logs', { params }),
 };

@@ -37,13 +37,14 @@ export const AdminDashboard: React.FC = () => {
   const [freshStartResult, setFreshStartResult] = useState<any>(null);
   const [previewData, setPreviewData] = useState<any>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [clearAllPayments, setClearAllPayments] = useState(true);
 
   const { success, error } = useToast();
 
-  const loadFreshStartPreview = async () => {
+  const loadFreshStartPreview = async (allPayments: boolean = clearAllPayments) => {
     try {
       setLoadingPreview(true);
-      const res = await maintenanceService.getPreview();
+      const res = await maintenanceService.getPreview({ clearAllPayments: allPayments });
       if (res.data.success) {
         setPreviewData(res.data.data);
       }
@@ -96,7 +97,7 @@ export const AdminDashboard: React.FC = () => {
   const handleExecuteFreshStart = async () => {
     try {
       setIsRunningFreshStart(true);
-      const res = await maintenanceService.runFreshStart();
+      const res = await maintenanceService.runFreshStart({ clearAllPayments });
       if (res.data.success) {
         setFreshStartResult(res.data.data);
         success('Safe Fresh Start completed! Demo data cleaned & snapshot created.');
@@ -618,6 +619,28 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                 ) : null}
+
+                {/* Checkbox for clearing all payment checking history */}
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={clearAllPayments}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setClearAllPayments(val);
+                      loadFreshStartPreview(val);
+                    }}
+                    className="mt-0.5 rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+                  />
+                  <div>
+                    <p className="font-bold text-rose-900 dark:text-rose-200 text-xs">
+                      Clear all test & checking payment records (Recommended)
+                    </p>
+                    <p className="text-[11px] text-rose-700/90 dark:text-rose-300/80 mt-0.5 leading-relaxed">
+                      Wipes all test/checking orders (₹1, ₹10, ₹200, ₹500, etc.) from the payment history so the student ledger starts fresh at 0. A recoverable snapshot is saved automatically.
+                    </p>
+                  </div>
+                </label>
 
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[11px]">
                   <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">Audit Record:</p>

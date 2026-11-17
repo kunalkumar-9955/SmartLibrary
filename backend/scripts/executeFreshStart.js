@@ -45,10 +45,12 @@ async function run() {
   const { User } = require('../dist/models/User');
   const { Attendance } = require('../dist/models/Attendance');
 
+  const clearAllPayments = !process.argv.includes('--filtered-only');
+
   // Step 1: Preview current state
   console.log('--- 1. PRE-CLEANUP DATABASE INSPECTION ---');
-  const preview = await previewFreshStart();
-  console.log(`- Confirmed Demo/Test Payments found: ${preview.paymentsToClean.length}`);
+  const preview = await previewFreshStart({ clearAllPayments });
+  console.log(`- Payments to clean: ${preview.paymentsToClean.length} (${clearAllPayments ? 'ALL checking/test payment records' : 'filtered test payments only'})`);
   preview.paymentsToClean.forEach((p, idx) => {
     console.log(`  [${idx + 1}] Order: ${p.orderId} | ₹${p.amount} | Plan: ${p.planName || 'N/A'} | Student: ${p.studentName} (${p.studentEmail})`);
   });
@@ -69,12 +71,12 @@ async function run() {
     adminEmail: 'admin@lakshyalibrary.com',
     adminName: 'Authorized Admin CLI',
     ipAddress: '127.0.0.1 (CLI Execution)',
+    clearAllPayments,
   });
 
   console.log(`✅ Snapshot ID Created: ${result.snapshotId}`);
-  console.log(`✅ Demo Payments Cleaned: ${result.summary.paymentsCleanedCount}`);
+  console.log(`✅ Payments Cleaned: ${result.summary.paymentsCleanedCount}`);
   console.log(`✅ Attendance QR Tokens Revoked: ${result.summary.qrsRevokedCount}`);
-  console.log(`✅ Genuine Payments Preserved: ${result.summary.paymentsPreservedCount}`);
   console.log(`✅ Registered Students Retained: ${result.summary.studentsPreservedCount}`);
   console.log(`✅ Attendance History Preserved: ${result.summary.attendancePreservedCount}`);
 
@@ -82,19 +84,13 @@ async function run() {
   console.log('\n--- 3. POST-CLEANUP VERIFICATION ---');
   const remainingActiveQrs = await StudentPersonalQr.countDocuments({ status: 'ACTIVE' });
   const remainingRevokedQrs = await StudentPersonalQr.countDocuments({ status: 'REVOKED' });
-  const remainingTestPayments = await Payment.countDocuments({
-    $or: [
-      { isTestTransaction: true },
-      { planId: { $in: ['test-gateway', 'gateway-test'] } },
-      { orderId: { $regex: /^(LIB-TEST|LIB-ORD-TEST-)/i } },
-    ],
-  });
+  const remainingPayments = await Payment.countDocuments();
 
   console.log(`- Remaining Active QR codes: ${remainingActiveQrs} (Expected: 0)`);
   console.log(`- Total Revoked QR codes: ${remainingRevokedQrs}`);
-  console.log(`- Remaining Test Payments: ${remainingTestPayments} (Expected: 0)`);
+  console.log(`- Remaining Payments in Database: ${remainingPayments} (Expected: ${clearAllPayments ? 0 : 'genuine count'})`);
 
-  if (remainingActiveQrs === 0 && remainingTestPayments === 0) {
+  if (remainingActiveQrs === 0 && (!clearAllPayments || remainingPayments === 0)) {
     console.log('\n🎯 VERIFICATION RESULT: SUCCESS! Database is clean and ready for fresh launch.\n');
   } else {
     console.warn('\n⚠️ VERIFICATION RESULT: Some records may still require inspection.\n');
