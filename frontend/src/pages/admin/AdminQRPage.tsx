@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { jsPDF } from 'jspdf';
 import { personalQrService } from '../../services/api';
 import { StudentWithQr, PersonalQrListResponse } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
@@ -25,6 +26,7 @@ import {
   ShieldCheck,
   RotateCcw,
   Trash2,
+  FileText,
 } from 'lucide-react';
 
 export const AdminQRPage: React.FC = () => {
@@ -45,6 +47,8 @@ export const AdminQRPage: React.FC = () => {
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
   const [gridLayout, setGridLayout] = useState<'3x2' | '2x3'>('3x2');
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+  const [isPrintingSheets, setIsPrintingSheets] = useState<boolean>(false);
 
   // Hidden container for offscreen rendering & canvas conversion
   const hiddenQrRef = useRef<HTMLDivElement>(null);
@@ -381,6 +385,416 @@ export const AdminQRPage: React.FC = () => {
     }
   };
 
+  // Render A4 Grid Card for PDF (6 cards per A4 page, exact 2 rows x 3 columns)
+  const renderA4GridCardToCanvas = async (student: StudentWithQr): Promise<HTMLCanvasElement> => {
+    const canvas = document.createElement('canvas');
+    const width = 800;
+    const height = 840;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+
+    // Clean white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    // Dashed Scissor Guide Border
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 8]);
+    ctx.strokeRect(16, 16, width - 32, height - 32);
+    ctx.setLineDash([]);
+
+    // Corner Cut Icon / Indicator
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('✂️ Cut here', 26, 38);
+
+    // Library Header
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '900 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('LAKSHYA SMART LIBRARY', width / 2, 74);
+
+    ctx.fillStyle = '#4f46e5';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('STUDENT ATTENDANCE DESK CARD', width / 2, 98);
+
+    // Student Name
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '900 30px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const cleanName = student.name.length > 22 ? student.name.slice(0, 20) + '…' : student.name;
+    ctx.fillText(cleanName.toUpperCase(), width / 2, 145);
+
+    // Seat Badge & Student ID
+    const seatNumber = student.assignedSeatNumber || 'N/A';
+    const studentId = student.studentIdNumber || 'N/A';
+
+    // Seat pill
+    const seatPillText = `SEAT: ${seatNumber}`;
+    ctx.font = '900 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const seatMetrics = ctx.measureText(seatPillText);
+    const pillW = seatMetrics.width + 24;
+    const pillH = 34;
+    const pillX = width / 2 - pillW / 2 - 55;
+    const pillY = 168;
+
+    ctx.fillStyle = '#4f46e5';
+    ctx.beginPath();
+    ctx.roundRect(pillX, pillY, pillW, pillH, 8);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(seatPillText, pillX + pillW / 2, pillY + 24);
+
+    // ID next to seat
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 18px monospace';
+    ctx.fillText(`ID: ${studentId}`, width / 2 + 30, pillY + 24);
+
+    // QR Code Container Box
+    const qrBoxSize = 420;
+    const qrBoxX = width / 2 - qrBoxSize / 2;
+    const qrBoxY = 224;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.roundRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 16);
+    ctx.fill();
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Render SVG QR code to Canvas
+    const existingSvg = document.getElementById(`qr-svg-${student._id}`);
+    if (existingSvg) {
+      const xml = new XMLSerializer().serializeToString(existingSvg);
+      const svg64 = btoa(unescape(encodeURIComponent(xml)));
+      const image64 = 'data:image/svg+xml;base64,' + svg64;
+
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, qrBoxX + 15, qrBoxY + 15, qrBoxSize - 30, qrBoxSize - 30);
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = image64;
+      });
+    }
+
+    // Footer Text
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '900 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Scan for Entry & Exit Attendance', width / 2, 690);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('✂️ Cut along dashed border & place on desk', width / 2, 725);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px monospace';
+    ctx.fillText(`Lakshya Smart Library • Gen #${student.qr?.generationCount || 1}`, width / 2, 770);
+
+    return canvas;
+  };
+
+  // Download Multi-Page Print-Ready A4 PDF (2 Rows × 3 Columns per page)
+  const handleDownloadA4Pdf = async () => {
+    const activeOnes = students.filter((s) => s.hasActiveQr);
+    if (activeOnes.length === 0) {
+      error('No active student QR codes available to export.');
+      return;
+    }
+
+    try {
+      setIsGeneratingPdf(true);
+      const isLandscape = gridLayout === '3x2';
+      const doc = new jsPDF({
+        orientation: isLandscape ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const cardsPerPage = 6;
+      const chunks: StudentWithQr[][] = [];
+      for (let i = 0; i < activeOnes.length; i += cardsPerPage) {
+        chunks.push(activeOnes.slice(i, i + cardsPerPage));
+      }
+
+      for (let p = 0; p < chunks.length; p++) {
+        if (p > 0) {
+          doc.addPage('a4', isLandscape ? 'landscape' : 'portrait');
+        }
+
+        const chunk = chunks[p];
+        for (let i = 0; i < chunk.length; i++) {
+          const student = chunk[i];
+          const canvas = await renderA4GridCardToCanvas(student);
+          const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+          if (isLandscape) {
+            // 2 rows × 3 columns on A4 Landscape (297mm × 210mm)
+            const cardW = 89;
+            const cardH = 93.5;
+            const col = i % 3;
+            const row = Math.floor(i / 3);
+            const x = 7 + col * (cardW + 4.5);
+            const y = 7 + row * (cardH + 4.5);
+            doc.addImage(imgData, 'JPEG', x, y, cardW, cardH);
+          } else {
+            // 3 rows × 2 columns on A4 Portrait (210mm × 297mm)
+            const cardW = 92;
+            const cardH = 89;
+            const col = i % 2;
+            const row = Math.floor(i / 2);
+            const x = 7 + col * (cardW + 6);
+            const y = 8 + row * (cardH + 4.5);
+            doc.addImage(imgData, 'JPEG', x, y, cardW, cardH);
+          }
+        }
+      }
+
+      doc.save(`Lakshya_Attendance_QR_Cards_A4_${new Date().toISOString().slice(0, 10)}.pdf`);
+      success(`Downloaded A4 PDF with ${activeOnes.length} student QR cards (${chunks.length} pages)!`);
+    } catch (err: any) {
+      console.error('PDF export error:', err);
+      error('Failed to generate A4 PDF: ' + err.message);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  // Clean Dedicated Print Function via isolated iframe (zero modal cutoff)
+  const handlePrintA4Sheets = () => {
+    const activeOnes = students.filter((s) => s.hasActiveQr);
+    if (activeOnes.length === 0) {
+      error('No active student QR codes available to print.');
+      return;
+    }
+
+    try {
+      setIsPrintingSheets(true);
+      const isLandscape = gridLayout === '3x2';
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow?.document;
+      if (!doc) {
+        window.print();
+        setIsPrintingSheets(false);
+        return;
+      }
+
+      const cardsPerPage = 6;
+      const chunks: StudentWithQr[][] = [];
+      for (let i = 0; i < activeOnes.length; i += cardsPerPage) {
+        chunks.push(activeOnes.slice(i, i + cardsPerPage));
+      }
+
+      let html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Lakshya Smart Library - Attendance QR Cards</title>
+  <style>
+    @page {
+      size: ${isLandscape ? 'A4 landscape' : 'A4 portrait'};
+      margin: 6mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #ffffff;
+      color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .sheet {
+      width: ${isLandscape ? '285mm' : '198mm'};
+      height: ${isLandscape ? '196mm' : '283mm'};
+      max-height: ${isLandscape ? '196mm' : '283mm'};
+      display: grid;
+      grid-template-columns: ${isLandscape ? 'repeat(3, 89mm)' : 'repeat(2, 92mm)'};
+      grid-template-rows: ${isLandscape ? 'repeat(2, 93.5mm)' : 'repeat(3, 89mm)'};
+      gap: ${isLandscape ? '4.5mm' : '5mm'};
+      page-break-after: always;
+      break-after: page;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      overflow: hidden;
+    }
+    .sheet:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+    .card {
+      border: 1.5px dashed #475569;
+      border-radius: 10px;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      text-align: center;
+      height: 100%;
+      max-height: 100%;
+      background: #ffffff;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      width: 100%;
+    }
+    .logo {
+      width: 14px;
+      height: 14px;
+      object-fit: contain;
+    }
+    .title {
+      font-size: 8.5px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      color: #0f172a;
+      text-transform: uppercase;
+    }
+    .name {
+      font-size: 12px;
+      font-weight: 900;
+      color: #0f172a;
+      margin-top: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .badge-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      margin-top: 1px;
+    }
+    .seat-badge {
+      background: #4f46e5;
+      color: #ffffff;
+      font-size: 8.5px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid #4338ca;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .id-badge {
+      font-size: 8.5px;
+      font-family: monospace;
+      font-weight: 700;
+      color: #334155;
+    }
+    .qr-box {
+      width: 102px;
+      height: 102px;
+      margin: 1px auto;
+      padding: 3px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qr-box svg {
+      width: 94px;
+      height: 94px;
+    }
+    .footer-text {
+      font-size: 8px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.1;
+    }
+    .cut-text {
+      font-size: 7.5px;
+      color: #64748b;
+      margin-top: 1px;
+    }
+  </style>
+</head>
+<body>`;
+
+      for (const chunk of chunks) {
+        html += `<div class="sheet">`;
+        for (const student of chunk) {
+          const svgElem = document.getElementById(`qr-svg-${student._id}`);
+          const svgHtml = svgElem ? new XMLSerializer().serializeToString(svgElem) : '';
+
+          html += `
+          <div class="card">
+            <div class="header">
+              <img src="/Logo.png" class="logo" />
+              <span class="title">Lakshya Smart Library</span>
+            </div>
+            <div>
+              <div class="name">${student.name}</div>
+              <div class="badge-row">
+                <span class="seat-badge">Seat ${student.assignedSeatNumber || 'N/A'}</span>
+                <span class="id-badge">ID: ${student.studentIdNumber || 'N/A'}</span>
+              </div>
+            </div>
+            <div class="qr-box">
+              ${svgHtml}
+            </div>
+            <div>
+              <div class="footer-text">Scan for Entry & Exit Attendance</div>
+              <div class="cut-text">✂️ Cut along dashed border</div>
+            </div>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+
+      html += `</body></html>`;
+
+      doc.open();
+      doc.write(html);
+      doc.close();
+
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+          setIsPrintingSheets(false);
+        }, 3000);
+      }, 500);
+    } catch (err: any) {
+      console.error('Print iframe error:', err);
+      window.print();
+      setIsPrintingSheets(false);
+    }
+  };
+
   // Print Individual Student Card
   const handlePrintCard = (student: StudentWithQr) => {
     setSelectedStudent(student);
@@ -537,6 +951,16 @@ export const AdminQRPage: React.FC = () => {
           >
             <Printer className="w-3.5 h-3.5 text-indigo-400" />
             <span>Print All A4 Sheets</span>
+          </button>
+
+          <button
+            onClick={handleDownloadA4Pdf}
+            disabled={isGeneratingPdf || summary.activeQrsCount === 0}
+            className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+            title="Download multi-page print-ready A4 PDF (2 rows x 3 columns per page)"
+          >
+            <FileText className={`w-3.5 h-3.5 ${isGeneratingPdf ? 'animate-spin' : ''}`} />
+            <span>{isGeneratingPdf ? 'Generating PDF...' : 'Download A4 PDF'}</span>
           </button>
 
           <button
@@ -860,11 +1284,22 @@ export const AdminQRPage: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/30 cursor-pointer"
+                onClick={handleDownloadA4Pdf}
+                disabled={isGeneratingPdf}
+                className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer disabled:opacity-50"
               >
-                <Printer className="w-4 h-4" />
-                <span>Print A4 Sheets Now</span>
+                <FileText className={`w-3.5 h-3.5 ${isGeneratingPdf ? 'animate-spin' : ''}`} />
+                <span>{isGeneratingPdf ? 'Generating PDF...' : 'Download A4 PDF'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintA4Sheets}
+                disabled={isPrintingSheets}
+                className="py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/30 cursor-pointer disabled:opacity-50"
+              >
+                <Printer className={`w-3.5 h-3.5 ${isPrintingSheets ? 'animate-spin' : ''}`} />
+                <span>{isPrintingSheets ? 'Opening Print...' : 'Print A4 Sheets'}</span>
               </button>
             </div>
           </div>
