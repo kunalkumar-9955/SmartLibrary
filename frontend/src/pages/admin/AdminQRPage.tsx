@@ -44,6 +44,7 @@ export const AdminQRPage: React.FC = () => {
   const [isPrintSheetOpen, setIsPrintSheetOpen] = useState<boolean>(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
+  const [gridLayout, setGridLayout] = useState<'3x2' | '2x3'>('3x2');
 
   // Hidden container for offscreen rendering & canvas conversion
   const hiddenQrRef = useRef<HTMLDivElement>(null);
@@ -390,6 +391,11 @@ export const AdminQRPage: React.FC = () => {
   };
 
   const activeStudents = students.filter((s) => s.hasActiveQr);
+  const cardsPerPage = 6;
+  const sheetChunks: StudentWithQr[][] = [];
+  for (let i = 0; i < activeStudents.length; i += cardsPerPage) {
+    sheetChunks.push(activeStudents.slice(i, i + cardsPerPage));
+  }
 
   return (
     <div className="space-y-6 font-sans pb-16">
@@ -800,75 +806,142 @@ export const AdminQRPage: React.FC = () => {
       )}
 
       {/* =========================================================================
-          MODAL 2: A4 SHEET PRINT PREVIEW (MULTI-CARD BATCH PRINTING)
+          MODAL 2: A4 SHEET PRINT PREVIEW (2 ROWS × 3 COLUMNS BATCH PRINTING)
          ========================================================================= */}
       <Modal
         isOpen={isPrintSheetOpen}
         onClose={() => setIsPrintSheetOpen(false)}
-        title="A4 Printable Sheet (Bulk Table QR Cards)"
-        maxWidth="lg"
+        title="A4 Printable Sheet (Desk Attendance QR Cards)"
+        maxWidth="2xl"
       >
-        <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between bg-indigo-50 dark:bg-indigo-950/40 p-4 rounded-2xl border border-indigo-200 dark:border-indigo-900">
+        <div className="p-6 space-y-4 font-sans">
+          {/* Header Controls Bar */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-indigo-50 dark:bg-indigo-950/40 p-4 rounded-2xl border border-indigo-200 dark:border-indigo-900">
             <div>
-              <h4 className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
-                Ready to Print {activeStudents.length} Active Cards
-              </h4>
-              <p className="text-[11px] text-indigo-700 dark:text-indigo-300 mt-0.5">
-                Formatted in a 4-card grid per A4 page with dashed scissor cut guidelines.
+              <div className="flex items-center gap-2">
+                <span className="p-1 rounded-md bg-indigo-600 text-white font-bold text-xs">A4</span>
+                <h4 className="text-xs font-black text-indigo-950 dark:text-indigo-100 uppercase tracking-wide">
+                  Ready to Print {activeStudents.length} Active Cards ({sheetChunks.length} Sheet{sheetChunks.length === 1 ? '' : 's'})
+                </h4>
+              </div>
+              <p className="text-[11px] text-indigo-700 dark:text-indigo-300 mt-1">
+                Standard <strong>2 Rows × 3 Columns (6 Cards per Sheet)</strong> with scissors cut lines and high-contrast scannable QR.
               </p>
             </div>
-            <button
-              onClick={() => window.print()}
-              className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md shadow-indigo-600/30 cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print A4 Sheets Now</span>
-            </button>
+
+            <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
+              {/* Layout Switcher */}
+              <div className="flex bg-white dark:bg-slate-900 rounded-xl p-1 border border-indigo-200 dark:border-indigo-800 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setGridLayout('3x2')}
+                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                    gridLayout === '3x2'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-indigo-600'
+                  }`}
+                  title="2 Rows × 3 Columns on Landscape A4"
+                >
+                  2 Rows × 3 Cols (Landscape)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGridLayout('2x3')}
+                  className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                    gridLayout === '2x3'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-indigo-600'
+                  }`}
+                  title="3 Rows × 2 Columns on Portrait A4"
+                >
+                  3 Rows × 2 Cols (Portrait)
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/30 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print A4 Sheets Now</span>
+              </button>
+            </div>
           </div>
 
-          {/* Scrollable Preview Grid */}
+          {/* Printable Container / Screen Preview */}
           <div
-            id="printable-a4-sheet"
-            className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto p-4 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800"
+            id="printable-a4-container"
+            className="space-y-6 max-h-[65vh] overflow-y-auto p-4 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800"
           >
-            {activeStudents.map((student) => (
-              <div
-                key={student._id}
-                className="bg-white text-slate-900 border-2 border-dashed border-slate-300 rounded-2xl p-4 text-center relative shadow-xs flex flex-col justify-between"
-              >
-                <div className="flex items-center justify-center gap-1.5 mb-1.5">
-                  <img src="/Logo.png" alt="Logo" className="w-5 h-5 object-contain" />
-                  <span className="text-[11px] font-black tracking-tight text-slate-900">
-                    LAKSHYA SMART LIBRARY
+            {sheetChunks.map((chunk, pageIndex) => (
+              <div key={pageIndex} className="space-y-2">
+                {/* Screen Preview Sheet Header (hidden on print) */}
+                <div className="print-no-show flex items-center justify-between text-xs font-bold text-slate-500 px-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                    A4 Sheet {pageIndex + 1} of {sheetChunks.length} ({chunk.length} Cards)
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-400">
+                    {gridLayout === '3x2' ? '2 Rows × 3 Columns (Landscape)' : '3 Rows × 2 Columns (Portrait)'}
                   </span>
                 </div>
 
-                <div>
-                  <h5 className="font-black text-sm text-slate-900 truncate">
-                    {student.name}
-                  </h5>
-                  <p className="text-[10px] font-mono font-bold text-slate-500">
-                    ID: {student.studentIdNumber || 'N/A'}
-                  </p>
-                  <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-indigo-600 text-white font-bold text-[10px] my-1">
-                    Seat: {student.assignedSeatNumber || 'N/A'}
-                  </div>
-                </div>
+                {/* The Actual A4 Sheet Grid */}
+                <div
+                  className={`a4-page-sheet bg-white p-3 sm:p-4 rounded-xl border border-slate-300 shadow-sm ${
+                    gridLayout === '3x2'
+                      ? 'grid grid-cols-1 sm:grid-cols-3 gap-3'
+                      : 'grid grid-cols-1 sm:grid-cols-2 gap-3'
+                  }`}
+                >
+                  {chunk.map((student) => (
+                    <div
+                      key={student._id}
+                      className="qr-desk-card bg-white text-slate-900 border-2 border-dashed border-slate-300 rounded-xl p-2.5 text-center relative shadow-xs flex flex-col justify-between"
+                    >
+                      {/* Top: Branding */}
+                      <div className="flex items-center justify-center gap-1.5 pt-0.5">
+                        <img src="/Logo.png" alt="Logo" className="w-4 h-4 object-contain" />
+                        <span className="text-[10px] font-black tracking-wider text-slate-900 uppercase">
+                          LAKSHYA SMART LIBRARY
+                        </span>
+                      </div>
 
-                <div className="w-36 h-36 mx-auto bg-white p-2 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center my-2">
-                  <QRCodeSVG
-                    value={student.qr?.qrPayloadString || student.qr?.qrToken || ''}
-                    size={128}
-                    level="H"
-                  />
-                </div>
+                      {/* Student Name & Details */}
+                      <div className="my-1">
+                        <h5 className="font-black text-xs text-slate-900 truncate" title={student.name}>
+                          {student.name}
+                        </h5>
+                        <div className="flex items-center justify-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-600 text-white font-bold text-[9px]">
+                            Seat {student.assignedSeatNumber || 'N/A'}
+                          </span>
+                          <span className="text-[9px] font-mono font-bold text-slate-600">
+                            ID: {student.studentIdNumber || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
 
-                <div>
-                  <p className="text-[10px] font-bold text-slate-800">
-                    Scan for Entry & Exit Attendance
-                  </p>
-                  <p className="text-[9px] text-slate-400">✂️ Cut along dashed border</p>
+                      {/* QR Code Container (Full Visibility & Crisp SVG) */}
+                      <div className="w-[104px] h-[104px] mx-auto bg-white p-1 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center my-1 shrink-0">
+                        <QRCodeSVG
+                          value={student.qr?.qrPayloadString || student.qr?.qrToken || ''}
+                          size={96}
+                          level="H"
+                          includeMargin={false}
+                        />
+                      </div>
+
+                      {/* Bottom: Instructions & Cut Line */}
+                      <div className="pb-0.5">
+                        <p className="text-[9px] font-bold text-slate-800 leading-tight">
+                          Scan for Entry &amp; Exit Attendance
+                        </p>
+                        <p className="text-[8px] text-slate-400 mt-0.5">✂️ Cut along dashed border</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
@@ -929,38 +1002,99 @@ export const AdminQRPage: React.FC = () => {
       {/* Global CSS for Clean Vector Printing */}
       <style>{`
         @media print {
+          @page {
+            size: ${gridLayout === '3x2' ? 'A4 landscape' : 'A4 portrait'};
+            margin: 6mm;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            color: black !important;
+            width: 100% !important;
+            height: auto !important;
+          }
           body * {
             visibility: hidden;
           }
-          #printable-single-card,
-          #printable-single-card *,
-          #printable-a4-sheet,
-          #printable-a4-sheet * {
-            visibility: visible;
-          }
-          #printable-single-card {
-            position: fixed;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            width: 90mm;
-            border: 2px dashed #94a3b8 !important;
-            padding: 8mm !important;
-          }
-          #printable-a4-sheet {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            display: grid !important;
-            grid-template-columns: repeat(2, 1fr) !important;
-            gap: 12mm !important;
-            background: white !important;
-            padding: 8mm !important;
-          }
-          @page {
-            size: A4 portrait;
-            margin: 10mm;
+          ${
+            isCardModalOpen
+              ? `
+              #printable-single-card,
+              #printable-single-card * {
+                visibility: visible;
+              }
+              #printable-single-card {
+                position: fixed;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: 90mm;
+                border: 2px dashed #64748b !important;
+                padding: 6mm !important;
+                background: white !important;
+                border-radius: 16px !important;
+              }
+              `
+              : `
+              #printable-a4-container,
+              #printable-a4-container * {
+                visibility: visible;
+              }
+              #printable-a4-container {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100% !important;
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                max-height: none !important;
+                overflow: visible !important;
+              }
+              .a4-page-sheet {
+                width: 100% !important;
+                height: ${gridLayout === '3x2' ? '194mm' : '280mm'} !important;
+                max-height: ${gridLayout === '3x2' ? '194mm' : '280mm'} !important;
+                display: grid !important;
+                grid-template-columns: ${gridLayout === '3x2' ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)'} !important;
+                grid-template-rows: ${gridLayout === '3x2' ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)'} !important;
+                gap: 5mm !important;
+                padding: 2mm !important;
+                box-sizing: border-box !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                border: none !important;
+                box-shadow: none !important;
+                background: white !important;
+              }
+              .a4-page-sheet:last-child {
+                page-break-after: auto !important;
+                break-after: auto !important;
+              }
+              .qr-desk-card {
+                box-sizing: border-box !important;
+                border: 2px dashed #94a3b8 !important;
+                border-radius: 12px !important;
+                padding: 6px 8px !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                text-align: center !important;
+                height: 100% !important;
+                max-height: 100% !important;
+                overflow: hidden !important;
+                background: white !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+              }
+              .print-no-show {
+                display: none !important;
+              }
+              `
           }
         }
       `}</style>
