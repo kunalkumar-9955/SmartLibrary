@@ -67,6 +67,7 @@ export const StudentMembershipPage: React.FC = () => {
     merchantName?: string;
     qrSvg?: string;
     receiptNumber?: string;
+    utr?: string;
   } | null>(null);
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [showManualUtrFallback, setShowManualUtrFallback] = useState(false);
@@ -75,6 +76,8 @@ export const StudentMembershipPage: React.FC = () => {
   const [onlineStatus, setOnlineStatus] = useState<'INITIAL' | 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED'>('INITIAL');
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [paymentSuccessData, setPaymentSuccessData] = useState<PaymentSuccessDetails | null>(null);
+  const [submittedUtr, setSubmittedUtr] = useState<string>('');
+  const [paymentRejectionReason, setPaymentRejectionReason] = useState<string>('');
 
   // Countdown / session expiry state
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -154,7 +157,10 @@ export const StudentMembershipPage: React.FC = () => {
           await fetchData();
           if (refreshUser) await refreshUser();
         } else {
-          success('Reference submitted. Verification is in progress.');
+          // Awaiting Administrator Verification
+          setSubmittedUtr(manualUtr.trim());
+          setOnlineStatus('PROCESSING');
+          success('UPI reference submitted! Awaiting library administration approval.');
           setManualUtr('');
           setShowManualUtrFallback(false);
           await pollStatus(activeOrder.orderId, false);
@@ -194,6 +200,8 @@ export const StudentMembershipPage: React.FC = () => {
     setIsModalOpen(true);
     setOrderError(null);
     setOnlineStatus('INITIAL');
+    setSubmittedUtr('');
+    setPaymentRejectionReason('');
     setOfflineSubmitted(false);
     setActiveOrder(null);
 
@@ -287,9 +295,13 @@ export const StudentMembershipPage: React.FC = () => {
           if (refreshUser) await refreshUser();
         } else if (status === 'PROCESSING' || status === 'PENDING_VERIFICATION') {
           setOnlineStatus('PROCESSING');
+          if (orderData.utr) setSubmittedUtr(orderData.utr);
         } else if (status === 'FAILED' || status === 'CANCELLED' || status === 'REJECTED') {
           setOnlineStatus('FAILED');
-          if (showToast) error('Payment was marked as failed or cancelled.');
+          if (orderData.adminRejectionReason) {
+            setPaymentRejectionReason(orderData.adminRejectionReason);
+          }
+          if (showToast) error(orderData.adminRejectionReason || 'Payment was marked as rejected or cancelled.');
         } else if (orderData.isSessionExpired) {
           setSessionExpired(true);
         } else {
@@ -733,9 +745,9 @@ export const StudentMembershipPage: React.FC = () => {
                             <Clock className="w-3 h-3" /> Pending Review
                           </span>
                         )}
-                        {s === 'PENDING' && (
+                        {(s === 'PENDING' || s === 'PROCESSING') && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
-                            <Clock className="w-3 h-3 animate-pulse" /> Processing
+                            <Clock className="w-3 h-3 animate-spin" /> Pending Verification
                           </span>
                         )}
                         {(s === 'REJECTED' || s === 'FAILED' || s === 'EXPIRED' || s === 'CANCELLED') && (
@@ -1087,37 +1099,101 @@ export const StudentMembershipPage: React.FC = () => {
                       </div>
                     </div>
                   ) : onlineStatus === 'PROCESSING' ? (
-                    /* PAYMENT PROCESSING SCREEN */
-                    <div className="bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 rounded-2xl p-6 text-center space-y-4 animate-fade-in shadow-sm">
-                      <div className="w-16 h-16 bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 rounded-full flex items-center justify-center mx-auto shadow-md">
-                        <RefreshCw className="w-10 h-10 animate-spin" />
+                    /* PAYMENT VERIFICATION IN PROGRESS SCREEN (OPTION 1) */
+                    <div className="bg-gradient-to-b from-amber-50/90 to-amber-100/40 dark:from-amber-950/40 dark:to-slate-900 border-2 border-amber-300 dark:border-amber-700/80 rounded-2xl p-6 sm:p-7 text-center space-y-4 animate-fade-in shadow-md">
+                      <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-amber-200 dark:bg-amber-900/40 animate-ping absolute opacity-50" />
+                        <div className="w-16 h-16 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 rounded-full flex items-center justify-center relative shadow-inner">
+                          <Clock className="w-8 h-8 animate-pulse" />
+                        </div>
                       </div>
+
                       <div>
-                        <h4 className="text-xl font-black text-slate-900 dark:text-white">
-                          Payment Processing...
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border border-amber-300 dark:border-amber-700 mb-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                          <span>Awaiting Admin Verification</span>
+                        </div>
+                        <h4 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                          Payment Reference Submitted!
                         </h4>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-                          We detected payment activity. Awaiting final confirmation from your bank...
+                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 max-w-md mx-auto leading-relaxed">
+                          Your UPI reference has been sent to Library Administration. We are verifying receipt against our bank statement.
                         </p>
-                        {activeOrder?.orderId && (
-                          <p className="text-[11px] font-mono text-slate-500 mt-1">
-                            Order Ref: {activeOrder.orderId}
-                          </p>
-                        )}
+                      </div>
+
+                      {/* Submitted Details Card */}
+                      <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/60 rounded-xl p-4 text-left text-xs space-y-2.5 shadow-xs max-w-md mx-auto">
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                          <span className="font-medium">Order Reference:</span>
+                          <span className="font-mono font-bold text-slate-900 dark:text-white">
+                            {activeOrder?.orderId || '—'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                          <span className="font-medium">Amount to Verify:</span>
+                          <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                            ₹{activeOrder?.amount ? Number(activeOrder.amount).toFixed(2) : effectiveAmount}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                          <span className="font-medium">Submitted UTR / Ref:</span>
+                          <span className="font-mono font-black text-amber-600 dark:text-amber-400 text-sm tracking-wider">
+                            {submittedUtr || manualUtr || activeOrder?.utr || '—'}
+                          </span>
+                        </div>
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                          <span>Live Auto-Sync:</span>
+                          <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            Checking status every 3s
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Informational Callout */}
+                      <div className="p-3 bg-amber-100/60 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 leading-relaxed max-w-md mx-auto">
+                        💡 <strong>No need to refresh:</strong> As soon as administration approves your payment, this screen will automatically turn green and show your receipt!
+                      </div>
+
+                      {/* Manual Refresh / Check Button & Close */}
+                      <div className="flex flex-col sm:flex-row gap-2.5 pt-1 max-w-md mx-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (activeOrder?.orderId) {
+                              pollStatus(activeOrder.orderId, true);
+                            }
+                          }}
+                          disabled={checkingStatus}
+                          className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${checkingStatus ? 'animate-spin' : ''}`} />
+                          <span>{checkingStatus ? 'Checking Bank Status...' : 'Check Status Now'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsModalOpen(false);
+                            fetchData();
+                          }}
+                          className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
+                        >
+                          Wait on Dashboard
+                        </button>
                       </div>
                     </div>
                   ) : onlineStatus === 'FAILED' ? (
-                    /* PAYMENT FAILURE SCREEN */
+                    /* PAYMENT FAILURE / REJECTION SCREEN */
                     <div className="bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-2xl p-6 text-center space-y-4 animate-fade-in shadow-sm">
                       <div className="w-16 h-16 bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto shadow-md">
                         <AlertCircle className="w-10 h-10" />
                       </div>
                       <div>
                         <h4 className="text-xl font-black text-slate-900 dark:text-white">
-                          Payment Failed
+                          Payment Verification Rejected
                         </h4>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-                          Your payment could not be confirmed or was cancelled.
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-md mx-auto">
+                          {paymentRejectionReason || 'Your payment reference could not be verified in the library bank account.'}
                         </p>
                         {activeOrder?.orderId && (
                           <p className="text-[11px] font-mono text-slate-500 mt-1">
@@ -1125,13 +1201,15 @@ export const StudentMembershipPage: React.FC = () => {
                           </p>
                         )}
                       </div>
-                      <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                      <div className="flex flex-col sm:flex-row gap-2.5 pt-2 max-w-md mx-auto">
                         <button
                           type="button"
                           onClick={() => {
                             setOnlineStatus('INITIAL');
                             setSessionExpired(false);
-                            createOnlineOrder(paymentMode === 'CUSTOM_AMOUNT' ? Number(customAmountInput) : 500);
+                            setSubmittedUtr('');
+                            setPaymentRejectionReason('');
+                            createOnlineOrder(paymentMode === 'CUSTOM_AMOUNT' ? Number(customAmountInput) : 500, paymentMode === 'CUSTOM_AMOUNT');
                           }}
                           className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
                         >
@@ -1142,7 +1220,7 @@ export const StudentMembershipPage: React.FC = () => {
                           onClick={() => setActiveTab('OFFLINE')}
                           className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl border border-slate-300 dark:border-slate-700 transition cursor-pointer"
                         >
-                          Choose Another Method
+                          Pay Cash at Desk
                         </button>
                       </div>
                     </div>
@@ -1302,7 +1380,7 @@ export const StudentMembershipPage: React.FC = () => {
                               Open PhonePe, Google Pay, or Paytm &bull; Tap <strong>Scan QR</strong> &bull; Point at this screen to pay ₹{activeOrder?.amount ? Number(activeOrder.amount).toFixed(2) : effectiveAmount}
                             </p>
 
-                            {/* Instant Verification via UPI Reference (UTR) */}
+                            {/* Verification via UPI Reference (UTR) */}
                             <div className="mt-4 w-full p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl text-left shadow-xs">
                               <div className="flex items-center justify-between mb-1.5">
                                 <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -1310,11 +1388,11 @@ export const StudentMembershipPage: React.FC = () => {
                                   <span>Paid using PhonePe, GPay, or Paytm?</span>
                                 </span>
                                 <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded-full">
-                                  Instant Activation
+                                  Quick Verification
                                 </span>
                               </div>
                               <p className="text-[11px] text-slate-600 dark:text-slate-300 mb-2.5 leading-relaxed">
-                                Enter the 12-digit UPI Reference Number / UTR from your payment receipt to instantly confirm payment and activate your membership:
+                                Enter the 12-digit UPI Reference Number / UTR from your payment app to submit for verification:
                               </p>
                               <form onSubmit={handleManualUtrSubmit} className="flex gap-2">
                                 <input
@@ -1333,12 +1411,12 @@ export const StudentMembershipPage: React.FC = () => {
                                   {submittingUtr ? (
                                     <>
                                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                      <span>Verifying...</span>
+                                      <span>Submitting...</span>
                                     </>
                                   ) : (
                                     <>
                                       <Check className="w-3.5 h-3.5" />
-                                      <span>Confirm &amp; Activate</span>
+                                      <span>Submit Reference</span>
                                     </>
                                   )}
                                 </button>

@@ -480,14 +480,14 @@ export const submitUtr = async (req: Request, res: Response, next: NextFunction)
       return sendError(res, 'Payment order not found', 404);
     }
 
-    if (payment.status === 'SUCCESS') {
+    if (payment.status === 'SUCCESS' || payment.status === 'APPROVED') {
       return sendSuccess(res, payment, 'This payment is already confirmed and active');
     }
 
     // Verify duplicate UTR hasn't already been consumed by another confirmed transaction
     const existingUtr = await Payment.findOne({
       utr: cleanUtr,
-      status: 'SUCCESS',
+      status: { $in: ['SUCCESS', 'APPROVED'] },
       _id: { $ne: payment._id },
     });
     if (existingUtr) {
@@ -495,20 +495,42 @@ export const submitUtr = async (req: Request, res: Response, next: NextFunction)
     }
 
     payment.utr = cleanUtr;
-    payment.verificationSource = 'MANUAL_ADMIN';
+    payment.verificationSource = 'PENDING_VERIFICATION';
     if (notes) payment.notes = String(notes).trim().slice(0, 200);
 
-    // Fulfill payment and activate membership immediately
-    await fulfillPaymentAndActivate(payment, 'MANUAL_ADMIN', cleanUtr, {
-      notes: notes || 'Verified via student UPI UTR confirmation',
-    });
+    // If it is an Admin Gateway Test transaction, fulfill immediately for zero friction
+    if (payment.isTestTransaction) {
+      await fulfillPaymentAndActivate(payment, 'MANUAL_ADMIN', cleanUtr, {
+        notes: notes || 'Verified via test transaction confirmation',
+      });
+      return sendSuccess(
+        res,
+        {
+          orderId: payment.orderId,
+          status: payment.status,
+          utr: payment.utr,
+          amount: payment.amount,
+          planName: payment.planName,
+          studentName: payment.studentName,
+          receiptNumber: payment.receiptNumber,
+          membershipRenewed: payment.membershipRenewed,
+          paymentCompletedAt: payment.paymentCompletedAt || new Date(),
+        },
+        'Test payment verified successfully!'
+      );
+    }
 
-    // Alert Admin
+    // Option 1: Genuine student payment - require Admin 1-Click Verification
+    payment.status = 'PROCESSING';
+    payment.lastStatusUpdatedAt = new Date();
+    await payment.save();
+
+    // High-Priority Alert to Admin
     try {
       await AdminNotification.create({
         type: 'SYSTEM',
-        title: 'Online UPI Payment Confirmed',
-        message: `${authUser.name} completed ₹${payment.amount} payment (Ref: ${payment.orderId}, UTR #${cleanUtr}). Membership activated.`,
+        title: 'UPI Payment Pending Verification',
+        message: `${authUser.name} submitted UTR #${cleanUtr} for ₹${payment.amount} (Ref: ${payment.orderId}). Please verify your bank statement and approve.`,
         relatedStudentId: userId,
         studentName: authUser.name,
       });
@@ -520,16 +542,13 @@ export const submitUtr = async (req: Request, res: Response, next: NextFunction)
       res,
       {
         orderId: payment.orderId,
-        status: payment.status,
+        status: 'PROCESSING',
         utr: payment.utr,
         amount: payment.amount,
         planName: payment.planName,
         studentName: payment.studentName,
-        receiptNumber: payment.receiptNumber,
-        membershipRenewed: payment.membershipRenewed,
-        paymentCompletedAt: payment.paymentCompletedAt || new Date(),
       },
-      'Payment verified successfully! Membership activated.'
+      'UPI reference submitted successfully! Awaiting library administration verification.'
     );
   } catch (error) {
     next(error);
@@ -906,20 +925,57 @@ export const verifyPaymentAdmin = async (req: Request, res: Response, next: Next
         payment.utr,
         { adminNotes: notes }
       );
+
+      // In-App Notification to Student
+      try {
+        await StudentNotification.create({
+          studentId: payment.userId,
+          type: 'SYSTEM',
+          title: 'UPI Payment Approved & Membership Activated',
+          message: `Your payment of ₹${payment.amount} (UTR: ${payment.utr || 'N/A'}) has been verified and approved by library administration. Your membership is now active!`,
+        });
+      } catch (err: any) {
+        console.warn('Failed to notify student of payment approval:', err.message);
+      }
+
       return sendSuccess(
         res,
         {
           orderId: payment.orderId,
           status: 'SUCCESS',
+          receiptNumber: payment.receiptNumber,
           alreadyProcessed: result.alreadyProcessed,
         },
         'Payment verified and student membership activated'
       );
     } else if (action === 'REJECT') {
-      payment.status = 'FAILED';
+      payment.status = 'REJECTED';
+      payment.adminRejectionReason = notes || 'Payment reference could not be verified in library bank account.';
       payment.notes = notes || 'Rejected by Admin';
+      payment.lastStatusUpdatedAt = new Date();
       await payment.save();
-      return sendSuccess(res, { orderId: payment.orderId, status: 'FAILED' }, 'Payment marked as rejected');
+
+      // In-App Notification to Student
+      try {
+        await StudentNotification.create({
+          studentId: payment.userId,
+          type: 'SYSTEM',
+          title: 'Payment Verification Rejected',
+          message: `Your payment reference for ₹${payment.amount} could not be verified. Reason: ${payment.adminRejectionReason}`,
+        });
+      } catch (err: any) {
+        console.warn('Failed to notify student of payment rejection:', err.message);
+      }
+
+      return sendSuccess(
+        res,
+        {
+          orderId: payment.orderId,
+          status: 'REJECTED',
+          adminRejectionReason: payment.adminRejectionReason,
+        },
+        'Payment marked as rejected'
+      );
     } else {
       return sendError(res, 'Invalid action. Expected "APPROVE" or "REJECT"', 400);
     }

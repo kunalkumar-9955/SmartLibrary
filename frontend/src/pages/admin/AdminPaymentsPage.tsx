@@ -189,9 +189,15 @@ export const AdminPaymentsPage: React.FC = () => {
     setSelectedPayment(payment);
     setSelectedAction(action);
     setGrantMembershipException(false);
-    setAdminNotes(action === 'APPROVE' ? 'Cash verified at library desk' : '');
+    setAdminNotes(
+      action === 'APPROVE'
+        ? payment.paymentType === 'OFFLINE'
+          ? 'Cash verified at library desk'
+          : `Verified in bank account (UTR: ${payment.utr || 'N/A'})`
+        : ''
+    );
     setRejectionReason(
-      action === 'REJECT' ? 'Payment could not be verified by library administration' : ''
+      action === 'REJECT' ? 'Payment could not be verified in library bank account' : ''
     );
     setActionModalOpen(true);
   };
@@ -222,7 +228,7 @@ export const AdminPaymentsPage: React.FC = () => {
         // Online manual verification
         const res = await paymentService.verifyPaymentAdmin(selectedPayment.orderId, {
           action: selectedAction,
-          notes: adminNotes.trim() || undefined,
+          notes: selectedAction === 'REJECT' ? (rejectionReason.trim() || 'Payment could not be verified in library bank account') : (adminNotes.trim() || undefined),
         });
 
         if (res.data.success) {
@@ -672,9 +678,9 @@ export const AdminPaymentsPage: React.FC = () => {
                             <Clock className="w-3.5 h-3.5" /> Desk Review
                           </span>
                         )}
-                        {s === 'PENDING' && (
+                        {(s === 'PENDING' || s === 'PROCESSING') && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
-                            <Clock className="w-3.5 h-3.5 animate-pulse" /> Processing
+                            <Clock className="w-3.5 h-3.5 animate-pulse" /> {s === 'PROCESSING' ? 'Pending Approval' : 'Processing'}
                           </span>
                         )}
                         {(s === 'REJECTED' || s === 'FAILED' || s === 'EXPIRED' || s === 'CANCELLED') && (
@@ -728,14 +734,26 @@ export const AdminPaymentsPage: React.FC = () => {
                             </button>
                           )}
 
-                          {p.status === 'PENDING' && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenActionModal(p, 'APPROVE')}
-                              className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
-                            >
-                              Verify
-                            </button>
+                          {(p.status === 'PENDING' || p.status === 'PROCESSING') && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenActionModal(p, 'APPROVE')}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                                title="Verify with bank statement & approve"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Verify UPI</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenActionModal(p, 'REJECT')}
+                                className="px-2 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 dark:bg-slate-800 dark:hover:bg-rose-950/40 dark:text-slate-300 dark:hover:text-rose-300 font-bold text-xs rounded-xl border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+                                title="Reject invalid payment reference"
+                              >
+                                Reject
+                              </button>
+                            </div>
                           )}
                           {/* Refund Action Button */}
                           {isSuccess && p.refundStatus === 'REFUND_REQUESTED' && (
@@ -818,11 +836,19 @@ export const AdminPaymentsPage: React.FC = () => {
                 <span className="font-mono text-slate-900 dark:text-white">{selectedPayment.orderId}</span>
               </div>
               {selectedPayment.utr && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">UTR / Ref:</span>
-                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/80 rounded-xl space-y-1">
+                  <div className="text-[11px] font-bold text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                    <span>UPI Reference Number (UTR):</span>
+                    <span className="text-[10px] bg-amber-200 dark:bg-amber-900/60 px-1.5 py-0.5 rounded font-mono font-bold text-amber-900 dark:text-amber-200">
+                      Bank Statement Match
+                    </span>
+                  </div>
+                  <div className="font-mono text-base font-black text-slate-900 dark:text-white tracking-widest select-all">
                     {selectedPayment.utr}
-                  </span>
+                  </div>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-300 leading-normal">
+                    Confirm that ₹{selectedPayment.amount} has been credited to your bank account with this UTR before approving.
+                  </p>
                 </div>
               )}
             </div>
